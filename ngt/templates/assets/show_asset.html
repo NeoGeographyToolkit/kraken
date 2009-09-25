@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Asset {{asset.id}}</title>
+        <script type="text/javascript" src="http://seadragon.com/ajax/0.8/seadragon-min.js"></script>
+        <script type="text/javascript">
+            var dz_container = "dz_container"
+            var dz_imagepath = "/{{asset.cache_file_path}}"
+
+            var PRECISION = 2;      // number of decimal places            
+            var viewer = null;
+            
+    
+            function init(){
+                //Seadragon.Config.zoomPerClick = 1.0;
+                document.getElementById(dz_container).innerHTML = "";
+                viewer = new Seadragon.Viewer(dz_container);
+                viewer.openDzi(dz_imagepath);
+            }
+            
+        </script>
+    </head>
+    <body>
+        <h1>Asset {{asset.id}}</h1>
+        <div id="dz_container"/>
+        <script type="text/javascript">
+            Seadragon.Utils.addEvent(window, "load", init);
+        </script>
+    </body>
+</html>

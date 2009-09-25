@@ -1,0 +1,17 @@
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/alderaan/!svn/ver/160/trunk/ngt/templates/assets
+END
+list_assets.html
+K 25
+svn:wc:ra_dav:version-url
+V 70
+/svn/alderaan/!svn/ver/160/trunk/ngt/templates/assets/list_assets.html
+END
+show_asset.html
+K 25
+svn:wc:ra_dav:version-url
+V 69
+/svn/alderaan/!svn/ver/160/trunk/ngt/templates/assets/show_asset.html
+END

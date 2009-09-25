@@ -1,0 +1,71 @@
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/tests
+END
+data.py
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/tests/data.py
+END
+benchmarks.py
+K 25
+svn:wc:ra_dav:version-url
+V 61
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/tests/benchmarks.py
+END
+boxes_3x3.data
+K 25
+svn:wc:ra_dav:version-url
+V 62
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/tests/boxes_3x3.data
+END
+point_clusters.data
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/tests/point_clusters.data
+END
+BoundsCheck.txt
+K 25
+svn:wc:ra_dav:version-url
+V 63
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/tests/BoundsCheck.txt
+END
+__init__.py
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/tests/__init__.py
+END
+runtests.dist
+K 25
+svn:wc:ra_dav:version-url
+V 61
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/tests/runtests.dist
+END
+rungrind.dist
+K 25
+svn:wc:ra_dav:version-url
+V 61
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/tests/rungrind.dist
+END
+boxes_15x15.data
+K 25
+svn:wc:ra_dav:version-url
+V 64
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/tests/boxes_15x15.data
+END
+R-Tree.txt
+K 25
+svn:wc:ra_dav:version-url
+V 58
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/tests/R-Tree.txt
+END
+test_doctests.py
+K 25
+svn:wc:ra_dav:version-url
+V 64
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/tests/test_doctests.py
+END

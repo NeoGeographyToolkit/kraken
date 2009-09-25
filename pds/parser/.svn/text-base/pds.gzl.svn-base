@@ -1,0 +1,32 @@
+@start asg_stmt_line  -> assign_stmt ws crlf;
+assign_stmt    -> nsidentifier ws "=" ws value;
+
+nsidentifier   -> identifier (":" identifier)?;
+identifier     -> letter (letter | digit | ("_"letter) | ("_"digit))*;
+
+value          -> scalarvalue;
+
+scalarvalue    -> numericvalue | textvalue | symbvalue;
+
+numericvalue   -> basedintnumber | intnumber;
+realnumber     -> .sign=/[+-]?/ (scaledreal | unscaledreal) ws (units_expr)?;
+scaledreal     -> unscaledreal ("E" | "e") intnumber;
+unscaledreal   -> ("." /[0-9]+/) | (unsignedint "." /[0-9]*/);
+intnumber      -> unsignedint (ws units_expr)?;
+basedintnumber -> /[0-9]{1,2}#[+-]?[0-9a-fA-F]+#/ (ws units_expr)?;
+unsignedint    -> .uint=/[0-9]+/;
+signedint      -> .sint=/[+-]?[0-9]+/;
+
+units_expr     -> "<" units_factor (/[*\/]?/ (units_factor | signedint))* ">";
+units_factor   -> identifier ("**" signedint)?;
+
+textvalue      -> ("\""/-[\042]+/"\"") | ("'"/-[\047]+/"'");
+symbvalue      -> identifier;
+
+ODLcharset     -> letter | digit;
+letter         -> /[a-zA-Z]/;
+digit          -> /[0-9]/;
+spacechar      -> /[ \t]/;
+
+ws             -> .whitespace=/[ \t]*/;
+crlf           -> .lineterm=/[\r\n]+/;

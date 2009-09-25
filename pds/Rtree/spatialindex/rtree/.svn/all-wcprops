@@ -1,0 +1,83 @@
+K 25
+svn:wc:ra_dav:version-url
+V 60
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/spatialindex/rtree
+END
+Statistics.h
+K 25
+svn:wc:ra_dav:version-url
+V 73
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/spatialindex/rtree/Statistics.h
+END
+RTree.cc
+K 25
+svn:wc:ra_dav:version-url
+V 69
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/spatialindex/rtree/RTree.cc
+END
+PointerPoolNode.h
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/spatialindex/rtree/PointerPoolNode.h
+END
+RTree.h
+K 25
+svn:wc:ra_dav:version-url
+V 68
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/spatialindex/rtree/RTree.h
+END
+BulkLoader.cc
+K 25
+svn:wc:ra_dav:version-url
+V 74
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/spatialindex/rtree/BulkLoader.cc
+END
+Node.cc
+K 25
+svn:wc:ra_dav:version-url
+V 68
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/spatialindex/rtree/Node.cc
+END
+BulkLoader.h
+K 25
+svn:wc:ra_dav:version-url
+V 73
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/spatialindex/rtree/BulkLoader.h
+END
+Index.cc
+K 25
+svn:wc:ra_dav:version-url
+V 69
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/spatialindex/rtree/Index.cc
+END
+Leaf.cc
+K 25
+svn:wc:ra_dav:version-url
+V 68
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/spatialindex/rtree/Leaf.cc
+END
+Node.h
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/spatialindex/rtree/Node.h
+END
+Index.h
+K 25
+svn:wc:ra_dav:version-url
+V 68
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/spatialindex/rtree/Index.h
+END
+Leaf.h
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/spatialindex/rtree/Leaf.h
+END
+Statistics.cc
+K 25
+svn:wc:ra_dav:version-url
+V 74
+/svn/alderaan/!svn/ver/73/trunk/pds/Rtree/spatialindex/rtree/Statistics.cc
+END
