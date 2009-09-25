@@ -1,0 +1,35 @@
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/alderaan/!svn/ver/160/trunk/ngt/assets
+END
+admin.py
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/alderaan/!svn/ver/152/trunk/ngt/assets/admin.py
+END
+views.py
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/alderaan/!svn/ver/160/trunk/ngt/assets/views.py
+END
+__init__.py
+K 25
+svn:wc:ra_dav:version-url
+V 55
+/svn/alderaan/!svn/ver/152/trunk/ngt/assets/__init__.py
+END
+models.py
+K 25
+svn:wc:ra_dav:version-url
+V 53
+/svn/alderaan/!svn/ver/157/trunk/ngt/assets/models.py
+END
+seadragon.py
+K 25
+svn:wc:ra_dav:version-url
+V 56
+/svn/alderaan/!svn/ver/152/trunk/ngt/assets/seadragon.py
+END
