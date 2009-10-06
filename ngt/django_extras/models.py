@@ -1,1 +1,1 @@
-'''This is just here so that ngt.djang_extras looks like an app.'''
+'''This is just here so that ngt.django_extras looks like an app.'''

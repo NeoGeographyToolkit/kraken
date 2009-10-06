@@ -1,11 +1,11 @@
 import os
 import util
-from ngt.jobs.models import RemoteJob
+#from ngt.jobs.models import RemoteJob
 
 class Moon(object):
 
     def altitude(self, lat, lon):
-        job = RemoteJob("altitude moon " + str(lon) + " " + str(lat))
+        #job = RemoteJob("altitude moon " + str(lon) + " " + str(lat))
 #        job.wait()
         return 10.0 #float(job.result())
 

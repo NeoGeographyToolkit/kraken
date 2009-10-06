@@ -9,8 +9,7 @@ PARENT_PATH = os.path.normpath(os.path.join(PROJECT_PATH,'..'))
 sys.path.insert(0, PARENT_PATH)
 sys.path.insert(1, PROJECT_PATH)
 
-#GEOS_LIBRARY_PATH = '/data/local/lib/libgeos_c.so'
-GEOS_LIBRARY_PATH = '/opt/local/lib/libgeos_c.dylib'
+GEOS_LIBRARY_PATH = '/data/local/lib/libgeos_c.so'
 
 DEBUG = True
 TEMPLATE_DEBUG = DEBUG

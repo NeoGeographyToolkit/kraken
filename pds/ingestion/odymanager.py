@@ -12,7 +12,7 @@ from django.db import connection, transaction
 try:
         from django.contrib.gis.geos.base import GEOSGeometry #Django 1.0.2
         #from django.contrib.gis.geos.geometries import GEOSGeometry #Django 1.1
-except ImportError::
+except ImportError:
         from django.contrib.gis.geos.geometry import GEOSGeometry #Django 1.1
 #from django.contrib.gis.geos.geometries import Polygon
 

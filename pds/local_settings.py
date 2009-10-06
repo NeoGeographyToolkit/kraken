@@ -3,4 +3,5 @@ DATABASE_ENGINE = 'postgresql_psycopg2' # 'postgresql_psycopg2', 'postgresql', '
 DATABASE_NAME = 'pds'                # Or path to database file if using sqlite3.
 DATABASE_HOST = 'postgres.nebula'               # Set to empty string for localhost. Not used with sqlite3.
 DATABASE_USER = 'pds'
+DATABASE_PASSWORD = 'passthepds'
 DATABASE_PORT = '5432'   
