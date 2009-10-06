@@ -74,12 +74,16 @@ class Product(models.Model):
 class Asset(models.Model):
     #pds_product = models.ForeignKey(Product, null=True)
     products = models.ManyToManyField(Product, related_name='assets')
-    parents = models.ManyToManyField(Asset, related_name='children')
+    parents = models.ManyToManyField('Asset', symmetrical=False, related_name='children')
     #original = models.ForeignKey('Asset', null=True)
     is_original = models.BooleanField(default=False)
     image_path = models.FilePathField(max_length=4096) #4096 being linux's maximum absolute path length
-    name = model.TextField(max_length=512, null=True)   
+    name = models.TextField(max_length=512, null=True)
+    
+    def __unicode__(self):
+        return self.name
 
+"""
 def asset_verify_originality(instance, **kwargs):
     if instance.is_original: #'''another original exists with the same pds product''':
         qs = Asset.objects.filter(pds_product=instance.pds_product).filter(is_original=True)
@@ -87,3 +91,4 @@ def asset_verify_originality(instance, **kwargs):
             if qs.count() > 1 or qs[0] != instance:
                 raise Exception("Tried to add a duplicate original asset for product %s" % instance.pds_product)
 models.signals.pre_save.connect(asset_verify_originality, sender=Asset)
+"""

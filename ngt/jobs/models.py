@@ -1,7 +1,9 @@
 from django.db import models
 import os, time, hashlib, datetime
-from ngt.messaging.queue import MessageBus
+from ngt.messaging.messagebus import MessageBus
 from pds.models import Asset
+
+messagebus = MessageBus()
 
 """
 REFACTORED TO just Job...
@@ -35,7 +37,7 @@ class RemoteJob(models.Model):
 """
 
 class Job(models.Model):
-    uuid = models.CharField(max_length=64)
+    uuid = models.CharField(max_length=64, null=True)
     command = models.CharField(max_length=64)
     arguments = models.TextField(null=True)
     status = models.CharField(max_length=32, default='new')
@@ -52,20 +54,56 @@ class Job(models.Model):
         m.update(self.arguments)
         return m.hexdigest()
     
-    def __init__(self, *args, **kwargs):
-        super(Job, self).__init__(self, *args, **kwargs)
-        self.uuid = self._generate_uuid()
-    
     def __unicode__(self):
         return self.uuid
+    
+    def enqueue(self):
+        message_body = '{"uuid": "%s", "command": "%s", "args": %s}' % (self.uuid, self.command, self.arguments) #JSON object literal
+        self.status = 'queued'
+        self.save()
+        messagebus.publish(message_body, routing_key='command')
+        print "Enqueued %s" % self.uuid
+        
+    
+    
+def set_uuid(instance, **kwargs):
+    if not instance.uuid:
+        instance.uuid = instance._generate_uuid()
+models.signals.pre_save.connect(set_uuid, sender=Job)
 
 class JobBatch(models.Model):
     name = models.CharField(max_length=256)
     assets = models.ManyToManyField(Asset)
-    jobs = models.ManyToManyField(Job)
+    jobs = models.ManyToManyField(Job, editable=False)
     status = models.CharField(max_length=32, default='new')
     command = models.CharField(max_length=64)
     
-    def __init__(self, *args, **kwargs):
-        super(JobBatch, self, *args, **kwargs)
-        #TODO: initialize the jobs
+    def __unicode__(self):
+        return self.name
+        
+    def simple_populate(self):
+        """Create one-parameter jobs for each of this batch's assets"""
+        print "Creating jobs for %s" % str(self.assets.all())
+        for asset in self.assets.all():
+            print "About to create a job for %s" % str(asset)
+            self.jobs.create(
+                command=self.command, 
+                arguments='["%s"]' % asset.image_path, #json-decodable lists of one
+            )
+    
+    def execute(self):
+        self.simple_populate()
+        self.status = "dispatched"
+        for job in self.jobs.filter(status='new'):
+            job.enqueue()
+
+"""
+I'd like jobs to be populated from the JobBatch's properties by a post-save signal...
+But this won't work because the related objects in jobbatch.assests don't get created until after the post_save signal has fired.
+
+def populate_jobs(instance, created, **kwargs):
+    print "populate_jobs fired: %s" % str(created)
+    if created:
+        instance.simple_populate() #just one asset per job, for now.
+models.signals.post_save.connect(populate_jobs, sender=JobBatch)
+"""

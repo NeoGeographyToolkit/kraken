@@ -35,6 +35,8 @@ if __name__ == '__main__':
 else:
     filename = __file__
 APP_BASE = os.path.abspath(os.path.dirname(filename))
+REPO_BASE = os.path.dirname(APP_BASE)
+sys.path.insert(0, REPO_BASE)
 
 # For now we are using a simple little sqlite database!
 #
@@ -43,7 +45,8 @@ DATABASE_NAME = '%s' % HOST['db_name']
 DATABASE_USER = '%s' % HOST['db_user']
 DATABASE_HOST = '%s' % HOST['db_host']
 DATABASE_PORT = '%s' % HOST['db_port']
-if HOSTNAME  == 'byss.arc.nasa.gov':
+DATABASE_PASSWORD = HOST.get('db_password', None)
+if not DATABASE_PASSWORD and HOSTNAME  == 'byss.arc.nasa.gov':
         _f = open("%s/db.pwd" % APP_BASE, "r")
         DATABASE_PASSWORD = _f.read()
         _f.close()
@@ -127,8 +130,14 @@ TEMPLATE_DIRS = (
 )
 
 # Settings for GeoDjango
-GEOS_LIBRARY_PATH = '/data/local/lib/libgeos_c.so'
-GDAL_LIBRARY_PATH = '/data/local/lib/libgdal.so'
+# Add your GEOS and GDAL path to the lists!
+def search(paths):
+    for path in paths:
+        if os.path.exists(path):
+            return path
+    return None
+GEOS_LIBRARY_PATH = search(('/data/local/lib/libgeos_c.so', '/opt/local/lib/libgeos_c.dylib'))
+GDAL_LIBRARY_PATH = search(('/data/local/lib/libgdal.so', '/Applications/Google Earth EC.app/Contents/MacOS/libgdal.dylib'))
 
 INSTALLED_APPS = (
     'django.contrib.auth',
@@ -139,7 +148,10 @@ INSTALLED_APPS = (
     #'django.contrib.gis',
     'ngt.tiepoints',
     'ngt.assets',
+    'ngt.jobs',
+    'ngt.mastercontrol',
     'ngt.django_extras',
+    'pds',
 )
 
 #HACK ATTACK... FIXME
