@@ -1,0 +1,5 @@
+message Command {
+    optional string uuid = 1;
+    optional string command = 2;
+    repeated string args = 3; 
+}

@@ -16,31 +16,23 @@ logger = logging.getLogger()
 
 from ngt.messaging.messagebus import MessageBus
 from ngt.jobs.models import Job
+from ngt import protocols
 
 messagebus = MessageBus()
 
-def update_status(msg_body):
+def update_status(pb_string):
     '''
-    Expects a json string message body and updates a Job's status.
-    json schema:
-    {
-        "uuid": "someuuid",
-        "status": "status-to-set"
-    }
+    Update the status of a job based on data from a serialized protocol buffer binary string.
     '''
+    stat_msg = protocols.Status()
+    stat_msg.ParseFromString(pb_string)
+    logger.debug("Setting status of job %s to '%s'." % (stat_msg.uuid, stat_msg.newstatus))
     try:
-        bdy = json.loads(msg_body)
-    except ValueError:
-        logger.error('statusd: Can''t parse JSON in "%s"' % bdy)
-        return
-    logger.debug("Setting status of job %s to '%s'." % (bdy['uuid'], bdy['status']))
-    try:
-        job = Job.objects.get(uuid=bdy['uuid'])
-        job.status = bdy['status']
+        job = Job.objects.get(uuid=stat_msg.uuid)
+        job.status = stat_msg.newstatus
         job.save()
     except Job.DoesNotExist:
-        logger.error("Couldn't find a job with uuid %s on status update." % bdy['uuid'])
-    
+        logger.error("Couldn't find a job with uuid %s on status update." % stat_msg.uuid)
     
 
 def process_status_msg(msg):

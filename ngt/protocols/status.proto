@@ -1,0 +1,4 @@
+message Status{
+    optional string uuid = 1;
+    optional string newstatus = 2;
+}

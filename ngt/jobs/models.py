@@ -2,6 +2,8 @@ from django.db import models
 import os, time, hashlib, datetime
 from ngt.messaging.messagebus import MessageBus
 from pds.models import Asset
+import json
+from ngt import protocols
 
 messagebus = MessageBus()
 
@@ -58,7 +60,13 @@ class Job(models.Model):
         return self.uuid
     
     def enqueue(self):
-        message_body = '{"uuid": "%s", "command": "%s", "args": %s}' % (self.uuid, self.command, self.arguments) #JSON object literal
+        #message_body = '{"uuid": "%s", "command": "%s", "args": %s}' % (self.uuid, self.command, self.arguments) #JSON object literal
+        cmd = protocols.Command()
+        cmd.uuid = self.uuid
+        cmd.command = self.command
+        for a in json.loads(self.arguments):
+            cmd.args.append(a)
+        message_body = cmd.SerializeToString()
         self.status = 'queued'
         self.save()
         messagebus.publish(message_body, routing_key='command')
