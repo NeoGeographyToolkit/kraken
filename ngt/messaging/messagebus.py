@@ -38,7 +38,9 @@ class MessageBus(object):
         self._chan.basic_publish(msg,exchange=exchange,routing_key=routing_key)
 
     def setup_direct_queue(self, queue, exchange=DEFAULT_EXCHANGE, routing_key=None, chan=None):
-        '''Simplifies the job of creating a directly-routed queue.'''
+        ''' Simplifies the job of creating a directly-routed queue by declaring the exchange, queue, and binding.
+            If you don't specify a routing key, the queue name will be used.
+        '''
         if not routing_key:
             routing_key = queue
         if not chan:
@@ -51,7 +53,7 @@ class MessageBus(object):
     def register_consumer(self, queuename, callback, exchange=DEFAULT_EXCHANGE, routing_key=None, chan=None):
         '''
         Declare a direct queue and attach a consumer to it.  This assumes an exchange has already beed created.
-        By default, the routing key will be the same as the queue name.
+        If you don't specify a routing key, the queue name will be used.
         Returns the consumer tag.
         '''
         if not routing_key:
@@ -64,9 +66,10 @@ class MessageBus(object):
         logger.debug("MessageBus (Ch#%d): %s will consume from queue '%s'" % (chan.channel_id, str(callback), queuename))
         return chan.basic_consume(callback=callback, queue=queuename)
 
-    def wait(self):
-        self._chan.wait()
 
     def ack(self, *args, **kwargs):
         self._chan.basic_ack(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return object.__getattribute__(self._chan, name)
  
