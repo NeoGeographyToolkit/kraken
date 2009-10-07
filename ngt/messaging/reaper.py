@@ -17,11 +17,12 @@ from messagebus import MessageBus
 messagebus = MessageBus()
 chan = messagebus.channel
 
-REAPER_TYPE = 'generic'
+REAPER_TYPE = 'reaper.generic'
 COMMAND_EXCHANGE_NAME = 'Command_Exchange'
 STATUS_EXCHANGE_NAME = 'Status_Exchange'
 
 # This script consumes from a command queue...
+chan.exchange_declare(COMMAND_EXCHANGE_NAME, type="direct", durable=True, auto_delete=False)
 chan.queue_declare(queue=REAPER_TYPE, durable=True, exclusive=False, auto_delete=False)
 chan.queue_bind(queue=REAPER_TYPE, exchange=COMMAND_EXCHANGE_NAME, routing_key=REAPER_TYPE)
 # ...and publishes to the status exchange.

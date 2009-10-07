@@ -70,7 +70,7 @@ class Job(models.Model):
         message_body = cmd.SerializeToString()
         self.status = 'queued'
         self.save()
-        messagebus.publish(message_body, exchange='Command_Exchange', routing_key='generic') #routing key is the name of the intended reaper type
+        messagebus.publish(message_body, exchange='Command_Exchange', routing_key='reaper.generic') #routing key is the name of the intended reaper type
         print "Enqueued %s" % self.uuid
         
     

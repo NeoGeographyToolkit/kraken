@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import sys
+import atexit
 import uuid
 try:
     import json
@@ -41,10 +42,16 @@ def process_status_msg(msg):
     logger.debug("GOT STATUS: %s" % msg.body)
     update_status(msg.body)
     messagebus.ack(msg.delivery_info['delivery_tag'])
+    
 
 queuename = "status_statusd_%s" % instance_id
 messagebus.queue_declare(queue=queuename, durable=True, exclusive=False, auto_delete=False)
 ctag = messagebus.register_consumer(queuename, process_status_msg, exchange="Status_Exchange")
+
+def cleanup():
+    logger.info("Deleting queue %s" % queuename)
+    messagebus.queue_delete(queuename, if_empty=True)
+atexit.register(cleanup)
 
 try:
     while True:
