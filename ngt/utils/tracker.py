@@ -26,7 +26,7 @@ class Tracker(object):
         self.starttime = datetime.now()
         self.iter = iter.__iter__() if iter else None
     
-    def _report_dump(self):
+    def _report_spew(self):
         if self.target:
             remaining = (datetime.now() - self.starttime) / self.count * (self.target - self.count)
             print "%s: %d of %d done. (%s remaining)" % (self.name, self.count, self.target, str(remaining))
@@ -37,14 +37,14 @@ class Tracker(object):
         scale = 80
         barlength = int(float(self.count) / float(self.target) * scale)
         #sys.stdout.write("\r"+''.join(( '=' for i in range(1,barlength)))+'>'+''.join((' ' for i in range(1,scale-barlength-1))) + " %d"%count)
-        sys.stdout.write("\r%s>%s %d" % (''.join(['=' for i in range(1,barlength)]), ''.join([' ' for i in range(1,scale - barlength)]), self.count))
+        sys.stdout.write("\r[%s>%s]%d" % (''.join(['=' for i in range(1,barlength)]), ''.join([' ' for i in range(1,scale - barlength)]), self.count))
         sys.stdout.flush()
     
     def _report(self):
         if self.progress:
             self._report_bar()
         else:
-            self._report_dump()
+            self._report_spew()
     
     def next(self):
         self.count += 1
@@ -52,6 +52,9 @@ class Tracker(object):
             self._report()
         if self.iter:
             return self.iter.next()
+        else:
+            return self.count
+            
     def __iter__(self):
         return self
         
