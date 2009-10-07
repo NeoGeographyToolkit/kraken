@@ -17,12 +17,18 @@ from messagebus import MessageBus
 messagebus = MessageBus()
 chan = messagebus.channel
 
-EXCHANGE_NAME = 'ngt.direct'
+REAPER_TYPE = 'generic'
+COMMAND_EXCHANGE_NAME = 'Command_Exchange'
+STATUS_EXCHANGE_NAME = 'Status_Exchange'
 
-messagebus.setup_direct_queue('command', exchange=EXCHANGE_NAME, chan=chan)
+# This script consumes from a command queue...
+chan.queue_declare(queue=REAPER_TYPE, durable=True, exclusive=False, auto_delete=False)
+chan.queue_bind(queue=REAPER_TYPE, exchange=COMMAND_EXCHANGE_NAME, routing_key=REAPER_TYPE)
+# ...and publishes to the status exchange.
+chan.exchange_declare(exchange=STATUS_EXCHANGE_NAME, type="fanout", durable=True, auto_delete=False)
 
 def recv_callback(msg):
-    """ For testing... """
+    """ For testing.  Just print the message body"""
     cmd_params = json.loads(msg.body)
     print 'Received: ' + str(cmd_params) + ' from channel #' + str(msg.channel.channel_id)
     
@@ -32,13 +38,14 @@ def send_status(uuid, status):
     stat.uuid = uuid
     stat.newstatus = status
     #chan.basic_publish( Message('{"uuid": "%s", "status": "%s"}' % (uuid, status)), exchange=EXCHANGE_NAME, routing_key='status' )
-    chan.basic_publish( Message(stat.SerializeToString()), exchange=EXCHANGE_NAME, routing_key='status' )
+    chan.basic_publish( Message(stat.SerializeToString()), exchange=STATUS_EXCHANGE_NAME, routing_key='.'.join((REAPER_TYPE, 'job')) )
     
 def execute_command(msg):
         
     if not msg:
+        # Is the queue empty?
         logger.error("execute_command() called with no message.")
-        return None #queue is empty?
+        return None
 
     cmd = protocols.Command()
     cmd.ParseFromString(msg.body)
@@ -48,16 +55,14 @@ def execute_command(msg):
         logger.debug("Executing %s" % ' '.join(args))
         resultcode = Popen(args).wait()
         if resultcode == 0:
-            #report success
             send_status(cmd.uuid, 'complete')
         else:
-            #report failure
             send_status(cmd.uuid, 'failed')
     else:
         logger.error("Command: '%s' not found in amq_config's list of valid commands." % cmd.command)
     
 
-ctag = chan.basic_consume(queue='command', no_ack=True, callback=execute_command)
+ctag = chan.basic_consume(queue=REAPER_TYPE, no_ack=True, callback=execute_command)
 
 while True:
     chan.wait()

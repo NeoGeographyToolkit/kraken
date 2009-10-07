@@ -6,6 +6,7 @@ import json
 from ngt import protocols
 
 messagebus = MessageBus()
+messagebus.channel.exchange_declare(exchange="Command_Exchange", type="direct", durable=True, auto_delete=False,)
 
 """
 REFACTORED TO just Job...
@@ -69,7 +70,7 @@ class Job(models.Model):
         message_body = cmd.SerializeToString()
         self.status = 'queued'
         self.save()
-        messagebus.publish(message_body, routing_key='command')
+        messagebus.publish(message_body, exchange='Command_Exchange', routing_key='generic') #routing key is the name of the intended reaper type
         print "Enqueued %s" % self.uuid
         
     

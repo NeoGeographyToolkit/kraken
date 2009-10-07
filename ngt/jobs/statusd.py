@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import sys
+import uuid
 try:
     import json
 except ImportError:
@@ -18,6 +19,7 @@ from ngt.messaging.messagebus import MessageBus
 from ngt.jobs.models import Job
 from ngt import protocols
 
+instance_id = uuid.uuid1().hex
 messagebus = MessageBus()
 
 def update_status(pb_string):
@@ -40,7 +42,9 @@ def process_status_msg(msg):
     update_status(msg.body)
     messagebus.ack(msg.delivery_info['delivery_tag'])
 
-ctag = messagebus.register_consumer('status', process_status_msg)
+queuename = "status_statusd_%s" % instance_id
+messagebus.queue_declare(queue=queuename, durable=True, exclusive=False, auto_delete=False)
+ctag = messagebus.register_consumer(queuename, process_status_msg, exchange="Status_Exchange")
 
 try:
     while True:
