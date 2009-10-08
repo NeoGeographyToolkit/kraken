@@ -62,12 +62,20 @@ class Job(models.Model):
     
     def enqueue(self):
         #message_body = '{"uuid": "%s", "command": "%s", "args": %s}' % (self.uuid, self.command, self.arguments) #JSON object literal
+        """
         cmd = protocols.Command()
         cmd.uuid = self.uuid
         cmd.command = self.command
         for a in json.loads(self.arguments):
             cmd.args.append(a)
         message_body = cmd.SerializeToString()
+        """
+        cmd = {
+            'uuid': self.uuid,
+            'command': self.command,
+            'args': json.loads(self.arguments)
+        }
+        message_body = protocols.pack(protocols.Command, cmd)
         self.status = 'queued'
         self.save()
         messagebus.publish(message_body, exchange='Command_Exchange', routing_key='reaper.generic') #routing key is the name of the intended reaper type

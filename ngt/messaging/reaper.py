@@ -35,11 +35,12 @@ def recv_callback(msg):
     
 def send_status(uuid, status):
     """ Issue a message to the status bus requesting to update a job's status."""
-    stat = protocols.Status()
-    stat.uuid = uuid
-    stat.newstatus = status
+    #stat = protocols.Status()
+    #stat.uuid = uuid
+    #stat.newstatus = status
+    msg_body = protocols.pack(protocols.Status, {'uuid':uuid, 'newstatus':status})
     #chan.basic_publish( Message('{"uuid": "%s", "status": "%s"}' % (uuid, status)), exchange=EXCHANGE_NAME, routing_key='status' )
-    chan.basic_publish( Message(stat.SerializeToString()), exchange=STATUS_EXCHANGE_NAME, routing_key='.'.join((REAPER_TYPE, 'job')) )
+    chan.basic_publish( Message(msg_body), exchange=STATUS_EXCHANGE_NAME, routing_key='.'.join((REAPER_TYPE, 'job')) )
     
 def execute_command(msg):
         
@@ -48,8 +49,9 @@ def execute_command(msg):
         logger.error("execute_command() called with no message.")
         return None
 
-    cmd = protocols.Command()
-    cmd.ParseFromString(msg.body)
+    #cmd = protocols.Command()
+    #cmd.ParseFromString(msg.body)
+    cmd = protocols.unpack(protocols.Command, msg.body)
         
     if cmd.command in commands:  # only commands allowed by the configuration will be executed
         args = [ commands[cmd.command] ] + list(cmd.args)
