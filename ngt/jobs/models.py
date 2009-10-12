@@ -61,15 +61,6 @@ class Job(models.Model):
         return self.uuid
     
     def enqueue(self):
-        #message_body = '{"uuid": "%s", "command": "%s", "args": %s}' % (self.uuid, self.command, self.arguments) #JSON object literal
-        """
-        cmd = protocols.Command()
-        cmd.uuid = self.uuid
-        cmd.command = self.command
-        for a in json.loads(self.arguments):
-            cmd.args.append(a)
-        message_body = cmd.SerializeToString()
-        """
         cmd = {
             'uuid': self.uuid,
             'command': self.command,
@@ -88,7 +79,7 @@ def set_uuid(instance, **kwargs):
         instance.uuid = instance._generate_uuid()
 models.signals.pre_save.connect(set_uuid, sender=Job)
 
-class JobBatch(models.Model):
+class JobSet(models.Model):
     name = models.CharField(max_length=256)
     assets = models.ManyToManyField(Asset)
     jobs = models.ManyToManyField(Job, editable=False)
@@ -115,12 +106,12 @@ class JobBatch(models.Model):
             job.enqueue()
 
 """
-I'd like jobs to be populated from the JobBatch's properties by a post-save signal...
+I'd like jobs to be populated from the JobSet's properties by a post-save signal...
 But this won't work because the related objects in jobbatch.assests don't get created until after the post_save signal has fired.
 
 def populate_jobs(instance, created, **kwargs):
     print "populate_jobs fired: %s" % str(created)
     if created:
         instance.simple_populate() #just one asset per job, for now.
-models.signals.post_save.connect(populate_jobs, sender=JobBatch)
+models.signals.post_save.connect(populate_jobs, sender=JobSet)
 """

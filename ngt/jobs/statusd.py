@@ -27,13 +27,11 @@ def update_status(pb_string):
     '''
     Update the status of a job based on data from a serialized protocol buffer binary string.
     '''
-    #stat_msg = protocols.Status()
-    #stat_msg.ParseFromString(pb_string)
     stat_msg = protocols.unpack(protocols.Status, pb_string)
-    logger.debug("Setting status of job %s to '%s'." % (stat_msg.uuid, stat_msg.newstatus))
+    logger.debug("Setting status of job %s to '%s'." % (stat_msg.uuid, stat_msg.state))
     try:
         job = Job.objects.get(uuid=stat_msg.uuid)
-        job.status = stat_msg.newstatus
+        job.status = stat_msg.state
         job.save()
     except Job.DoesNotExist:
         logger.error("Couldn't find a job with uuid %s on status update." % stat_msg.uuid)
