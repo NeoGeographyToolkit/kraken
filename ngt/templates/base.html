@@ -1,0 +1,63 @@
+{% load ngt_urls %}
+<html>
+  <head>
+    <title>{% block title %}NASA NeoGeography Toolkit{% endblock %}</title>
+    <link rel="stylesheet" type="text/css" href="{{ MEDIA_URL }}/css/ngt.css">
+    {% block extrahead %}{% endblock %}
+  </head>
+  <body id="body">
+    <div id="wrapper">
+      <div id="masthead">
+	      <div style="width: 500px; height=70px;  margin-right: 17px; float: left;">
+	        {% block masthead %}
+	        <img src="{{ MEDIA_URL }}/images/ngt_masthead.jpg" width=500px height=70px> 
+	        {% endblock %}
+	      </div>
+	<div style="float:right; margin-right: 17px;">
+	  <p style="line-height:70px; margin-top:0px; margin-bottom:0px; ">
+	    <a href="">Login</a> | <a href="ngt/admin">Admin</a>
+	  </p>
+	</div>
+      </div>
+      
+      <div id="nav">
+        {% include "_navbar.html"%}
+      </div>
+
+      <div id="buffer"></div>
+      
+      <div id="contentArea">
+      {% block content %}
+	<p> Here is a short list of applications currently under
+	development as part of the NeoGeography Toolkit.  </p>
+
+	<p>
+	  <ul>
+	    <li><a href="ngt/assets">Assets</a>: A Proof-of-concept asset management utility.</li>
+	    <li><a href="ngt/tiepoints">Tiepoints</a>: A Proof-of-concept tie-pointing utility.</li>
+
+	  </ul>
+	</p>
+
+	<!--
+        <div class="twoCol">2-Col</div>
+	<div class="twoCol">2-Col</div>
+	<div class="twoCol">2-Col</div>
+	<div class="twoCol">2-Col</div>
+	
+	<div class="sixCol">6-Col</div>
+	<div class="twoCol">2-Col</div>
+	
+	<div class="fourCol">4-Col</div>
+	<div class="fourCol">4-Col</div>
+	-->
+      {% endblock %}
+      </div>
+      <div id="sidebar"></div>
+
+      <div id="buffer"></div>
+
+      <div id="footer"><center>&copy; 2009 <a href="http://nasa.gov">National Aeronautics and Space Administration</a></center></div>
+    </div>
+  </body>
+</html>
