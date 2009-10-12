@@ -8,8 +8,12 @@ PROJECT_PATH = os.path.dirname(os.path.abspath(__file__))
 PARENT_PATH = os.path.normpath(os.path.join(PROJECT_PATH,'..'))
 sys.path.insert(0, PARENT_PATH)
 sys.path.insert(1, PROJECT_PATH)
-
-GEOS_LIBRARY_PATH = '/data/local/lib/libgeos_c.so'
+ 
+# local mac os x machine
+if platform.system() == 'Darwin':
+  GEOS_LIBRARY_PATH = 'Library/Frameworks/GEOS.framework/unix/lib/libgeos.dylib'
+else:
+ GEOS_LIBRARY_PATH = '/data/local/lib/libgeos_c.so'
 
 DEBUG = True
 TEMPLATE_DEBUG = DEBUG
@@ -29,6 +33,14 @@ DATABASE_NAME = 'pds_pc'                # Or path to database file if using sqli
 DATABASE_HOST = 'bosshog'               # Set to empty string for localhost. Not used with sqlite3.
 DATABASE_PORT = ''                      # Set to empty string for default. Not used with sqlite3.
 
+#nebula connection
+if platform.system() == 'Darwin':
+  DATABASE_NAME = 'pds'
+  DATABASE_HOST = '208.87.118.87'
+  DATABASE_PORT = '80'
+  DATABASE_USER = 'pds'
+  DATABASE_PASSWORD = 'passthepds'
+
 # local settings
 #DATABASE_USER = 'upcmgr'                # Not used with sqlite3.
 #DATABASE_PASSWORD = 'test1000'         # Not used with sqlite3.
@@ -37,11 +49,11 @@ DATABASE_PORT = ''                      # Set to empty string for default. Not u
 #DATABASE_NAME = 'testdb1'               # Or path to database file if using sqlite3.
 #DATABASE_USER = 'django'                # Not used with sqlite3.
 #DATABASE_PASSWORD = 'reinhardt'         # Not used with sqlite3.
+
 try:
     from local_settings import *
 except:
     pass
-
 
 # Local time zone for this installation. Choices can be found here:
 # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name
@@ -96,6 +108,7 @@ TEMPLATE_DIRS = (
     # Put strings here, like "/home/html/django_templates" or "C:/www/django/templates".
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
+    PROJECT_PATH + '/templates',
 )
 
 # include these application models for manage.py syncdb command!
