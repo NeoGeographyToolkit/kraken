@@ -21,7 +21,9 @@
       </div>
       
       <div id="nav">
-        {% include "_navbar.html"%}
+        {% block topnav %}
+        <!-- site-level navigation goes here -->
+        {% endblock %}
       </div>
 
       <div id="buffer"></div>

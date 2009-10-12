@@ -40,7 +40,7 @@ class RemoteJob(models.Model):
 """
 
 class Job(models.Model):
-    uuid = models.CharField(max_length=64, null=True)
+    uuid = models.CharField(max_length=32, null=True)
     command = models.CharField(max_length=64)
     arguments = models.TextField(null=True)
     status = models.CharField(max_length=32, default='new')

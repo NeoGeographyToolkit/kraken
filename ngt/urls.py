@@ -14,8 +14,8 @@ urlpatterns = patterns('',
                        (r'^admin/(.*)', admin.site.root),
                        
                        #Job Management
-                       (r'^mastercontrol/?$', 'mastercontrol.views.index'),
-                       (r'^mastercontrol/job/?$', 'mastercontrol.views.jobber'),
+                       (r'^dispatch/?$', 'dispatch.views.index'),
+                       (r'^dispatch/job/?$', 'dispatch.views.jobber'),
                        
                        #The Big Board!
                        (r'bigboard/?$', 'ngt.bigboard.views.index'),
