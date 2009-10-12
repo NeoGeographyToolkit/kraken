@@ -23,7 +23,7 @@ _STATUS = descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     descriptor.FieldDescriptor(
-      name='newstatus', full_name='Status.newstatus', index=1,
+      name='state', full_name='Status.state', index=1,
       number=2, type=9, cpp_type=9, label=1,
       default_value=unicode("", "utf-8"),
       message_type=None, enum_type=None, containing_type=None,

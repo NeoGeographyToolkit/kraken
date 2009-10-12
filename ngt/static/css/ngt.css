@@ -50,6 +50,10 @@ a:visited {
   float: left;
   width: 960px;
 }
+span#bannertext{
+    font-size: 48px;
+    vertical-align: middle;
+}
 
 #buffer {
   float: left;
@@ -78,4 +82,24 @@ a:visited {
   margin-top: 17px;
   font-size: 9pt;
   vertical-align: bottom;
+}
+
+/*** Nav Bar ***/
+#navbar,
+#navbar ul{
+/*Remove all spacings from the list items*/
+	margin: 0;
+	padding: 0;
+	cursor: default;
+	list-style-type: none;
+	display: inline;
+}
+
+#navbar{
+    display: inline;
+}
+#navbar>li{
+	display: table-cell;
+	position: relative;
+	padding: 2px 6px;
 }
