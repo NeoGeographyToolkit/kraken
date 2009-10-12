@@ -149,7 +149,7 @@ INSTALLED_APPS = (
     'ngt.tiepoints',
     'ngt.assets',
     'ngt.jobs',
-    'ngt.mastercontrol',
+    'ngt.dispatch',
     'ngt.django_extras',
     'pds',
 )

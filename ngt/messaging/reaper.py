@@ -35,7 +35,7 @@ def recv_callback(msg):
     
 def send_status(uuid, status):
     """ Issue a message to the status bus requesting to update a job's status."""
-    msg_body = protocols.pack(protocols.Status, {'uuid':uuid, 'newstatus':status})
+    msg_body = protocols.pack(protocols.Status, {'uuid':uuid, 'state':status})
     chan.basic_publish( Message(msg_body), exchange=STATUS_EXCHANGE_NAME, routing_key='.'.join((REAPER_TYPE, 'job')) )
     
 def execute_command(msg):
