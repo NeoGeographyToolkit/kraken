@@ -1,8 +1,10 @@
+import logging
+logger = logging.getLogger()
 from django.db import models
 try:
     import cpickle as pickle
 except ImportError:
-    print "Couldn't locate cpickle.  Using the native python pickle."
+    logger.warning("Couldn't locate cpickle.  Using the native python pickle.")
     import pickle
     
 class PickledDescriptor(property):

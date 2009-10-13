@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import sys, os
+import sys, os, uuid
 from subprocess import Popen, PIPE
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))    
@@ -18,15 +18,19 @@ messagebus = MessageBus()
 chan = messagebus.channel
 
 REAPER_TYPE = 'reaper.generic'
-COMMAND_EXCHANGE_NAME = 'Command_Exchange'
+JOB_EXCHANGE_NAME = 'Job_Exchange'
+CONTROL_EXCHANGE_NAME = 'Control_Exchange'
 STATUS_EXCHANGE_NAME = 'Status_Exchange'
+REAPER_ID = uuid.uuid1().hex
 
-# This script consumes from a command queue...
-chan.exchange_declare(COMMAND_EXCHANGE_NAME, type="direct", durable=True, auto_delete=False)
+# Consume from the job queue...
+chan.exchange_declare(JOB_EXCHANGE_NAME, type="direct", durable=True, auto_delete=False)
 chan.queue_declare(queue=REAPER_TYPE, durable=True, exclusive=False, auto_delete=False)
-chan.queue_bind(queue=REAPER_TYPE, exchange=COMMAND_EXCHANGE_NAME, routing_key=REAPER_TYPE)
-# ...and publishes to the status exchange.
+chan.queue_bind(queue=REAPER_TYPE, exchange=JOB_EXCHANGE_NAME, routing_key=REAPER_TYPE)
+# Publish to the status exchange.
 chan.exchange_declare(exchange=STATUS_EXCHANGE_NAME, type="fanout", durable=True, auto_delete=False)
+# Notify the dispatcher via the control exchange:
+chan.exchange_declare(CONTROL_EXCHANGE_NAME, type='topic')
 
 def recv_callback(msg):
     """ For testing.  Just print the message body"""
@@ -38,11 +42,11 @@ def send_status(uuid, status):
     msg_body = protocols.pack(protocols.Status, {'uuid':uuid, 'state':status})
     chan.basic_publish( Message(msg_body), exchange=STATUS_EXCHANGE_NAME, routing_key='.'.join((REAPER_TYPE, 'job')) )
     
-def execute_command(msg):
+def command_handler(msg):
         
     if not msg:
         # Is the queue empty?
-        logger.error("execute_command() called with no message.")
+        logger.error("command_handler() called with no message.")
         return None
 
     cmd = protocols.unpack(protocols.Command, msg.body)
@@ -58,12 +62,15 @@ def execute_command(msg):
     else:
         logger.error("Command: '%s' not found in amq_config's list of valid commands." % cmd.command)
     
+#register this reaper with dispatch
+registration_command = protocols.pack(protocols.Command, {'command':'register_reaper', 'args':[REAPER_ID]})
+chan.basic_publish(registration_command, exchange=CONTROL_EXCHANGE_NAME, routing_key='dispatch')
 
-ctag = chan.basic_consume(queue=REAPER_TYPE, no_ack=True, callback=execute_command)
+ctag = chan.basic_consume(queue=REAPER_TYPE, no_ack=True, callback=command_handler)
 
-while True:
-    chan.wait()
-chan.basic_cancel(ctag)
-
-
-chan.close()
+try:
+    while True:
+        chan.wait()
+finally:
+    chan.basic_cancel(ctag)
+    chan.close()

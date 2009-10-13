@@ -1,4 +1,7 @@
 import os, sys, platform
+import logging
+logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+logger = logging.getLogger()
 
 #Import local settings file if it exists and set HOST dictionary
 try:
@@ -161,4 +164,4 @@ try:
     from django.contrib.gis.admin.options import GeoModelAdmin
     INSTALLED_APPS += ('django.contrib.gis',)
 except ImportError:
-    print "WARNING: Could not import GeoModelAdmin. (GEOS may be missing).  geodjango will be disabled."
+    logger.warning("Could not import GeoModelAdmin. (GEOS may be missing).  geodjango will be disabled.")
