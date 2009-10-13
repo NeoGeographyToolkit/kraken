@@ -11,8 +11,8 @@ logger = logging.getLogger()
 
 from amqplib import client_0_8 as amqp
 from amqplib.client_0_8.basic_message import Message
-from amq_config import connection_params, commands
-from messagebus import MessageBus
+from messaging.amq_config import connection_params, commands
+from messaging.messagebus import MessageBus
 
 messagebus = MessageBus()
 chan = messagebus.channel
@@ -41,6 +41,7 @@ def send_status(uuid, status):
     """ Issue a message to the status bus requesting to update a job's status."""
     msg_body = protocols.pack(protocols.Status, {'uuid':uuid, 'state':status})
     chan.basic_publish( Message(msg_body), exchange=STATUS_EXCHANGE_NAME, routing_key='.'.join((REAPER_TYPE, 'job')) )
+    logger.debug("Sent status %s to %s" % (msg_body, STATUS_EXCHANGE_NAME))
     
 def command_handler(msg):
         
@@ -64,7 +65,7 @@ def command_handler(msg):
     
 #register this reaper with dispatch
 registration_command = protocols.pack(protocols.Command, {'command':'register_reaper', 'args':[REAPER_ID]})
-chan.basic_publish(registration_command, exchange=CONTROL_EXCHANGE_NAME, routing_key='dispatch')
+chan.basic_publish(Message(registration_command), exchange=CONTROL_EXCHANGE_NAME, routing_key='dispatch')
 
 ctag = chan.basic_consume(queue=REAPER_TYPE, no_ack=True, callback=command_handler)
 

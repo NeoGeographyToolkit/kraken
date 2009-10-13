@@ -14,7 +14,8 @@ setup_environ(settings)
 
 import logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
-logger = logging.getLogger()
+logger = logging.getLogger('statusd')
+logger.setLevel(logging.DEBUG)
 
 from ngt.messaging.messagebus import MessageBus
 from ngt.jobs.models import Job
@@ -42,10 +43,14 @@ def process_status_msg(msg):
     update_status(msg.body)
     messagebus.ack(msg.delivery_info['delivery_tag'])
     
-
+logger.info("statusd running with instance id %s" % instance_id)
 queuename = "status_statusd_%s" % instance_id
+messagebus.exchange_declare(exchange="Status_Exchange", type="fanout", durable=True)
 messagebus.queue_declare(queue=queuename, durable=True, exclusive=False, auto_delete=False)
-ctag = messagebus.register_consumer(queuename, process_status_msg, exchange="Status_Exchange")
+messagebus.queue_bind(queue=queuename, exchange='Status_Exchange', routing_key=queuename)
+#ctag = messagebus.register_consumer(queuename, process_status_msg, exchange="Status_Exchange")
+ctag = messagebus.basic_consume(callback=process_status_msg, queue=queuename)
+logger.debug("Consuming with ctag %s" % ctag)
 
 def cleanup():
     logger.info("Deleting queue %s" % queuename)
