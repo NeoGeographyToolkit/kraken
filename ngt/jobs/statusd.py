@@ -2,6 +2,7 @@
 import sys
 import atexit
 import uuid
+import threading
 try:
     import json
 except ImportError:
@@ -42,7 +43,17 @@ def process_status_msg(msg):
     logger.debug("GOT STATUS: %s" % msg.body)
     update_status(msg.body)
     messagebus.ack(msg.delivery_info['delivery_tag'])
-    
+
+def cleanup():
+    logger.info("Deleting queue %s" % queuename)
+    messagebus.queue_delete(queuename, if_empty=True)
+atexit.register(cleanup)
+
+def consume(ctag, shutdown_event):
+    while not shutdown_event.is_set():
+        messagebus._chan.wait()
+        
+
 logger.info("statusd running with instance id %s" % instance_id)
 queuename = "status_statusd_%s" % instance_id
 messagebus.exchange_declare(exchange="Status_Exchange", type="fanout", durable=True)
@@ -50,16 +61,18 @@ messagebus.queue_declare(queue=queuename, durable=True, exclusive=False, auto_de
 messagebus.queue_bind(queue=queuename, exchange='Status_Exchange', routing_key=queuename)
 #ctag = messagebus.register_consumer(queuename, process_status_msg, exchange="Status_Exchange")
 ctag = messagebus.basic_consume(callback=process_status_msg, queue=queuename)
+
+shutdown_event = threading.Event()
+consume_loop = threading.Thread(target=consume, args=(ctag,shutdown_event))
+consume_loop.daemon = True
+
+consume_loop.start()
 logger.debug("Consuming with ctag %s" % ctag)
-
-def cleanup():
-    logger.info("Deleting queue %s" % queuename)
-    messagebus.queue_delete(queuename, if_empty=True)
-atexit.register(cleanup)
-
-try:
-    while True:
-        messagebus._chan.wait()
-finally:
-    messagebus._chan.basic_cancel(ctag)
-    
+while True:
+    try:
+        consume_loop.join(0.5)
+    except KeyboardInterrupt:
+        shutdown_event.set()
+        messagebus._chan.basic_cancel(ctag)
+        #logger.debug("Consumption cancelled.")
+        sys.exit(0)
