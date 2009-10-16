@@ -19,7 +19,8 @@ urlpatterns = patterns('',
                        
                        #The Big Board!
                        (r'bigboard/?$', 'ngt.bigboard.views.index'),
-                       
+                       (r'bigboard/reapers/?$', 'ngt.bigboard.views.list_reapers'),
+           
                        #(r'^(.*)$', 'ngt.views.index'),
                        (r'^/?$', 'ngt.views.index'),
                       

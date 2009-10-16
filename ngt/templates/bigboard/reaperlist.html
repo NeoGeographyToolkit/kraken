@@ -1,0 +1,18 @@
+{% extends "bigboard/bb_base.html"%}
+
+{% block content %}
+<table id="reapers" class="centered">
+  <tr>
+    <th>Reaper ID</th>
+    <th>Job Count</th>
+    <th>Running</th>
+  </tr>
+{% for reaper in reapers %}
+<tr>
+    <td>{{reaper.uuid}}</td>
+    <td>{{reaper.jobcount}}</td>
+    <td>{{reaper.start_time|timesince}}</td>
+</tr>
+{% endfor %}
+</table>
+{% endblock %}

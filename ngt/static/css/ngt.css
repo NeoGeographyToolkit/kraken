@@ -50,6 +50,14 @@ a:visited {
   float: left;
   width: 960px;
 }
+#masthead a{
+    color: inherit;
+    text-decoration: none;
+}
+#masthead a img {
+    color: black;
+}
+
 span#bannertext{
     font-size: 48px;
     vertical-align: middle;
@@ -103,4 +111,9 @@ span#bannertext{
 	display: table-cell;
 	position: relative;
 	padding: 2px 6px;
+}
+
+
+table.centered td{
+    text-align: center;
 }
