@@ -117,26 +117,11 @@ class MessageBus(object):
         logger.debug("MessageBus (Ch#%d): %s will consume from queue '%s'" % (chan.channel_id, str(callback), queuename))
         return chan.basic_consume(callback=callback, queue=queuename)
 
-    '''
-    def ack(self, *args, **kwargs):
-        self._chan.basic_ack(*args, **kwargs)
-    '''
         
     def start_consuming(self):
         self.consumption_thread.start()
         
-    '''    
-    def _consume_loop(self):
-        logger.debug("Starting consume loop on channel %d" % self._chan.channel_id)
-        while self._chan.callbacks and not self.shutdown_event.is_set():
-            self._chan.wait()
-        logger.debug("consume loop terminating, channel %d" % self._chan.channel_id)
-    
-    def launch_consume_loop(self):
-        consume_thread = threading.Thread(target=self._consume_loop)
-        consume_thread.daemon = True
-        consume_thread.start()
-    '''
+
 
     def __getattr__(self, name):
         return object.__getattribute__(self._chan, name)

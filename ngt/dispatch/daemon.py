@@ -118,13 +118,7 @@ def init():
     status_ctag = mb.basic_consume(callback=status_handler, queue='status.dispatch')
 
     mb.start_consuming()
-    '''
-    # consumption loop now handled in the MessageBus
-    shutdown_event = threading.Event()
-    thread_consume_loop = threading.Thread(target=consume_loop, args=(mb, shutdown_event) )
-    thread_consume_loop.daemon = True
-    thread_consume_loop.start()
-    '''
+
 
 if __name__ == '__main__':
     init()
