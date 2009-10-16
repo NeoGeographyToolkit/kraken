@@ -16,7 +16,7 @@ _STATUS = descriptor.Descriptor(
   containing_type=None,
   fields=[
     descriptor.FieldDescriptor(
-      name='uuid', full_name='Status.uuid', index=0,
+      name='job_id', full_name='Status.job_id', index=0,
       number=1, type=9, cpp_type=9, label=1,
       default_value=unicode("", "utf-8"),
       message_type=None, enum_type=None, containing_type=None,
@@ -25,6 +25,13 @@ _STATUS = descriptor.Descriptor(
     descriptor.FieldDescriptor(
       name='state', full_name='Status.state', index=1,
       number=2, type=9, cpp_type=9, label=1,
+      default_value=unicode("", "utf-8"),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    descriptor.FieldDescriptor(
+      name='reaper_id', full_name='Status.reaper_id', index=2,
+      number=3, type=9, cpp_type=9, label=1,
       default_value=unicode("", "utf-8"),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
