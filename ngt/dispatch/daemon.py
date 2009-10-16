@@ -55,10 +55,18 @@ def update_status(pb_string):
         job = Job.objects.get(uuid=stat_msg.job_id)
         job.status = stat_msg.state
         job.save()
+        if 'reaper_id' in stat_msg and stat_msg['reaper_id']:
+            r = Reaper.objects.get(uuid=stat_msg['reaper_id'])
+            r.jobcount += 1
+            r.save()
         return True
     except Job.DoesNotExist:
         logger.error("Couldn't find a job with uuid %s on status update." % stat_msg.uuid)
         return False
+    except Reaper.DoesNotExist:
+        # <shrug>
+        logger.warning("Dispatch received a status message from unregistered reaper %s" % stat_msg['reaper_id'])
+        return True
     
 ###
 # Handlers
