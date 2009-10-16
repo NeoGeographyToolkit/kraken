@@ -1,11 +1,13 @@
 import sys, logging, threading, os, atexit
-logger = logging.getLogger('dispatch')
-logger.setLevel(logging.DEBUG)
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))    
 from ngt import protocols
 from ngt.messaging.messagebus import MessageBus
 from amqplib.client_0_8 import Message
-from ngt.jobs.statusd import update_status
+
+logger = logging.getLogger('dispatch')
+logger.setLevel(logging.INFO)
+
 mb = MessageBus()
 
 sys.path.insert(0, '../..')
@@ -13,11 +15,15 @@ from django.core.management import setup_environ
 from ngt import settings
 setup_environ(settings)
 from models import Reaper
+from ngt.jobs.models import Job
 
 commands = ['register_reaper', 'unregister_reaper']
 command_map = dict([(name, name) for name in commands ])
 command_map.update({'shutdown': '_shutdown'})
 
+###
+# COMMANDS
+###
 
 def register_reaper(args):
     assert len(args) == 1
@@ -38,7 +44,26 @@ def unregister_reaper(args):
         logger.info("Reaper deleted: %s" % reaper_uuid)
     except Reaper.DoesNotExist:
         logger.error("Tried to delete an unregistered reaper, UUID %s" % reaper_uuid)
+
+def update_status(pb_string):
+    '''
+    Update the status of a job based on data from a serialized protocol buffer binary string.
+    '''
+    stat_msg = protocols.unpack(protocols.Status, pb_string)
+    logger.info("Setting status of job %s to '%s'." % (stat_msg.job_id, stat_msg.state))
+    try:
+        job = Job.objects.get(uuid=stat_msg.job_id)
+        job.status = stat_msg.state
+        job.save()
+        return True
+    except Job.DoesNotExist:
+        logger.error("Couldn't find a job with uuid %s on status update." % stat_msg.uuid)
+        return False
     
+###
+# Handlers
+###
+
 def command_handler(msg):
     """ Unpack a message and process commands 
         Speaks the command protocol.
@@ -67,7 +92,7 @@ def consume_loop(mb, shutdown_event):
         
 
 def _shutdown(*args):
-    shutdown_event.set()
+    mb.shutdown_event.set()
     
 def shutdown():
     payload = protocols.pack(protocols.Command, {'command':'shutdown'})
@@ -75,7 +100,8 @@ def shutdown():
     mb.channel.basic_publish(Message(payload), exchange='Control_Exchange', routing_key='dispatch')
     
 def init():
-    global command_ctag, status_ctag, thread_consume_loop, shutdown_event
+    global command_ctag, status_ctag, thread_consume_loop#, shutdown_event
+    logging.getLogger('messagebus').setLevel(logging.DEBUG)
     
     atexit.register(shutdown)
     
@@ -91,10 +117,14 @@ def init():
     mb.queue_bind(queue='status.dispatch', exchange='Status_Exchange', routing_key='dispatch')
     status_ctag = mb.basic_consume(callback=status_handler, queue='status.dispatch')
 
+    mb.start_consuming()
+    '''
+    # consumption loop now handled in the MessageBus
     shutdown_event = threading.Event()
     thread_consume_loop = threading.Thread(target=consume_loop, args=(mb, shutdown_event) )
     thread_consume_loop.daemon = True
     thread_consume_loop.start()
+    '''
 
 if __name__ == '__main__':
     init()
