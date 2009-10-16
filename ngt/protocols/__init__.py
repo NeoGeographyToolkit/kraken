@@ -1,5 +1,7 @@
 from command_pb2 import Command
 from status_pb2 import Status
+import logging
+logger = logging.getLogger('protocol')
 
 __all__ = ('test', 'dotdict', 'pack', 'unpack', 'Command', 'Status')
 
@@ -28,6 +30,7 @@ def pack(msgclass, data):
             assert field_descriptor.label in [field_descriptor.LABEL_OPTIONAL, field_descriptor.LABEL_REQUIRED]
             setattr(msg, k, v)
     assert msg.IsInitialized
+    logger.debug("PACK %s --> %s" % (str(data), str(msg.SerializeToString())))
     return msg.SerializeToString()
             
     
@@ -42,7 +45,7 @@ def unpack(msgclass, msgstring):
             dd[fieldname] = list(value)
         else:
             dd[fieldname] = value
-
+    logger.debug("UNPACK %s --> %s" % (msgstring, str(dd)))
     return dd
             
     
