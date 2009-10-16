@@ -1,8 +1,10 @@
 {% extends "base.html"%}
 {% block title %}The Big Board{% endblock %}
 {% block masthead%}
+<a href="{% url bigboard.views.index %}">
 <img src="{{ MEDIA_URL }}/images/meatball.jpg" height=70px>
 <span id="bannertext">The Big Board</span>
+</a>
 {% endblock %}
 
 {% block topnav %}

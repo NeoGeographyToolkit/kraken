@@ -65,7 +65,7 @@ def update_status(pb_string):
         return False
     except Reaper.DoesNotExist:
         # <shrug>
-        logger.warning("Dispatch received a status message from unregistered reaper %s" % stat_msg['reaper_id'])
+        logger.warning("Dispatch received a status message from unregistered reaper %s.  Probably not good." % stat_msg['reaper_id'])
         return True
     
 ###
