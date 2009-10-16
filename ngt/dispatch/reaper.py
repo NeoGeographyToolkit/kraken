@@ -7,7 +7,6 @@ import protocols
 
 import logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
-logger = logging.getLogger()
 
 from amqplib import client_0_8 as amqp
 from amqplib.client_0_8.basic_message import Message
@@ -22,6 +21,8 @@ JOB_EXCHANGE_NAME = 'Job_Exchange'
 CONTROL_EXCHANGE_NAME = 'Control_Exchange'
 STATUS_EXCHANGE_NAME = 'Status_Exchange'
 REAPER_ID = uuid.uuid1().hex
+logger = logging.getLogger('reaper.%s' % REAPER_ID)
+
 
 # Consume from the job queue...
 chan.exchange_declare(JOB_EXCHANGE_NAME, type="direct", durable=True, auto_delete=False)
@@ -62,16 +63,24 @@ def command_handler(msg):
             send_status(cmd.uuid, 'failed')
     else:
         logger.error("Command: '%s' not found in amq_config's list of valid commands." % cmd.command)
-    
-#register this reaper with dispatch
-registration_command = protocols.pack(protocols.Command, {'command':'register_reaper', 'args':[REAPER_ID]})
-chan.basic_publish(Message(registration_command), exchange=CONTROL_EXCHANGE_NAME, routing_key='dispatch')
+def register_with_dispatch():
+    #register this reaper with dispatch
+    registration_command = protocols.pack(protocols.Command, {'command':'register_reaper', 'args':[REAPER_ID]})
+    chan.basic_publish(Message(registration_command), exchange=CONTROL_EXCHANGE_NAME, routing_key='dispatch')
 
+def unregister_with_dispatch():
+    #register this reaper with dispatch
+    registration_command = protocols.pack(protocols.Command, {'command':'unregister_reaper', 'args':[REAPER_ID]})
+    chan.basic_publish(Message(registration_command), exchange=CONTROL_EXCHANGE_NAME, routing_key='dispatch')
+
+register_with_dispatch()
 ctag = chan.basic_consume(queue=REAPER_TYPE, no_ack=True, callback=command_handler)
 
 try:
     while True:
         chan.wait()
 finally:
+    unregister_with_dispatch()
     chan.basic_cancel(ctag)
     chan.close()
+

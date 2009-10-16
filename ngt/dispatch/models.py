@@ -13,6 +13,9 @@ from django.db import models
 
         
 class Reaper(models.Model):
+    class Meta:
+        app_label = 'dispatch'
+        
     uuid = models.CharField(max_length=32, unique=True)
     type = models.CharField(max_length=128, default='reaper')
     start_time = models.DateTimeField(auto_now_add=True)
