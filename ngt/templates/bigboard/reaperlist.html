@@ -4,12 +4,14 @@
 <table id="reapers" class="centered">
   <tr>
     <th>Reaper ID</th>
+    <th>Type</th>
     <th>Job Count</th>
     <th>Running</th>
   </tr>
 {% for reaper in reapers %}
 <tr>
-    <td>{{reaper.uuid}}</td>
+    <td><span class="uuid">{{reaper.uuid|slice:"0:8"}}</span></td>
+    <td>{{reaper.type}}</td>
     <td>{{reaper.jobcount}}</td>
     <td>{{reaper.start_time|timesince}}</td>
 </tr>

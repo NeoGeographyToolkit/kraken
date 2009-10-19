@@ -1,0 +1,10 @@
+{% extends "bigboard/bb_base.html"%}
+
+{% block content %}
+{% if jobsetform.instance.id %}
+<form method="POST" action="{% url bigboard.views.jobset_detail jobset_id=jobsetform.instance.id %}">{% else %}
+<form method="POST" action="{% url bigboard.views.jobset_create%}">{% endif %}
+<input type="submit" value="Save" />
+{{ jobsetform.as_p }}
+</form>
+{% endblock %}

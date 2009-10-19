@@ -1,0 +1,20 @@
+{% extends "bigboard/bb_base.html"%}
+
+{% block content %}
+<table id="jobsets" class="centered">
+  <tr>
+    <th>Name</th>
+    <th>Command</th>
+    <th>Assets</th>
+    <th>Status</th>
+  </tr>
+{% for jobset in jobsets %}
+<tr>
+    <td><a href="{% url bigboard.views.jobset_detail jobset_id=jobset.id %}">{{jobset.name}}</a></td>
+    <td>{{jobset.command}}</td>
+    <td>{{jobset.assets.count}}</td>
+    <td>{{jobset.status}}</td>
+</tr>
+{% endfor %}
+</table>
+{% endblock %}
