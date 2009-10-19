@@ -26,12 +26,12 @@ command_map.update({'shutdown': '_shutdown'})
 ###
 
 def register_reaper(args):
-    assert len(args) == 1
-    reaper_uuid = args[0]
+    assert len(args) == 2
+    reaper_uuid, reaper_type = args
     try:
         Reaper.objects.get(uuid=reaper_uuid)
     except Reaper.DoesNotExist:
-        r = Reaper(uuid=reaper_uuid)
+        r = Reaper(uuid=reaper_uuid, type=reaper_type)
         r.save()
         logger.info("Registered reaper: %s" % reaper_uuid)
 

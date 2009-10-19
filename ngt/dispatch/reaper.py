@@ -16,7 +16,7 @@ from messaging.messagebus import MessageBus
 messagebus = MessageBus()
 chan = messagebus.channel
 
-REAPER_TYPE = 'reaper.generic'
+REAPER_TYPE = 'generic'
 JOB_EXCHANGE_NAME = 'Job_Exchange'
 CONTROL_EXCHANGE_NAME = 'Control_Exchange'
 STATUS_EXCHANGE_NAME = 'Status_Exchange'
@@ -65,7 +65,7 @@ def command_handler(msg):
         logger.error("Command: '%s' not found in amq_config's list of valid commands." % cmd.command)
 def register_with_dispatch():
     #register this reaper with dispatch
-    registration_command = protocols.pack(protocols.Command, {'command':'register_reaper', 'args':[REAPER_ID]})
+    registration_command = protocols.pack(protocols.Command, {'command':'register_reaper', 'args':[REAPER_ID, REAPER_TYPE]})
     chan.basic_publish(Message(registration_command), exchange=CONTROL_EXCHANGE_NAME, routing_key='dispatch')
 
 def unregister_with_dispatch():

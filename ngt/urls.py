@@ -20,6 +20,9 @@ urlpatterns = patterns('',
                        #The Big Board!
                        (r'bigboard/?$', 'ngt.bigboard.views.index'),
                        (r'bigboard/reapers/?$', 'ngt.bigboard.views.list_reapers'),
+                       (r'bigboard/jobs/?$', 'ngt.bigboard.views.list_jobsets'),
+                       (r'bigboard/jobs/(?P<jobset_id>\d+)$', 'ngt.bigboard.views.jobset_detail'),
+                       (r'bigboard/jobs/new/?$', 'ngt.bigboard.views.jobset_create'),
            
                        #(r'^(.*)$', 'ngt.views.index'),
                        (r'^/?$', 'ngt.views.index'),
