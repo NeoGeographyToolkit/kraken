@@ -20,7 +20,7 @@ class LazyProperty(object):
         return result
 
 class ConsumptionThread(threading.Thread):
-    def __init__(self, connection, shutdown_event):
+    def __init__(self, shutdown_event, connection=connection):
         threading.Thread.__init__(self)
         self.daemon = True
         self.name = "consumption_thread"
@@ -30,7 +30,10 @@ class ConsumptionThread(threading.Thread):
     @LazyProperty
     def channel(self):
         return connection.channel()
-    
+        
+    def ack(self, delivery_tag):
+        self.channel.basic_ack(delivery_tag)
+        
     def run(self):
         logger.info("Starting consume loop on channel %d" % self.channel.channel_id)
         while self.channel.callbacks and not self.shutdown_event.is_set():
@@ -75,7 +78,7 @@ class MessageBus(object):
 
     @LazyProperty
     def consumption_thread(self):
-        return ConsumptionThread(self._conn, self.shutdown_event)
+        return ConsumptionThread(self.shutdown_event)
     
     def publish(self, msg, exchange=DEFAULT_EXCHANGE, routing_key=None):
         msg = amqp.Message(msg)
