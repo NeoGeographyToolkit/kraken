@@ -3,6 +3,8 @@ from amq_config import connection_params
 import threading
 import logging
 logger = logging.getLogger('messagebus')
+logger.setLevel(logging.DEBUG)
+
 DEFAULT_EXCHANGE = 'amq.direct'
 
 connection = amqp.Connection(**connection_params)
@@ -25,6 +27,7 @@ class ConsumptionThread(threading.Thread):
         self.daemon = True
         self.name = name
         self.shutdown_event = shutdown_event
+        logger.debug("%s init complete." % self.name)
         #self.channel = connection.channel()
     
     @LazyProperty
@@ -34,8 +37,20 @@ class ConsumptionThread(threading.Thread):
     def ack(self, delivery_tag):
         self.channel.basic_ack(delivery_tag)
         
+    def bump(self):
+        ''' Push a dummy method onto the queue for this consumer's channel
+            This *might* help break out of the wait cycle on shutdown.
+        '''
+        dummy_method = (
+            self.channel.channel_id, # channel_id
+            (20,40), # method_sig
+            [], # args
+            '', # content
+        )
+        self.channel.connection.method_reader.queue.put(dummy_method)
+        
     def run(self):
-        logger.info("Starting consume loop on channel %d" % self.channel.channel_id)
+        logger.info("%s starting consume loop on channel %d" % (self.name, self.channel.channel_id) )
         while self.channel.callbacks and not self.shutdown_event.is_set():
             self.channel.wait()
         logger.info("%s terminating, channel %d" % (self.name, self.channel.channel_id) )

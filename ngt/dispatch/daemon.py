@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import sys, logging, threading, os, atexit
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))    
@@ -130,3 +131,9 @@ def init():
 
 if __name__ == '__main__':
     init()
+    try:
+        while True:
+            pass
+    except KeyboardInterrupt:
+        logger.info("Got a keyboard interrupt.  Shutting down dispatch.")
+        sys.exit(0)
