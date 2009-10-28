@@ -73,6 +73,7 @@ class Product(models.Model):
 
 class Asset(models.Model):
     #pds_product = models.ForeignKey(Product, null=True)
+    pds_product_id = models.TextField(max_length=64, null=True) # only meaningful if this asset is associated with a single product
     products = models.ManyToManyField(Product, related_name='assets')
     parents = models.ManyToManyField('Asset', symmetrical=False, related_name='children')
     #original = models.ForeignKey('Asset', null=True)
@@ -81,7 +82,13 @@ class Asset(models.Model):
     name = models.TextField(max_length=512, null=True)
     
     def __unicode__(self):
-        return self.name
+        if self.name:
+            rep = self.name
+        elif self.pds_product_id:
+            rep = self.pds_product_id
+        else:
+            rep = self.id
+        return "<Asset: %s>" % rep
 
 """
 def asset_verify_originality(instance, **kwargs):
