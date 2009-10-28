@@ -71,6 +71,8 @@ class Product(models.Model):
         #super(Product,self).save(self, *args, **kwargs)
         models.Model.save(self, *args, **kwargs)
 
+"""
+# pds.models.Asset is replaced by ngt.models.Asset
 class Asset(models.Model):
     #pds_product = models.ForeignKey(Product, null=True)
     pds_product_id = models.TextField(max_length=64, null=True) # only meaningful if this asset is associated with a single product
@@ -78,7 +80,7 @@ class Asset(models.Model):
     parents = models.ManyToManyField('Asset', symmetrical=False, related_name='children')
     #original = models.ForeignKey('Asset', null=True)
     is_original = models.BooleanField(default=False)
-    image_path = models.FilePathField(max_length=4096) #4096 being linux's maximum absolute path length
+    image_path = models.FilePathField(max_length=4096) #4096 being the linux kernel's default maximum absolute path length
     name = models.TextField(max_length=512, null=True)
     
     def __unicode__(self):
@@ -90,7 +92,6 @@ class Asset(models.Model):
             rep = self.id
         return "<Asset: %s>" % rep
 
-"""
 def asset_verify_originality(instance, **kwargs):
     if instance.is_original: #'''another original exists with the same pds product''':
         qs = Asset.objects.filter(pds_product=instance.pds_product).filter(is_original=True)
