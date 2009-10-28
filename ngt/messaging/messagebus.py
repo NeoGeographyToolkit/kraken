@@ -74,7 +74,8 @@ class MessageBus(object):
         try:
             self._chan.close()
         except TypeError:
-            logger.error("Couldn't close the channel on MessageBus delete.  It may already have been closed...")
+            if logger:
+                logger.error("Couldn't close the channel on MessageBus delete.  It may already have been closed...")
 
     @LazyProperty
     def consumption_thread(self):

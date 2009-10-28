@@ -1,7 +1,7 @@
 from django.db import models
 import os, time, hashlib, datetime
 from ngt.messaging.messagebus import MessageBus
-from pds.models import Asset
+from ngt.assets.models import Asset
 import json
 from ngt import protocols
 
