@@ -17,18 +17,20 @@ class Tracker(object):
     """
     def __init__(self, 
         name="TRACKER", 
-        report_every=10, 
+        report_every=1, 
         target=None, 
         iter=None, 
         progress=False,
         output_to=sys.stdout
     ):
         if progress:
-            assert target
+            assert target != None
+            if target == 0:
+                raise ValueError("Tracker can't deal with a target of 0.")
         self.count = 0
         self.output_stream = output_to
         self.name = name
-        self.iter = iter.__iter__() if iter else None
+        self.iter = iter.__iter__() if iter != None else None
         if not target and iter and hasattr(iter, '__len__'):
             self.target = len(iter)
         else:
@@ -50,6 +52,9 @@ class Tracker(object):
         #self.output_stream.write("\r"+''.join(( '=' for i in range(1,barlength)))+'>'+''.join((' ' for i in range(1,scale-barlength-1))) + " %d"%count)
         self.output_stream.write("\r[%s>%s]%d" % (''.join(['=' for i in range(1,barlength)]), ''.join([' ' for i in range(1,scale - barlength)]), self.count))
         self.output_stream.flush()
+        if self.count == self.target: # last one...
+            self.output_stream.write("\n")
+            self.output_stream.flush()
     
     def _report(self):
         if self.progress:

@@ -16,6 +16,10 @@ class Asset(models.Model):
     status = models.TextField(max_length=128, null=True)
     md5_check = models.BooleanField(null=True)
     class_label = models.TextField(max_length=512, null=True)
+
+    center_latitude = models.FloatField(null=True)
+    min_latitude = models.FloatField(null=True)
+    max_latitude = models.FloatField(null=True)
     
     def __unicode__(self):
         if self.name:

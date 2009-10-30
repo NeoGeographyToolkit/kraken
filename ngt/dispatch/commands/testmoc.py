@@ -38,7 +38,7 @@ for id in testids:
     try:
         #moc_stage.stage_image(a.file_path, output_dir='testdata/')
         outfile = 'out/'+os.path.splitext(os.path.basename(a.file_path))[0]+'.cub'
-        moc_stage.mocproc(a.file_path, outfile)
+        moc_stage.mocproc(a.file_path, outfile, map='PolarStereographic')
     except AssertionError, e:
         print e
     print "Finish ", count
