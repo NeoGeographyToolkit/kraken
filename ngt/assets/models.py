@@ -1,7 +1,8 @@
 from django.contrib.gis.db import models
 from pds.models import Product
+import os
 
-DATA_ROOT = '/big/sourcedata/MOC'
+DATA_ROOT = '/big/sourcedata/moc'
 class Asset(models.Model):
     '''  Image file asset -- built for MOC data '''
     volume = models.TextField(max_length=256, null=True)
@@ -19,12 +20,12 @@ class Asset(models.Model):
     def __unicode__(self):
         if self.name:
             rep = self.name
-        elif self.pds_product_id:
-            rep = self.pds_product_id
+        elif self.product_id:
+            rep = self.product_id
         else:
             rep = self.id
         return "<Asset: %s>" % rep
 
     @property
     def file_path(self, dataroot=DATA_ROOT):
-        return os.path.join(dataroot, self.volume, self.file_name)
+        return os.path.join(DATA_ROOT, self.volume.lower(), self.file_name.lower())
