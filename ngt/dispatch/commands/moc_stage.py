@@ -1,13 +1,18 @@
+#!/usr/bin/env python
 import sys, os
 from subprocess import Popen
 
 ### Global Params
-COMMAND_PATH = (os.path.dirname(__file__)) if (os.path.dirname(__file__)).strip() else '.'# because this file lives in the command path
+# COMMAND_PATH = os.path.dirname(__file__) if os.path.dirname(__file__)).strip() else '.' # because this file lives in the command path
+if os.path.dirname(__file__).strip():
+    COMMAND_PATH = os.path.dirname(__file__)
+else:
+    COMMAND_PATH = '.' # because this file lives in the command path
 print "command path is %s" % COMMAND_PATH
 
 def isis_run(message, args):
     print message
-    print os.path.join(COMMAND_PATH, 'isis.sh')
+    #print os.path.join(COMMAND_PATH, 'isis.sh')
     p = Popen([os.path.join(COMMAND_PATH, 'isis.sh')]+list(args))
     p.wait()
     print "Done."
@@ -26,9 +31,12 @@ def cam2map(incube, outcube):
     msg = "Projecting to %s" % outcube
     isis_run(msg, ('cam2map', 'from='+incube, 'to='+outcube))
 
-def stage_image(image_path, output_dir="/big/assets/moc/"):
+def stage_image(image_path, output_dir="/big/assets/moc/", flat=True):
    basename = os.path.splitext(os.path.basename(image_path))[0]
-   dest_dir = os.path.join(output_dir, basename[:5])
+   if flat:
+    dest_dir = output_dir
+   else:
+    dest_dir = os.path.join(output_dir, basename[:5])
    if not os.path.exists(dest_dir):
        os.makedirs(dest_dir)
    tmpfilename = "_%s.cub" % basename
@@ -46,11 +54,16 @@ def stage_image(image_path, output_dir="/big/assets/moc/"):
 
    projfile = tmpfilename.replace('_','')
    cam2map(tmpfilename, projfile)
-   assert os.path.exists(tmpfilename[1:])
+   assert os.path.exists(projfile)
    os.remove(tmpfilename)
 
-   print "YAY!!!"
-   sys.exit(0)
+   print "Projected map saved to %s" % projfile
+   #sys.exit(0) 
+
+def mocproc(input_file, output_file):
+    msg = "%s --> %s" % (input_file, output_file)
+    #output_to = os.path.join(output_dir, output_file)
+    isis_run(msg, ('mocproc', 'from='+input_file, 'to='+output_file))
 
 if __name__ == '__main__':
     usage = '''USAGE: stage_moc.py sourceimage [outputpath] '''
@@ -58,6 +71,9 @@ if __name__ == '__main__':
         print usage
         sys.exit(1)
     elif len(sys.argv) > 2:
-        stage_image(sys.argv[1], output_dir=sys.argv[2])
+        #stage_image(sys.argv[1], output_dir=sys.argv[2])
+        mocproc(sys.argv[1], sys.argv[2])
     else:
-        stage_image(sys.argv[1])
+        outfile = "out/"+os.path.splitext(os.path.basename(sys.argv[1]))[0]+".cub"
+        #stage_image(sys.argv[1], outfile)
+        mocproc(sys.argv[1], outfile)
