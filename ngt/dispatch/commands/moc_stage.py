@@ -60,10 +60,17 @@ def stage_image(image_path, output_dir="/big/assets/moc/", flat=True):
    print "Projected map saved to %s" % projfile
    #sys.exit(0) 
 
-def mocproc(input_file, output_file):
+mapfiles = {
+    'PolarStereographic': 'polarstereographic.map',
+    'Sinusoidal': 'sinusoidal.map',
+}
+def mocproc(input_file, output_file, map=False):
     msg = "%s --> %s" % (input_file, output_file)
-    #output_to = os.path.join(output_dir, output_file)
-    isis_run(msg, ('mocproc', 'from='+input_file, 'to='+output_file))
+    args = ('mocproc', 'from='+input_file, 'to='+output_file)
+    if map and map in mapfiles:
+        mapfile = mapfiles[map]
+        args = args + ("map="+mapfile,)
+    isis_run(msg, args)
 
 if __name__ == '__main__':
     usage = '''USAGE: stage_moc.py sourceimage [outputpath] '''
