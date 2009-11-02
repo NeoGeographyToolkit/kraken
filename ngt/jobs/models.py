@@ -42,8 +42,9 @@ class RemoteJob(models.Model):
 class Job(models.Model):
     uuid = models.CharField(max_length=32, null=True)
     command = models.CharField(max_length=64)
-    arguments = models.TextField(null=True)
+    arguments = models.TextField(null=True) # an array seriaized as json
     status = models.CharField(max_length=32, default='new')
+    assets = models.ManyToManyField(Asset, related_name='jobs')
     
     def _generate_uuid(self):
         '''Returns a unique job ID that is the MD5 hash of the local
@@ -59,6 +60,10 @@ class Job(models.Model):
     
     def __unicode__(self):
         return self.uuid
+
+    @property
+    def command_string(self):
+        return self.command + ' ' + ' '.join(json.loads(self.arguments))
     
     def enqueue(self):
         cmd = {
@@ -100,7 +105,7 @@ class JobSet(models.Model):
             )
     
     def execute(self):
-        self.simple_populate()
+        #self.simple_populate()
         self.status = "dispatched"
         for job in self.jobs.filter(status='new'):
             job.enqueue()

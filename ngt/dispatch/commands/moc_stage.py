@@ -4,6 +4,8 @@ from subprocess import Popen
 
 ### Global Params
 # COMMAND_PATH = os.path.dirname(__file__) if os.path.dirname(__file__)).strip() else '.' # because this file lives in the command path
+DEFAULT_OUTPATH = "out/"
+
 if os.path.dirname(__file__).strip():
     COMMAND_PATH = os.path.dirname(__file__)
 else:
@@ -14,10 +16,45 @@ def isis_run(message, args):
     print message
     #print os.path.join(COMMAND_PATH, 'isis.sh')
     p = Popen([os.path.join(COMMAND_PATH, 'isis.sh')]+list(args))
-    p.wait()
-    print "Done."
+    return p.wait()
+
+mapfiles = {
+    'PolarStereographic': 'polarstereographic.map',
+    'Sinusoidal': 'sinusoidal.map',
+}
+def mocproc(input_file, output_file, map=False):
+    msg = "%s --> %s" % (input_file, output_file)
+    output_dir = os.path.split(output_file)[0]
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    args = ('mocproc', 'from='+input_file, 'to='+output_file)
+    if map and map in mapfiles:
+        mapfile = os.path.join(COMMAND_PATH,mapfiles[map])
+        args = args + ("map="+mapfile,)
+    return isis_run(msg, args)
+
+if __name__ == '__main__':
+    from optparse import OptionParser
+    usage = '''USAGE: stage_moc.py sourceimage.img destination.cub  '''
+    parser = OptionParser(usage=usage)
+    parser.add_option("-m", "--map", default='Sinusoidal', dest='map_projection', help='ISIS name of a map projection to use.')
+    (options, args) = parser.parse_args()
+    if len(args) < 1:
+        parser.print_help()
+        sys.exit(1)
+    elif len(args) > 1:
+        #stage_image(sys.argv[1], output_dir=sys.argv[2])
+        retcode = mocproc(args[0], args[1], map=options.map_projection)
+    else:
+        outfile = DEFAULT_OUTPATH + os.path.splitext(os.path.basename(args[0]))[0] + ".cub"
+        #stage_image(sys.argv[1], outfile)
+        retcode = mocproc(sys.argv[1], outfile, map=options.map_projection)
+    sys.exit(retcode)
 
 
+
+
+"""
 def make_cube(source_img_path, dest_cube_path):
     assert os.path.exists(source_img_path)
     msg =  "Creating new CUB at %s" % dest_cube_path
@@ -59,28 +96,4 @@ def stage_image(image_path, output_dir="/big/assets/moc/", flat=True):
 
    print "Projected map saved to %s" % projfile
    #sys.exit(0) 
-
-mapfiles = {
-    'PolarStereographic': 'polarstereographic.map',
-    'Sinusoidal': 'sinusoidal.map',
-}
-def mocproc(input_file, output_file, map=False):
-    msg = "%s --> %s" % (input_file, output_file)
-    args = ('mocproc', 'from='+input_file, 'to='+output_file)
-    if map and map in mapfiles:
-        mapfile = mapfiles[map]
-        args = args + ("map="+mapfile,)
-    isis_run(msg, args)
-
-if __name__ == '__main__':
-    usage = '''USAGE: stage_moc.py sourceimage [outputpath] '''
-    if len(sys.argv) < 2:
-        print usage
-        sys.exit(1)
-    elif len(sys.argv) > 2:
-        #stage_image(sys.argv[1], output_dir=sys.argv[2])
-        mocproc(sys.argv[1], sys.argv[2])
-    else:
-        outfile = "out/"+os.path.splitext(os.path.basename(sys.argv[1]))[0]+".cub"
-        #stage_image(sys.argv[1], outfile)
-        mocproc(sys.argv[1], outfile)
+"""
