@@ -16,6 +16,13 @@ from messaging.amq_config import connection_params, which
 from messaging.messagebus import MessageBus, ConsumptionThread
 from threading import Event
 
+if os.path.dirname(__file__).strip():
+    COMMAND_PATH = os.path.join(os.path.dirname(__file__), 'commands')
+else:
+    COMMAND_PATH = './commands' 
+print "command path is %s" % COMMAND_PATH
+
+
 commands = {
     'echo': which('echo'),
     'grep': which('grep'),
@@ -23,6 +30,7 @@ commands = {
     #'test': os.path.join(os.path.split(__file__)[0], 'fake_mosiac.py'), #a test command that randomly fails
     'test': '/Users/ted/code/alderaan/ngt/messaging/fake_command.py',
     'size': which('du'),
+    'moc-stage': os.path.join(COMMAND_PATH, 'moc_stage.py'), # convert and map-project MOC images
 }
 
 messagebus = MessageBus()
