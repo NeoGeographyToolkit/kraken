@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import sys, logging, threading, os, atexit
+import sys, logging, threading, os, atexit, time
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))    
 from ngt import protocols
@@ -16,11 +16,15 @@ from django.core.management import setup_environ
 from ngt import settings
 setup_environ(settings)
 from models import Reaper
-from ngt.jobs.models import Job
+from ngt.jobs.models import Job, JobSet
+from django.db.models import Q
 
 commands = ['register_reaper', 'unregister_reaper']
 command_map = dict([(name, name) for name in commands ])
 command_map.update({'shutdown': '_shutdown'})
+
+JOB_RELEASE_RATE = 5
+job_semaphore = threading.Semaphore(JOB_RELEASE_RATE)
 
 ###
 # COMMANDS
@@ -50,6 +54,7 @@ def update_status(pb_string):
     '''
     Update the status of a job based on data from a serialized protocol buffer binary string.
     '''
+    global active_jobs
     stat_msg = protocols.unpack(protocols.Status, pb_string)
     logger.info("Setting status of job %s to '%s'." % (stat_msg.job_id, stat_msg.state))
     try:
@@ -57,17 +62,18 @@ def update_status(pb_string):
         job.status = stat_msg.state
         job.save()
         if 'reaper_id' in stat_msg and stat_msg['reaper_id']:
-            r = Reaper.objects.get(uuid=stat_msg['reaper_id'])
-            r.jobcount += 1
-            r.save()
+            try:
+                r = Reaper.objects.get(uuid=stat_msg['reaper_id'])
+                r.jobcount += 1
+                r.save()
+            except Reaper.DoesNotExist:
+                # <shrug>
+                logger.warning("Dispatch received a status message from unregistered reaper %s.  Probably not good." % stat_msg['reaper_id'])
+        job_semaphore.release()
         return True
     except Job.DoesNotExist:
         logger.error("Couldn't find a job with uuid %s on status update." % stat_msg.uuid)
         return False
-    except Reaper.DoesNotExist:
-        # <shrug>
-        logger.warning("Dispatch received a status message from unregistered reaper %s.  Probably not good." % stat_msg['reaper_id'])
-        return True
     
 ###
 # Handlers
@@ -107,27 +113,50 @@ def shutdown():
     payload = protocols.pack(protocols.Command, {'command':'shutdown'})
     print "sending ", payload
     mb.channel.basic_publish(Message(payload), exchange='Control_Exchange', routing_key='dispatch')
+
+
+def enqueue_jobs(logger, job_semaphore, shutdown_event):
+    ''' Loop and enqueue jobs if the maximum queue size hasn't been exceeded '''
+    logger.debug("Job dispatch is launching.")
+    Job.objects.filter(status='queued').update(status='requeue')
+    while True:
+        if shutdown_event.is_set():
+            break
+        for jobset in JobSet.objects.filter(active=True):
+            try:
+                job = jobset.jobs.filter(Q(status='new') | Q(status='requeue') )[0]
+                job_semaphore.acquire()
+                job.enqueue()
+                time.sleep(0.5)
+            except IndexError:
+                logger.info("Ran out of jobs to enqueue. Dispatch thread will exit.")
+                return True
+
     
 def init():
-    global command_ctag, status_ctag, thread_consume_loop#, shutdown_event
+    global command_ctag, status_ctag, thread_consume_loop, shutdown_event
+    shutdown_event = threading.Event()
     logging.getLogger('messagebus').setLevel(logging.DEBUG)
     
     atexit.register(shutdown)
     
     #setup command queue
     mb.exchange_declare('Control_Exchange', type='topic')
-    mb.queue_declare('control.dispatch')
+    mb.queue_declare('control.dispatch',auto_delete=False)
     mb.queue_bind(queue='control.dispatch', exchange='Control_Exchange', routing_key='dispatch')
     command_ctag = mb.basic_consume(callback=command_handler, queue='control.dispatch')
 
     #setup status queue
     mb.exchange_declare('Status_Exchange', type='fanout')
-    mb.queue_declare('status.dispatch')
+    mb.queue_declare('status.dispatch', auto_delete=False)
     mb.queue_bind(queue='status.dispatch', exchange='Status_Exchange', routing_key='dispatch')
     status_ctag = mb.basic_consume(callback=status_handler, queue='status.dispatch')
 
     mb.start_consuming()
 
+    dispatch_thread = threading.Thread(name="job_dispatcher", target=enqueue_jobs, args=(logger, job_semaphore, shutdown_event) )
+    dispatch_thread.daemon = True
+    dispatch_thread.start()
 
 if __name__ == '__main__':
     init()

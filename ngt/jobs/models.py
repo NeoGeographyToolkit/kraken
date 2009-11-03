@@ -90,6 +90,7 @@ class JobSet(models.Model):
     jobs = models.ManyToManyField(Job, editable=False)
     status = models.CharField(max_length=32, default='new')
     command = models.CharField(max_length=64)
+    active = models.BooleanField(default=False)
     
     def __unicode__(self):
         return self.name
