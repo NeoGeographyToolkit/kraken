@@ -80,6 +80,7 @@ def job_command_handler(msg):
     cmd = protocols.unpack(protocols.Command, msg.body)
         
     if cmd.command in commands:  # only commands allowed by the configuration will be executed
+        send_job_status(cmd.uuid,  REAPER_ID)
         args = [ commands[cmd.command] ] + list(cmd.args)
         logger.debug("Executing %s" % ' '.join(args))
         resultcode = Popen(args).wait()
