@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import sys, os, uuid
 import threading
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, STDOUT
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))    
 import protocols
@@ -28,7 +28,7 @@ commands = {
     'grep': which('grep'),
     'ls': which('ls'),
     #'test': os.path.join(os.path.split(__file__)[0], 'fake_mosiac.py'), #a test command that randomly fails
-    'test': '/Users/ted/code/alderaan/ngt/messaging/fake_command.py',
+    'test': '../messaging/fake_command.py',
     'size': which('du'),
     'moc-stage': os.path.join(COMMAND_PATH, 'moc_stage.py'), # convert and map-project MOC images
 }
@@ -70,9 +70,12 @@ def recv_callback(msg):
     cmd_params = json.loads(msg.body)
     print 'Received: ' + str(cmd_params) + ' from channel #' + str(msg.channel.channel_id)
     
-def send_job_status(uuid, status):
+def send_job_status(uuid, status, output=None):
     """ Issue a message to the status bus requesting to update a job's status."""
-    msg_body = protocols.pack(protocols.Status, {'job_id':uuid, 'state':status, 'reaper_id': REAPER_ID})
+    args = {'job_id':uuid, 'state':status, 'reaper_id': REAPER_ID}
+    if output != None:
+        args['output'] = output
+    msg_body = protocols.pack(protocols.Status, args)
     chan.basic_publish( Message(msg_body), exchange=STATUS_EXCHANGE_NAME, routing_key='.'.join((REAPER_TYPE, 'job')) )
     logger.debug("Sent status %s to %s" % (msg_body, STATUS_EXCHANGE_NAME))
     
@@ -81,14 +84,23 @@ def job_command_handler(msg):
         
     if cmd.command in commands:  # only commands allowed by the configuration will be executed
         send_job_status(cmd.uuid,  REAPER_ID)
+        msg.channel.basic_ack(msg.delivery_tag)
         args = [ commands[cmd.command] ] + list(cmd.args)
         logger.debug("Executing %s" % ' '.join(args))
-        resultcode = Popen(args).wait()
+        p = Popen(args, stdout=PIPE, stderr=STDOUT)
+        output=""
+        while True:
+            line = p.stdout.readline()
+            if line == '' and p.poll() != None:
+                break
+            output += line
+            sys.stdout.write(line)
+        resultcode = p.wait()
         if resultcode == 0:
-            send_job_status(cmd.uuid, 'complete')
+            state = 'complete'
         else:
-            send_job_status(cmd.uuid, 'failed')
-        msg.channel.basic_ack(msg.delivery_tag)
+            state = 'failed'
+        send_job_status(cmd.uuid, state, output=output)
     else:
         logger.error("Command: '%s' not found in amq_config's list of valid commands." % cmd.command)
 # ***
@@ -118,9 +130,9 @@ def unregister_with_dispatch():
     command_to_dispatch('unregister_reaper', [REAPER_ID])
 
 logger.info("Registering and launching message handlers...")
-logger.debug("\tcontrol...")
+logger.debug("\tcontrol will consume from %s" % CONTROL_QUEUE_NAME)
 control_listener.channel.basic_consume(queue=CONTROL_QUEUE_NAME, no_ack=False, callback=control_command_handler)
-logger.debug("\tjob...")
+logger.debug("\tjob will consume from %s" % JOB_QUEUE_NAME)
 job_listener.channel.basic_consume(queue=JOB_QUEUE_NAME, no_ack=False, callback=job_command_handler)
 
 logger.debug("Launching consume threads...")

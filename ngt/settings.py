@@ -162,6 +162,7 @@ INSTALLED_APPS = (
 #--ebs
 try:
     from django.contrib.gis.admin.options import GeoModelAdmin
+    print "Adding django.contrib.gis to INSTALLED_APPS."
     INSTALLED_APPS += ('django.contrib.gis',)
 except ImportError:
     logger.warning("Could not import GeoModelAdmin. (GEOS may be missing).  geodjango will be disabled.")

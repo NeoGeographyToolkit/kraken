@@ -7,7 +7,7 @@ from ngt.messaging.messagebus import MessageBus
 from amqplib.client_0_8 import Message
 
 logger = logging.getLogger('dispatch')
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 mb = MessageBus()
 
@@ -23,8 +23,8 @@ commands = ['register_reaper', 'unregister_reaper']
 command_map = dict([(name, name) for name in commands ])
 command_map.update({'shutdown': '_shutdown'})
 
-JOB_RELEASE_RATE = 5
-job_semaphore = threading.Semaphore(JOB_RELEASE_RATE)
+JOB_RELEASE_LIMIT = 5
+job_semaphore = threading.Semaphore(JOB_RELEASE_LIMIT)
 
 ###
 # COMMANDS
@@ -54,22 +54,26 @@ def update_status(pb_string):
     '''
     Update the status of a job based on data from a serialized protocol buffer binary string.
     '''
-    global active_jobs
+    job_completers = ('complete','failed')
     stat_msg = protocols.unpack(protocols.Status, pb_string)
     logger.info("Setting status of job %s to '%s'." % (stat_msg.job_id, stat_msg.state))
     try:
         job = Job.objects.get(uuid=stat_msg.job_id)
         job.status = stat_msg.state
+        if 'output' in stat_msg:
+            job.output = stat_msg.output
         job.save()
         if 'reaper_id' in stat_msg and stat_msg['reaper_id']:
             try:
                 r = Reaper.objects.get(uuid=stat_msg['reaper_id'])
-                r.jobcount += 1
-                r.save()
+                if stat_msg.state in job_completers:
+                    r.jobcount += 1
+                    r.save()
             except Reaper.DoesNotExist:
                 # <shrug>
                 logger.warning("Dispatch received a status message from unregistered reaper %s.  Probably not good." % stat_msg['reaper_id'])
-        job_semaphore.release()
+        if stat_msg.state in job_completers:
+            job_semaphore.release()
         return True
     except Job.DoesNotExist:
         logger.error("Couldn't find a job with uuid %s on status update." % stat_msg.uuid)
@@ -108,6 +112,8 @@ def consume_loop(mb, shutdown_event):
 
 def _shutdown(*args):
     mb.shutdown_event.set()
+    time.sleep(2)
+    sys.exit(1)
     
 def shutdown():
     payload = protocols.pack(protocols.Command, {'command':'shutdown'})
@@ -140,13 +146,13 @@ def init():
     
     atexit.register(shutdown)
     
-    #setup command queue
+    # setup command queue
     mb.exchange_declare('Control_Exchange', type='topic')
-    mb.queue_declare('control.dispatch',auto_delete=False)
+    mb.queue_declare('control.dispatch',auto_delete=True)
     mb.queue_bind(queue='control.dispatch', exchange='Control_Exchange', routing_key='dispatch')
     command_ctag = mb.basic_consume(callback=command_handler, queue='control.dispatch')
 
-    #setup status queue
+    #i setup status queue
     mb.exchange_declare('Status_Exchange', type='fanout')
     mb.queue_declare('status.dispatch', auto_delete=False)
     mb.queue_bind(queue='status.dispatch', exchange='Status_Exchange', routing_key='dispatch')
@@ -154,9 +160,10 @@ def init():
 
     mb.start_consuming()
 
-    dispatch_thread = threading.Thread(name="job_dispatcher", target=enqueue_jobs, args=(logger, job_semaphore, shutdown_event) )
-    dispatch_thread.daemon = True
-    dispatch_thread.start()
+    if '--moc' in sys.argv:
+        dispatch_thread = threading.Thread(name="job_dispatcher", target=enqueue_jobs, args=(logger, job_semaphore, shutdown_event) )
+        dispatch_thread.daemon = True
+        dispatch_thread.start()
 
 if __name__ == '__main__':
     init()
