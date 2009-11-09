@@ -1,5 +1,6 @@
 from django.db import models
 import os, time, hashlib, datetime
+import uuid
 from ngt.messaging.messagebus import MessageBus
 from ngt.assets.models import Asset
 import json
@@ -7,6 +8,8 @@ from ngt import protocols
 
 messagebus = MessageBus()
 messagebus.channel.exchange_declare(exchange="Job_Exchange", type="direct", durable=True, auto_delete=False,)
+messagebus.channel.queue_declare(queue='reaper.generic', auto_delete=False)
+messagebus.channel.queue_bind(queue='reaper.generic', exchange='Job_Exchange', routing_key='reaper.generic')
 
 """
 REFACTORED TO just Job...
@@ -45,18 +48,20 @@ class Job(models.Model):
     arguments = models.TextField(null=True) # an array seriaized as json
     status = models.CharField(max_length=32, default='new')
     assets = models.ManyToManyField(Asset, related_name='jobs')
+    output = models.TextField(null=True)
     
     def _generate_uuid(self):
         '''Returns a unique job ID that is the MD5 hash of the local
         hostname, the local time of day, and the command & arguments for this job.'''
-        hostname = os.uname()[1]
-        t = time.clock()
-        m = hashlib.md5()
-        m.update(str(hostname))
-        m.update(str(t))
-        m.update(self.command)
-        m.update(self.arguments)
-        return m.hexdigest()
+        return uuid.uuid1().hex
+#        hostname = os.uname()[1]
+#        t = time.clock()
+#        m = hashlib.md5()
+#        m.update(str(hostname))
+#        m.update(str(t))
+#        m.update(self.command)
+#        m.update(self.arguments)
+#        return m.hexdigest()
     
     def __unicode__(self):
         return self.uuid

@@ -19,7 +19,10 @@ def pack(msgclass, data):
     """
     msg = msgclass()
     for k, v in data.items():
-        assert hasattr(msg, k)
+        try:
+            assert hasattr(msg, k)
+        except:
+            import pdb; pdb.set_trace()
         field_descriptor = msg.DESCRIPTOR.fields_by_name[k]
         if hasattr(v, '__iter__'):
             assert field_descriptor.label == field_descriptor.LABEL_REPEATED # verify this is a repeated field
@@ -30,7 +33,7 @@ def pack(msgclass, data):
             assert field_descriptor.label in [field_descriptor.LABEL_OPTIONAL, field_descriptor.LABEL_REQUIRED]
             setattr(msg, k, v)
     assert msg.IsInitialized
-    logger.debug("PACK %s --> %s" % (str(data), str(msg.SerializeToString())))
+    logger.debug("PACK %s --> %s" % (str(data), str(msg.SerializeToString())[:80]))
     return msg.SerializeToString()
             
     
@@ -45,7 +48,7 @@ def unpack(msgclass, msgstring):
             dd[fieldname] = list(value)
         else:
             dd[fieldname] = value
-    logger.debug("UNPACK %s --> %s" % (msgstring, str(dd)))
+    logger.debug("UNPACK %s --> %s" % (msgstring[80:], str(dd)[80:]))
     return dd
             
     

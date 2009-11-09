@@ -2,4 +2,5 @@ message Status{
     optional string job_id = 1;
     optional string state = 2;
     optional string reaper_id = 3;
+    optional string output = 4;
 }

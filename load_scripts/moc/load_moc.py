@@ -5,6 +5,8 @@ from django.core.management import setup_environ
 from ngt import settings
 setup_environ(settings)
 
+from django.contrib.gis.geos import Point, Polygon, LinearRing
+
 from pds.ingestion.cum_index import Table
 from ngt.assets.models import Asset
 from ngt.utils.tracker import Tracker
@@ -32,6 +34,7 @@ def peek_at_records():
         continue
 
 latitude_fields = ('lower_right_latitude','lower_left_latitude','upper_left_latitude','upper_left_latitude')
+longitude_fields = ('lower_right_longitude','lower_left_longitude','upper_left_longitude','upper_left_longitude')
 def update_latititudes():
     for volname, rec in Tracker(name='assets', iter=generate_image_records()):
         asset = Asset.objects.get(product_id=rec.product_id, volume=volname.upper())
@@ -40,6 +43,22 @@ def update_latititudes():
         asset.min_latitude = min(corner_latitudes)
         asset.max_latitude = max(corner_latitudes)
         asset.save()
+
+def build_footprint(record):
+    ''' take a pds record and return a geos polygon with the image footprint '''
+    fieldnames = zip(longitude_fields, latitude_fields)
+    points = []
+    for lonfield, latfield in fieldnames:
+        points.append(Point(getattr(record, lonfield), getattr(record, latfield)))
+    poly = Polgon(LinearRing( [p for p in points] + points[0] ))
+    return poly
+
+def update_footprints():
+    for volname, rec in Tracker(name='assets', iter=generate_image_records()):
+        asset = Asset.objects.get(product_id=rec.product_id, volume=volname.upper())
+        asset.footprint = build_footprint(rec)
+        asset.save()
+        
 
 if __name__ == '__main__':
     peek_at_records()
