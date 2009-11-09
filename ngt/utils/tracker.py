@@ -21,7 +21,7 @@ class Tracker(object):
         target=None, 
         iter=None, 
         progress=False,
-        output_to=sys.stdout
+        output_to=sys.stderr
     ):
         if progress:
             assert target != None
