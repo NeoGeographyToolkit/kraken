@@ -2,7 +2,8 @@ from django.contrib.gis.db import models
 from pds.models import Product
 import os
 
-DATA_ROOT = '/big/sourcedata/moc'
+#DATA_ROOT = '/big/sourcedata/moc'
+DATA_ROOT = '/big/assets/'
 class Asset(models.Model):
     '''  Image file asset -- built for MOC data '''
     volume = models.TextField(max_length=256, null=True)
@@ -10,7 +11,8 @@ class Asset(models.Model):
     products = models.ManyToManyField(Product, related_name='ngt_assets')
     parents = models.ManyToManyField('Asset', symmetrical=False, related_name='children')
     is_original = models.BooleanField(default=False)
-    file_name = models.FilePathField(max_length=4096) #4096 being the linux kernel's default maximum absolute path length
+    #file_name = models.FilePathField(max_length=4096) #4096 being the linux kernel's default maximum absolute path length
+    relative_file_path = models.FilePathField(max_length=4096) #4096 being the linux kernel's default maximum absolute path length
     name = models.TextField(max_length=512, null=True)
     
     status = models.TextField(max_length=128, null=True)
@@ -33,4 +35,6 @@ class Asset(models.Model):
 
     @property
     def file_path(self, dataroot=DATA_ROOT):
-        return os.path.join(DATA_ROOT, self.volume.lower(), self.file_name.lower())
+        """ Read only attribute: to set the file path, use relative_file_path """
+        #return os.path.join(DATA_ROOT, self.volume.lower(), self.file_name.lower())
+        return os.path.join(DATA_ROOT, self.relative_file_path)
