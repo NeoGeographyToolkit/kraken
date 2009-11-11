@@ -2,6 +2,7 @@ import sys, os, glob
 import md5
 
 from django.core.management import setup_environ
+sys.path.insert(0,'/home/ted/alderaan-wc')
 from ngt import settings
 setup_environ(settings)
 
@@ -11,7 +12,8 @@ from pds.ingestion.cum_index import Table
 from ngt.assets.models import Asset
 from ngt.utils.tracker import Tracker
 
-rootpath='/big/sourcedata/moc'
+#rootpath='/big/sourcedata/moc'
+rootpath='/home/ted/data/moc_meta'
 
 def generate_volnames():
     for file in glob.glob(os.path.join(rootpath,'mgsc_1*')):
@@ -29,7 +31,7 @@ def generate_image_records():
             
 def peek_at_records():
     import pdb
-    for rec in generate_image_records():
+    for volname, rec in generate_image_records():
         pdb.set_trace()
         continue
 
