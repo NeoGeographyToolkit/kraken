@@ -35,7 +35,7 @@ class Tracker(object):
         self.progress = progress
         if self.progress:
             assert self.target != None
-         if self.target == 0:
+        if self.target == 0:
             raise ValueError("Tracker can't deal with a target of 0.")
         self.report_every = report_every
         self.starttime = datetime.now()
