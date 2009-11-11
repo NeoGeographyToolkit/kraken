@@ -65,7 +65,6 @@ class Tracker(object):
     
     def next(self):
         self.count += 1
-        self.count += 1
         if self.count % self.report_every == 0:
             if not self.target or self.count <= self.target:
                 self._report()
