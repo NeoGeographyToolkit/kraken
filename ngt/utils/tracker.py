@@ -23,10 +23,7 @@ class Tracker(object):
         progress=False,
         output_to=sys.stderr
     ):
-        if progress:
-            assert target != None
-            if target == 0:
-                raise ValueError("Tracker can't deal with a target of 0.")
+
         self.count = 0
         self.output_stream = output_to
         self.name = name
@@ -36,6 +33,10 @@ class Tracker(object):
         else:
             self.target = target
         self.progress = progress
+        if self.progress:
+            assert self.target != None
+         if self.target == 0:
+            raise ValueError("Tracker can't deal with a target of 0.")
         self.report_every = report_every
         self.starttime = datetime.now()
     
