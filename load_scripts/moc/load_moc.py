@@ -6,6 +6,7 @@ sys.path.insert(0,'/home/ted/alderaan-wc')
 from ngt import settings
 setup_environ(settings)
 
+from django.db import transaction
 from django.contrib.gis.geos import Point, Polygon, LinearRing
 
 from pds.ingestion.cum_index import Table
@@ -55,11 +56,14 @@ def build_footprint(record):
     poly = Polgon(LinearRing( [p for p in points] + points[0] ))
     return poly
 
+@transaction.commit_on_success
 def update_footprints():
     for volname, rec in Tracker(name='assets', iter=generate_image_records()):
         asset = Asset.objects.get(product_id=rec.product_id, volume=volname.upper())
         asset.footprint = build_footprint(rec)
+        asset.instrument_name = rec.insturment_name
         asset.save()
+    return True
         
 
 if __name__ == '__main__':
