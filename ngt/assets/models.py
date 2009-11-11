@@ -22,7 +22,7 @@ class Asset(models.Model):
     center_latitude = models.FloatField(null=True)
     min_latitude = models.FloatField(null=True)
     max_latitude = models.FloatField(null=True)
-    footprint = models.PolygonField(null=True, srid=0)
+    footprint = models.PolygonField(null=True, srid=949900)
     
     def __unicode__(self):
         if self.name:
