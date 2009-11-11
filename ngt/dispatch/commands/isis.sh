@@ -7,7 +7,8 @@
 
 if [[ -z $ISISROOT ]]
 then
-    export ISISROOT='/big/packages/isis3/isis'
+    #export ISISROOT='/big/packages/isis3/isis'
+    export ISISROOT='/opt/isis3/isis'
 fi
 echo "ISISROOT is $ISISROOT"
 source "${ISISROOT}/scripts/isis3Startup.sh"
