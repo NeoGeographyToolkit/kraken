@@ -88,10 +88,11 @@ def update_footprints():
 
 def testpolys():
     for vol, rec in generate_image_records():
-        yield build_footprint(rec)
-def checkvalid():
-    for p in testpolys():
-        print p.valid
+        yield rec, build_footprint(rec)
+def badpolys():
+    for rec, p in testpolys():
+        if not p.valid and rec.instrument_name == 'MOC-NA':
+           yield rec, p
 def checkcoords():
     for vol, rec in generate_image_records():
        p = build_footprint(rec)
