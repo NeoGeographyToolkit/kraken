@@ -66,7 +66,7 @@ class Bouncer(threading.Thread):
                 self.handlemsg(msg)
             time.sleep(0.1)
 
-
+flag = threading.Event()
 def test():
     bouncer = Bouncer()
     bouncer.start()
@@ -75,17 +75,28 @@ def test():
     controller = protocols.rpcServices.AmqpRpcController()
     request = protocols.EchoMessage()
     
+    time.sleep(0.5)
     # Test the success case
+    print "\nTesting for success..."
     request.echotext = 'Howdy!'
     response = service.Echo(controller, request, None)
     print "Got a response: ", response
     
     #Test the failure case
+    print "\nTesting for failure..."
     request.echotext = "I hate you."
     response = service.Echo(controller, request, None)
     assert response == None
     
     #TODO: Test Callbacks
+    print "\nTesting callbacks."
+    flag.clear()
+    def callmeback(msg):
+        flag.set()
+        print "In callback: ", str(msg)
+    request.echotext = "ping"
+    service.Echo(controller, request, callmeback)
+    assert flag.is_set()
 
 if __name__ == '__main__':
     test()
