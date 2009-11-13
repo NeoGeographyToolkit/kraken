@@ -1,0 +1,54 @@
+message Command {
+    optional string uuid = 1;  // id of the entity meant to execute the command.
+    optional string command = 2;
+    repeated string args = 3; 
+}
+
+message JobStatus{
+    optional string job_id = 1;
+    optional string state = 2;
+    optional string reaper_id = 3;
+    optional string output = 4;
+}
+
+message ReaperStatusRequest {
+    required string reaper_uuid = 1;
+}
+
+message ReaperCommandRequest{
+    optional string reaper_uuid = 1;  // id of the entity meant to execute the command.
+    optional string command = 2;
+    repeated string args = 3;
+}
+
+message ReaperStatusResponse{
+    required string reaper_uuid = 1;
+    required string new_status = 2;
+}
+
+message EchoMessage{
+    required string payload = 1;
+}
+
+// ---------------------------------
+// Service definition
+// ---------------------------------
+
+message RpcRequestWrapper {
+  required string requestor = 1;
+  required string method = 2;
+  required bytes payload = 3;
+}
+
+message RpcResponseWrapper {
+  required bytes payload = 1;
+  required bool error = 2 [ default = false ];
+  optional string error_string = 3;
+}
+
+service ReaperCommandService{
+    rpc GetStatus(ReaperStatusRequest) returns (ReaperStatusResponse);
+    //rpc Pause(ReaperPauseRequest) returns (ReaperStatusResponse);
+    //rpc Resume(ReaperResumeRequest) returns (ReaperStatusResponse);
+    rpc Echo(EchoMessage) returns (EchoMessage);
+}
