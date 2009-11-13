@@ -27,7 +27,7 @@ message ReaperStatusResponse{
 }
 
 message EchoMessage{
-    required string payload = 1;
+    required string echotext = 1;
 }
 
 // ---------------------------------

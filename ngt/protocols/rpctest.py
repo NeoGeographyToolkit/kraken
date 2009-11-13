@@ -11,21 +11,44 @@ def hexdump(str):
 class Bouncer(threading.Thread):
     daemon = True
     queuename = 'bouncer'
-    response_class = protocols.EchoMessage
-    request_class = protocols.EchoMessage
+    
+    
+    def bounce(self, requestbytes):
+        """ Takes a reqest_class message as bytes and returns a response_class message as bytes.
+            Only the method being called needs to care about the message types it accepts and returns.
+        """
+        response_msg_class = protocols.EchoMessage
+        request_msg_class = protocols.EchoMessage
+        
+        request = protocols.unpack(request_msg_class, requestbytes)
+        print "Bouncing! ",
+        pprint(request)
+        if 'hate you' in request.echotext:
+            print "Failing due to hate crimes."
+            raise Exception("I hate you too.")
+        response = protocols.dotdict()
+        response.echotext = ''.join(reversed(request.echotext))
+        return protocols.pack(response_msg_class,response)
 
     def handlemsg(self, msg):
-       print "In the message handler"
+       """ Accepts an AMQP Message with a WireMessage payload.
+           Decodes the wiremessage and dispatches its RpcRequestWrapper payload (raw bytes) to the appropriate handler command.
+           Takes the response, wraps it in an RpcResponseWrapper Message, wraps THAT in a WireMessage, and sends it back to the requestor.
+       """
        wiremessage = WireMessage(msg.body)
-       print "bouncer wire msg: %s" % hexdump(wiremessage.serialized_bytes)
        pprint(protocols.unpack(protocols.RpcRequestWrapper, wiremessage.serialized_bytes))
        wrapped_request = wiremessage.parse_as_message(protocols.RpcRequestWrapper)
        request_bytes = wrapped_request.payload
-       request = protocols.unpack(self.request_class, request_bytes)
-       pprint(request)
-       response_bytes = protocols.pack(self.response_class, {'payload': ''.join(reversed(request.payload))})
-       responsewire = WireMessage.response({'payload':response_bytes, 'error':False})
-       self.mb.basic_publish(amqp.Message(responsewire.serialized_bytes), exchange='amq.direct', routing_key=wrapped_request.requestor)
+       
+       assert wrapped_request.method == 'Echo'  # or multiplex here to dispatch to different methods
+       
+       try:
+           response_bytes = self.bounce(request_bytes)
+           wireresponse = WireMessage.response({'payload':response_bytes, 'error':False})
+       except Exception, e:
+           wireresponse = WireMessage.response({'payload':'', 'error':True, 'error_string': str(e)})
+       
+       self.mb.basic_publish(amqp.Message(wireresponse.serialized_bytes), exchange='amq.direct', routing_key=wrapped_request.requestor)
        print "Bouncer published a result with key '%s'" % wrapped_request.requestor
 
 
@@ -34,15 +57,14 @@ class Bouncer(threading.Thread):
         self.mb.queue_delete(self.queuename )
         self.mb.queue_declare(self.queuename )
         self.mb.queue_bind(self.queuename, 'amq.direct', routing_key=self.queuename)
-        print "Bouncer Go! Consuming from %s" % self.queuename      
+        print "Bouncer Go! Consuming from queue '%s'" % self.queuename      
         while True:
-            sys.stdout.write('.'); sys.stdout.flush()
+            #sys.stdout.write('.'); sys.stdout.flush()
             msg = self.mb.basic_get(queue=self.queuename, no_ack=True)
             if msg:
                 print "Bouncer got a message."
                 self.handlemsg(msg)
-                break
-            time.sleep(0.1)    
+            time.sleep(0.1)
 
 
 def test():
@@ -50,11 +72,20 @@ def test():
     bouncer.start()
     channel = protocols.rpcServices.RpcChannel('amq.direct', 'test', Bouncer.queuename)
     service = protocols.ReaperCommandService_Stub(channel)
-    controller = protocols.rpcServices.RpcController()
+    controller = protocols.rpcServices.AmqpRpcController()
     request = protocols.EchoMessage()
-    request.payload = 'Howdy!'
+    
+    # Test the success case
+    request.echotext = 'Howdy!'
     response = service.Echo(controller, request, None)
     print "Got a response: ", response
+    
+    #Test the failure case
+    request.echotext = "I hate you."
+    response = service.Echo(controller, request, None)
+    assert response == None
+    
+    #TODO: Test Callbacks
 
 if __name__ == '__main__':
     test()

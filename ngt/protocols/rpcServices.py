@@ -1,6 +1,6 @@
 import sys, os, time
 import google.protobuf
-from google.protobuf.service import RpcController, Service
+from google.protobuf.service import RpcController as _RpcController, Service
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 from ngt import protocols
 from ngt.messaging.messagebus import MessageBus, amqp
@@ -10,7 +10,7 @@ logger = logging.getLogger('amqprpc')
 logger.setLevel(logging.DEBUG)
 logger.debug("Testing logger.")
 
-class AmqpRpcController(RpcController):
+class AmqpRpcController(_RpcController):
 
   """An RpcController mediates a single method call.
 
@@ -106,7 +106,8 @@ class WireMessage(object):
         if google.protobuf.message.Message in type(bytesource).mro(): # check if bytesource is a Message subclass
             self.size = bytesource.ByteSize()
             self.serialized_bytes = bytesource.SerializeToString()
-            #TODO: insert size at head of bytestring, cast as int32 bytes
+            # TODO: insert size at head of bytestring, cast as int32 bytes
+            # This needs to be done for compatability with the C++ WireRequests... don't forget to pop'em off on the way back in!
         elif type(bytesource) == str:
             self.size = len(bytesource)
             self.serialized_bytes = bytesource
@@ -169,7 +170,7 @@ class RpcChannel(object):
       
       #TODO: Setup exchange & queue
       self.messagebus.exchange_declare(exchange, 'direct')
-      #self.messagebus.queue_delete(queue=response_queue) # clear it in case there are backed up messages
+      #self.messagebus.queue_delete(queue=response_queue) # clear it in case there are backed up messages (EDIT: it *should* autodelete)
       self.messagebus.queue_declare(queue=response_queue)
       self.messagebus.queue_bind(response_queue, exchange, routing_key=response_queue)
       logger.debug("Response queue '%s' is bound to key '%s' on exchange '%s'" % (response_queue, response_queue, exchange))
@@ -190,8 +191,8 @@ class RpcChannel(object):
             'payload': request.SerializeToString()
         }
         )
-    print ' '.join([hex(ord(c))[2:] for c in request.SerializeToString()])    
-    print ' '.join([hex(ord(c))[2:] for c in request_wrapper])
+    #print ' '.join([hex(ord(c))[2:] for c in request.SerializeToString()])    
+    #print ' '.join([hex(ord(c))[2:] for c in request_wrapper])
     
     wire_request = WireMessage(request_wrapper)
     logger.debug("About to publish to exchange %s with key %s" % (self.exchange, self.request_routing_key))
@@ -203,7 +204,6 @@ class RpcChannel(object):
     logger.debug("Waiting for a response on queue '%s'" % self.response_queue)
     response = None
     while not response:
-        sys.stdout.write(','); sys.stdout.flush()
         response = self.messagebus.basic_get(self.response_queue, no_ack=True) # returns a message or None
         time.sleep(0.01)
     logger.debug("Got some sort of response")
@@ -211,7 +211,7 @@ class RpcChannel(object):
     wire_response = WireMessage(response.body)
     response_wrapper = wire_response.parse_as_message(protocols.RpcResponseWrapper)
     if response_wrapper.error:
-        logger.error("Error String: %s" % respnse_wrapper.error_string)
+        logger.error("Error String: %s" % response_wrapper.error_string)
         rpc_controller.SetFailed(response_wrapper.error)
         if done:
             done(None)
