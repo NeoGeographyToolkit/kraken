@@ -1,5 +1,6 @@
-from command_pb2 import Command
-from status_pb2 import Status
+#from command_pb2 import Command
+#from status_pb2 import Status
+from protocols_pb2 import *
 import logging
 logger = logging.getLogger('protocol')
 
@@ -22,7 +23,7 @@ def pack(msgclass, data):
         try:
             assert hasattr(msg, k)
         except:
-            import pdb; pdb.set_trace()
+            raise AttributeError("%s doesn't have an attribute named %s." % (str(msgclass), k))
         field_descriptor = msg.DESCRIPTOR.fields_by_name[k]
         if hasattr(v, '__iter__'):
             assert field_descriptor.label == field_descriptor.LABEL_REPEATED # verify this is a repeated field
