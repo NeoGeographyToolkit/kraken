@@ -1,4 +1,5 @@
 import sys, os, time
+from datetime import datetime
 import google.protobuf
 from google.protobuf.service import RpcController as _RpcController, Service
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
@@ -170,7 +171,7 @@ class RpcChannel(object):
       
       #TODO: Setup exchange & queue
       self.messagebus.exchange_declare(exchange, 'direct')
-      #self.messagebus.queue_delete(queue=response_queue) # clear it in case there are backed up messages (EDIT: it *should* autodelete)
+      self.messagebus.queue_delete(queue=response_queue) # clear it in case there are backed up messages (EDIT: it *should* autodelete)
       self.messagebus.queue_declare(queue=response_queue)
       self.messagebus.queue_bind(response_queue, exchange, routing_key=response_queue)
       logger.debug("Response queue '%s' is bound to key '%s' on exchange '%s'" % (response_queue, response_queue, exchange))
@@ -203,20 +204,34 @@ class RpcChannel(object):
     # Wait for a response
     logger.debug("Waiting for a response on queue '%s'" % self.response_queue)
     response = None
+    timeout_flag = False
+    t0 = datetime.now()
     while not response:
+        delta_t = datetime.now() - t0
+        if delta_t.seconds * 1000 + delta_t.microseconds / 1000 > rpc_controller.m_timeout_millis:
+            timeout_flag = True
+            break
         response = self.messagebus.basic_get(self.response_queue, no_ack=True) # returns a message or None
         time.sleep(0.01)
-    logger.debug("Got some sort of response")
     
-    wire_response = WireMessage(response.body)
-    response_wrapper = wire_response.parse_as_message(protocols.RpcResponseWrapper)
-    if response_wrapper.error:
-        #logger.error("Error String: %s" % response_wrapper.error_string)
-        rpc_controller.SetFailed(response_wrapper.error)
+    if timeout_flag:
+        logger.debug("RPC Method %s Timed out," % method_descriptor.name)
+        rpc_controller.SetFailed("Timed out.")
         if done:
             done(None)
         return None
-    response = protocols.unpack(response_class, response_wrapper.payload)
-    if done:
-        done(response)
-    return response
+    else:
+        logger.debug("Got some sort of response")
+    
+        wire_response = WireMessage(response.body)
+        response_wrapper = wire_response.parse_as_message(protocols.RpcResponseWrapper)
+        if response_wrapper.error:
+            #logger.error("Error String: %s" % response_wrapper.error_string)
+            rpc_controller.SetFailed(response_wrapper.error)
+            if done:
+                done(None)
+            return None
+        response = protocols.unpack(response_class, response_wrapper.payload)
+        if done:
+            done(response)
+        return response
