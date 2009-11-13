@@ -7,7 +7,7 @@ from ngt.messaging.messagebus import MessageBus, amqp
 import logging
 logging.basicConfig()
 logger = logging.getLogger('amqprpc')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARNING)
 logger.debug("Testing logger.")
 
 class AmqpRpcController(_RpcController):
@@ -211,7 +211,7 @@ class RpcChannel(object):
     wire_response = WireMessage(response.body)
     response_wrapper = wire_response.parse_as_message(protocols.RpcResponseWrapper)
     if response_wrapper.error:
-        logger.error("Error String: %s" % response_wrapper.error_string)
+        #logger.error("Error String: %s" % response_wrapper.error_string)
         rpc_controller.SetFailed(response_wrapper.error)
         if done:
             done(None)
