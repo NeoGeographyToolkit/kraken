@@ -11,24 +11,6 @@ message JobStatus{
     optional string output = 4;
 }
 
-message ReaperStatusRequest {
-    required string reaper_uuid = 1;
-}
-
-message ReaperCommandRequest{
-    optional string reaper_uuid = 1;  // id of the entity meant to execute the command.
-    optional string command = 2;
-    repeated string args = 3;
-}
-
-message ReaperStatusResponse{
-    required string reaper_uuid = 1;
-    required string new_status = 2;
-}
-
-message EchoMessage{
-    required string echotext = 1;
-}
 
 // ---------------------------------
 // Service definition
@@ -46,9 +28,67 @@ message RpcResponseWrapper {
   optional string error_string = 3;
 }
 
+message AckResponse {
+    enum AckState{
+        ACK = 0;
+        NO_ACK = 1;
+    }
+    optional AckState ack = 1 [default = ACK];
+}
+
+
+// #####
+// # Dispatch Control Service
+// #####
+
+message ReaperRegistrationRequest{
+    required string reaper_uuid = 1;
+    optional string reaper_type = 2 [default = "generic"];
+}
+
+message ReaperUnregistrationRequest{
+    required string reaper_uuid = 1;
+}
+
+service DispatchCommandService{
+    rpc registerReaper(ReaperRegistrationRequest) returns (AckResponse);
+    rpc unregisterReaper(ReaperUnregistrationRequest) returns (AckResponse);
+}
+
+// #####
+// # Reaper Control Service
+// #####
+
+message ReaperCommandRequest{
+    optional string reaper_uuid = 1;  // id of the entity meant to execute the command.
+    optional string command = 2;
+    repeated string args = 3;
+}
+
+message ReaperStatusRequest {
+    required string reaper_uuid = 1;
+}
+
+message ReaperStatusResponse{
+    required string reaper_uuid = 1;
+    required string new_status = 2;
+}
+
+
+
 service ReaperCommandService{
     rpc GetStatus(ReaperStatusRequest) returns (ReaperStatusResponse);
     //rpc Pause(ReaperPauseRequest) returns (ReaperStatusResponse);
     //rpc Resume(ReaperResumeRequest) returns (ReaperStatusResponse);
+    rpc Echo(EchoMessage) returns (EchoMessage);
+}
+
+// #####
+// # RPC Testing
+// #####
+message EchoMessage{
+    required string echotext = 1;
+}
+service TestService{
     rpc Echo(EchoMessage) returns (EchoMessage);
 }
