@@ -1,10 +1,11 @@
 #from command_pb2 import Command
 #from status_pb2 import Status
-from protocols_pb2 import *
+from protocols_pb2 import RpcRequestWrapper, RpcResponseWrapper
+import protocols_pb2 as protobuf
 import logging
 logger = logging.getLogger('protocol')
 
-__all__ = ('test', 'dotdict', 'pack', 'unpack', 'Command', 'Status')
+__all__ = ('test', 'dotdict', 'pack', 'unpack', 'RpcRequestWrapper', 'RpcResponseWrapper', 'protobuf')
 
 class dotdict(dict):
     """ Dictionary subclass that gives you JavaScript-style dot-operator access to members. """
@@ -13,6 +14,9 @@ class dotdict(dict):
     __setattr__= dict.__setitem__
     __delattr__= dict.__delitem__
 
+####
+# A Simplified interface to google.protobuf
+###
 
 def pack(msgclass, data):
     """ Convert a the data in dict 'data' to a protocol buffer Message of type 'msgclass'

@@ -108,24 +108,28 @@ class WireMessage(object):
             self.size = bytesource.ByteSize()
             self.serialized_bytes = bytesource.SerializeToString()
             # TODO: insert size at head of bytestring, cast as int32 bytes
-            # This needs to be done for compatability with the C++ WireRequests... don't forget to pop'em off on the way back in!
+            # This needs to be done for compatability with the C++ WireRequests... don't forget to pop'em off in payload_bytes
         elif type(bytesource) == str:
             self.size = len(bytesource)
+            # TODO: insert size at head of bytestring, cast as int32 bytes
             self.serialized_bytes = bytesource
         else:
             raise ValueError("WireMesssage constructor wants a protobuf Message or string, but got a %s" % str(type(bytesource)))
             
-    def parse_as_message(self, pbmsgclass):
-        msgbytes = self.serialized_bytes
+    @property
+    def payload_bytes(self):
         # TODO: pop the size bytes off the head of the string...
-        #print ' '.join([hex(ord(c))[2:] for c in msgbytes])
+        return self.serialized_bytes
+    
+    def parse_as_message(self, pbmsgclass):
+        msgbytes = self.payload_bytes
         pbmsg = pbmsgclass()
         pbmsg.ParseFromString(msgbytes)
         return pbmsg
 
     @classmethod
-    def request(klass, response_dict):
-       """ Takes a dict and returns a wrapped request ready for the wire. 
+    def pack_request(klass, response_dict):
+       """ Takes a dict and returns bytes ready for the wire. 
            The response dict needs to have the appropriate fields for an RpcResponse Wrapper protobuf:
            message RpcRequestWrapper {
              required string requestor = 1;
@@ -133,11 +137,15 @@ class WireMessage(object):
              required bytes payload = 3;
            }
        """
-       return klass(protocols.pack(protocols.RpcRequestWrapper, response_dict))
+       return klass(protocols.pack(protocols.RpcRequestWrapper, response_dict)).serialized_bytes
+
+    @classmethod
+    def unpack_request(klass, bytes):
+        return protocols.unpack(protocols.RpcRequestWrapper, klass(bytes).payload_bytes)
     
     @classmethod
-    def response(klass, response_dict):
-        """ Takes a dict and returns a wrapped response ready for the wire. 
+    def pack_response(klass, response_dict):
+        """ Takes a dict and returns a bytes ready for the wire. 
             The response dict needs to have the appropriate fields for an RpcResponse Wrapper protobuf:
             message RpcResponseWrapper {
               required bytes payload = 1;
@@ -145,7 +153,11 @@ class WireMessage(object):
               optional string error_string = 3;
             }
         """
-        return klass(protocols.pack(protocols.RpcResponseWrapper, response_dict))
+        return klass(protocols.pack(protocols.RpcResponseWrapper, response_dict)).serialized_bytes
+
+    @classmethod    
+    def unpack_response(klass, bytes):
+       return protocols.unpack(protocols.RpcRequestWrapper, klass(bytes).payload_bytes)
         
 
 class RpcChannel(object):
