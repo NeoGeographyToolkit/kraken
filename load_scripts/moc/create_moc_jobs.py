@@ -12,8 +12,8 @@ from ngt.jobs.models import JobSet, Job
 from ngt.assets.models import Asset
 from ngt.utils.tracker import Tracker
 
-ROOTPATH='/big/sourcedata/moc'
-DESTPATH='/big/assets/MOC/'
+ROOTPATH='/big/assets/mocsource/'
+DESTPATH='/big/assets/moc/'
 
 def generate_jobs(queryset):
     track = None
@@ -24,7 +24,7 @@ def generate_jobs(queryset):
         sourcefile = asset.file_path
         dest_name = os.path.splitext(asset.file_name.lower())[0] + '.cub'
         destfile =  os.path.join(DESTPATH, asset.volume.lower(), dest_name)
-        if abs(asset.center_latitude) > 85:
+        if abs(asset.footprint.centroid.y) > 85:
             map_projection = 'PolarStereographic'
         else:
             map_projection = 'Sinusoidal'

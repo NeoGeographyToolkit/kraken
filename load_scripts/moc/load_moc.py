@@ -3,7 +3,7 @@ import md5
 from decimal import Decimal
 
 from django.core.management import setup_environ
-sys.path.insert(0,'/home/ted/alderaan-wc')
+sys.path.insert(0,'/home/ted/alderaan')
 from ngt import settings
 setup_environ(settings)
 
@@ -16,6 +16,7 @@ from ngt.utils.tracker import Tracker
 
 #rootpath='/big/sourcedata/moc'
 rootpath='/home/ted/data/moc_meta'
+rootpath='/big/assets/mocsource/'
 mars_srid = 949900
 
 def generate_volnames():
@@ -84,6 +85,18 @@ def update_footprints():
         #asset.instrument_name = rec.instrument_name
         asset.save()
     return True
+
+@transaction.commit_on_success
+def make_records():
+    for vol, rec in Tracker(iter=generate_image_records(), report_every=100):
+       if rec.instrument_name == 'MOC-NA':
+           a = Asset()
+           a.volume = vol
+           a.product_id = rec.product_id
+           a.instrument_name = rec.instrument_name
+           a.footprint = build_footprint(rec)
+           a.relative_file_path = os.path.join(vol, rec.file_specification_name)
+           a.save()
         
 
 def testpolys():
