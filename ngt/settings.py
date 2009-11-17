@@ -3,6 +3,8 @@ import logging
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 logger = logging.getLogger()
 
+DISABLE_GEO = False
+
 #Import local settings file if it exists and set HOST dictionary
 try:
     #import local_settings
@@ -154,15 +156,17 @@ INSTALLED_APPS = (
     'ngt.jobs',
     'ngt.dispatch',
     'ngt.django_extras',
-    'pds',
+    #'pds',
 )
 
 #HACK ATTACK... FIXME
 #Did the below so I can develop locally without GEOS installed
 #--ebs
-try:
-    from django.contrib.gis.admin.options import GeoModelAdmin
-    print "Adding django.contrib.gis to INSTALLED_APPS."
-    INSTALLED_APPS += ('django.contrib.gis',)
-except ImportError:
-    logger.warning("Could not import GeoModelAdmin. (GEOS may be missing).  geodjango will be disabled.")
+if not DISABLE_GEO:
+        try:
+            from django.contrib.gis.admin.options import GeoModelAdmin
+            print "Adding django.contrib.gis to INSTALLED_APPS."
+            INSTALLED_APPS += ('django.contrib.gis',)
+            INSTALLED_APPS += ('pds',)
+        except ImportError:
+            logger.warning("Could not import GeoModelAdmin. (GEOS may be missing).  geodjango will be disabled.")

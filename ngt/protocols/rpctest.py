@@ -2,7 +2,7 @@ import threading, time, sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import protocols
 from protocols import protobuf
-from protocols.rpcServices import WireMessage
+from protocols.rpc_services import WireMessage
 from pprint import pprint
 from messaging.messagebus import MessageBus, amqp
 
@@ -81,7 +81,7 @@ def test():
     bouncer.start()
     channel = protocols.rpcServices.RpcChannel('amq.direct', 'test', Bouncer.queuename)
     service = protobuf.TestService_Stub(channel)
-    controller = protocols.rpcServices.AmqpRpcController()
+    controller = protocols.rpc_services.AmqpRpcController()
     request = protobuf.EchoMessage()
        
     time.sleep(0.2)

@@ -1,5 +1,9 @@
-from django.contrib.gis.db import models
-from pds.models import Product
+from ngt import settings
+if not settings.DISABLE_GEO:
+        from django.contrib.gis.db import models
+        from pds.models import Product
+else:
+    from django.db import models
 import os
 
 #DATA_ROOT = '/big/sourcedata/moc'
@@ -8,7 +12,9 @@ class Asset(models.Model):
     '''  Image file asset -- built for MOC data '''
     volume = models.TextField(max_length=256, null=True)
     product_id = models.TextField(max_length=512, null=True) # only meaningful if this asset is associated with a single product
-    products = models.ManyToManyField(Product, related_name='ngt_assets')
+
+    if not settings.DISABLE_GEO:
+            products = models.ManyToManyField(Product, related_name='ngt_assets')
     parents = models.ManyToManyField('Asset', symmetrical=False, related_name='children')
     is_original = models.BooleanField(default=False)
     #file_name = models.FilePathField(max_length=4096) #4096 being the linux kernel's default maximum absolute path length
@@ -24,7 +30,8 @@ class Asset(models.Model):
     center_latitude = models.FloatField(null=True)
     min_latitude = models.FloatField(null=True)
     max_latitude = models.FloatField(null=True)
-    footprint = models.PolygonField(null=True, srid=949900)
+    if not settings.DISABLE_GEO:
+            footprint = models.PolygonField(null=True, srid=949900)
     
     def __unicode__(self):
         if self.name:

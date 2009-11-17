@@ -8,7 +8,7 @@ from ngt.messaging.messagebus import MessageBus, amqp
 import logging
 logging.basicConfig()
 logger = logging.getLogger('amqprpc')
-logger.setLevel(logging.WARNING)
+logger.setLevel(logging.DEBUG)
 logger.debug("Testing logger.")
 
 class AmqpRpcController(_RpcController):
@@ -183,8 +183,8 @@ class RpcChannel(object):
       
       #TODO: Setup exchange & queue
       self.messagebus.exchange_declare(exchange, 'direct')
-      self.messagebus.queue_delete(queue=response_queue) # clear it in case there are backed up messages (EDIT: it *should* autodelete)
-      self.messagebus.queue_declare(queue=response_queue)
+      #self.messagebus.queue_delete(queue=response_queue) # clear it in case there are backed up messages (EDIT: it *should* autodelete)
+      self.messagebus.queue_declare(queue=response_queue, auto_delete=True)
       self.messagebus.queue_bind(response_queue, exchange, routing_key=response_queue)
       logger.debug("Response queue '%s' is bound to key '%s' on exchange '%s'" % (response_queue, response_queue, exchange))
       
@@ -208,7 +208,7 @@ class RpcChannel(object):
     #print ' '.join([hex(ord(c))[2:] for c in request_wrapper])
     
     wire_request = WireMessage(request_wrapper)
-    logger.debug("About to publish to exchange %s with key %s" % (self.exchange, self.request_routing_key))
+    logger.debug("About to publish to exchange '%s' with key '%s'" % (self.exchange, self.request_routing_key))
     self.messagebus.basic_publish(amqp.Message(wire_request.serialized_bytes),
                     exchange=self.exchange,
                     routing_key=self.request_routing_key)
@@ -217,6 +217,9 @@ class RpcChannel(object):
     logger.debug("Waiting for a response on queue '%s'" % self.response_queue)
     response = None
     timeout_flag = False
+    def donotcall(msg):
+        logger.error("%s should never have been consumed." % str(msg))
+    #self.messagebus.basic_consume(queue=self.response_queue, callback=donotcall)
     t0 = datetime.now()
     while not response:
         delta_t = datetime.now() - t0
@@ -227,7 +230,7 @@ class RpcChannel(object):
         time.sleep(0.01)
     
     if timeout_flag:
-        logger.debug("RPC Method %s Timed out," % method_descriptor.name)
+        logger.debug("RPC method '%s' timed out," % method_descriptor.name)
         rpc_controller.SetFailed("Timed out.")
         if done:
             done(None)
