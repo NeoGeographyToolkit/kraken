@@ -5,48 +5,31 @@ from ngt.messaging.messagebus import MessageBus
 from ngt.assets.models import Asset
 import json
 from ngt import protocols
+from ngt.protocols import protobuf
 
 messagebus = MessageBus()
+
 messagebus.channel.exchange_declare(exchange="Job_Exchange", type="direct", durable=True, auto_delete=False,)
 messagebus.channel.queue_declare(queue='reaper.generic', auto_delete=False)
 messagebus.channel.queue_bind(queue='reaper.generic', exchange='Job_Exchange', routing_key='reaper.generic')
-
 """
-REFACTORED TO just Job...
-class RemoteJob(models.Model):
-    date_added = models.DateTimeField('date acquired')
-    job_id = models.CharField(max_length=64)
-    job_string = models.CharField(max_length=4096)
-
-    def generate_unique_id(self, job_str):
-        '''Returns a unique job ID that is the MD5 hash of the local
-        hostname, the local time of day, and the job string.'''
-        hostname = os.uname()[1]
-        t = time.clock()
-        m = hashlib.md5()
-        m.update(str(hostname))
-        m.update(str(t))
-        m.update(job_str)
-        return m.hexdigest()
-
-    def __init__(self, job_string, callback = None):
-        self.job_id = self.generate_unique_id(job_string)
-        self.date_added = datetime.datetime.now()
-        self.job_string = job_string
-        print('[' + str(self.date_added) + '] ' + 'Registering NGT job ' + self.job_id +
-              ' : ' + self.job_string)
-        MessageBus().publish("JOB " + str(self.job_id) +
-                                   " EXECUTE " + str(self.job_string))
-        
-    def __unicode__(self):
-        return "NGT job: " + self.job_id + "    Started at " + self.date_added
+# RPC Service to dispatch
+REPLY_QUEUE_NAME = 'jobmodels'
+JOB_EXCHANGE_NAME = 'Job_Exchange'
+chan.queue_declare(queue=self.REPLY_QUEUE_NAME, durable=False, auto_delete=True)
+chan.queue_bind(self.REPLY_QUEUE_NAME, self.JOB_EXCHANGE_NAME, routing_key=self.REPLY_QUEUE_NAME)
+dispatch_rpc_channel = protocols.rpc_services.RpcChannel(self.JOB_EXCHANGE_NAME, self.REPLY_QUEUE_NAME, 'dispatch')
+dispatch = protobuf.DispatchCommandService_Stub(dispatch_rpc_channel)
+amqp_rpc_controller = protocols.rpc_services.AmqpRpcController()
 """
 
 class Job(models.Model):
     uuid = models.CharField(max_length=32, null=True)
+    jobset = models.ForeignKey('JobSet', related_name="jobs")
     command = models.CharField(max_length=64)
     arguments = models.TextField(null=True) # an array seriaized as json
     status = models.CharField(max_length=32, default='new')
+    processor = models.CharField(max_length=32, null=True, default=None)
     assets = models.ManyToManyField(Asset, related_name='jobs')
     output = models.TextField(null=True)
     
@@ -54,14 +37,6 @@ class Job(models.Model):
         '''Returns a unique job ID that is the MD5 hash of the local
         hostname, the local time of day, and the command & arguments for this job.'''
         return uuid.uuid1().hex
-#        hostname = os.uname()[1]
-#        t = time.clock()
-#        m = hashlib.md5()
-#        m.update(str(hostname))
-#        m.update(str(t))
-#        m.update(self.command)
-#        m.update(self.arguments)
-#        return m.hexdigest()
     
     def __unicode__(self):
         return self.uuid
@@ -76,7 +51,7 @@ class Job(models.Model):
             'command': self.command,
             'args': json.loads(self.arguments)
         }
-        message_body = protocols.pack(protocols.Command, cmd)
+        message_body = protocols.pack(protobuf.Command, cmd)
         self.status = 'queued'
         self.save()
         messagebus.publish(message_body, exchange='Job_Exchange', routing_key='reaper.generic') #routing key is the name of the intended reaper type
@@ -92,7 +67,7 @@ models.signals.pre_save.connect(set_uuid, sender=Job)
 class JobSet(models.Model):
     name = models.CharField(max_length=256)
     assets = models.ManyToManyField(Asset)
-    jobs = models.ManyToManyField(Job, editable=False)
+    #jobs = models.ManyToManyField(Job, editable=False)
     status = models.CharField(max_length=32, default='new')
     command = models.CharField(max_length=64)
     active = models.BooleanField(default=False)
@@ -107,7 +82,7 @@ class JobSet(models.Model):
             print "About to create a job for %s" % str(asset)
             self.jobs.create(
                 command=self.command, 
-                arguments='["%s"]' % asset.image_path, #json-decodable lists of one
+                arguments='["%s"]' % asset.file_path, #json-decodable lists of one
             )
     
     def execute(self):

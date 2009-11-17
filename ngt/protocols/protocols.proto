@@ -31,7 +31,7 @@ message RpcResponseWrapper {
 message AckResponse {
     enum AckState{
         ACK = 0;
-        NO_ACK = 1;
+        NOACK = 1;
     }
     optional AckState ack = 1 [default = ACK];
 }

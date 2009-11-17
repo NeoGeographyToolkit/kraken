@@ -1,10 +1,12 @@
 #!/usr/bin/env python
-import sys, os, uuid
+import sys, os, uuid, time
 import threading
 from subprocess import Popen, PIPE, STDOUT
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))    
 import protocols
+import protocols.rpc_services
+from protocols import protobuf
 
 import logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -23,142 +25,177 @@ else:
 print "command path is %s" % COMMAND_PATH
 
 
-commands = {
-    'echo': which('echo'),
-    'grep': which('grep'),
-    'ls': which('ls'),
-    #'test': os.path.join(os.path.split(__file__)[0], 'fake_mosiac.py'), #a test command that randomly fails
-    'test': '../messaging/fake_command.py',
-    'size': which('du'),
-    'moc-stage': os.path.join(COMMAND_PATH, 'moc_stage.py'), # convert and map-project MOC images
-}
+class Reaper(object):
 
-messagebus = MessageBus()
-chan = messagebus.channel
-
-REAPER_TYPE = 'generic'
-JOB_EXCHANGE_NAME = 'Job_Exchange'
-CONTROL_EXCHANGE_NAME = 'Control_Exchange'
-STATUS_EXCHANGE_NAME = 'Status_Exchange'
-REAPER_ID = uuid.uuid1().hex
-CONTROL_QUEUE_NAME = "control.reaper.%s" % REAPER_ID
-JOB_QUEUE_NAME = "reaper."+REAPER_TYPE
-logger = logging.getLogger('reaper.%s' % REAPER_ID)
+    commands = {
+        'test': '../messaging/fake_command.py',
+        'moc-stage': os.path.join(COMMAND_PATH, 'moc_stage.py'), # convert and map-project MOC images
+    }
 
 
-# Consume from the job queue...
-chan.exchange_declare(JOB_EXCHANGE_NAME, type="direct", durable=True, auto_delete=False)
-chan.queue_declare(queue=JOB_QUEUE_NAME, durable=True, exclusive=False, auto_delete=False)
-chan.queue_bind(queue=JOB_QUEUE_NAME, exchange=JOB_EXCHANGE_NAME, routing_key=JOB_QUEUE_NAME)
+    REAPER_TYPE = 'generic'
+    JOB_EXCHANGE_NAME = 'Job_Exchange'
+    CONTROL_EXCHANGE_NAME = 'Control_Exchange'
+    STATUS_EXCHANGE_NAME = 'Status_Exchange'
 
-# Publish to the status exchange.
-chan.exchange_declare(exchange=STATUS_EXCHANGE_NAME, type="fanout", durable=True, auto_delete=False)
 
-# Notify the dispatcher and accept control commands via the control exchange:
-chan.exchange_declare(CONTROL_EXCHANGE_NAME, type='topic')
-chan.queue_declare(queue=CONTROL_QUEUE_NAME, durable=False, auto_delete=True)
-chan.queue_bind(queue=CONTROL_QUEUE_NAME, exchange=CONTROL_EXCHANGE_NAME, routing_key=CONTROL_QUEUE_NAME)
-chan.queue_bind(queue=CONTROL_QUEUE_NAME, exchange=CONTROL_EXCHANGE_NAME, routing_key="control.reaper")
-
-# Init threads to handle message consumption
-shutdown_event = threading.Event()
-control_listener = ConsumptionThread(shutdown_event=shutdown_event, name="control_listener")
-job_listener = ConsumptionThread(shutdown_event=shutdown_event, name="job_listener")
-
-def recv_callback(msg):
-    """ For testing.  Just print the message body"""
-    cmd_params = json.loads(msg.body)
-    print 'Received: ' + str(cmd_params) + ' from channel #' + str(msg.channel.channel_id)
-    
-def send_job_status(uuid, status, output=None):
-    """ Issue a message to the status bus requesting to update a job's status."""
-    args = {'job_id':uuid, 'state':status, 'reaper_id': REAPER_ID}
-    if output != None:
-        args['output'] = output
-    msg_body = protocols.pack(protocols.Status, args)
-    chan.basic_publish( Message(msg_body), exchange=STATUS_EXCHANGE_NAME, routing_key='.'.join((REAPER_TYPE, 'job')) )
-    logger.debug("Sent status %s to %s" % (msg_body, STATUS_EXCHANGE_NAME))
-    
-def job_command_handler(msg):
-    cmd = protocols.unpack(protocols.Command, msg.body)
+    def __init__(self):
+        self.reaper_id = uuid.uuid1().hex
+        self.messagebus = MessageBus()
+        self.chan = self.messagebus.channel
         
-    if cmd.command in commands:  # only commands allowed by the configuration will be executed
-        send_job_status(cmd.uuid,  REAPER_ID)
-        msg.channel.basic_ack(msg.delivery_tag)
-        args = [ commands[cmd.command] ] + list(cmd.args)
-        logger.debug("Executing %s" % ' '.join(args))
-        p = Popen(args, stdout=PIPE, stderr=STDOUT)
-        output=""
-        while True:
-            line = p.stdout.readline()
-            if line == '' and p.poll() != None:
-                break
-            output += line
-            sys.stdout.write(line)
-        resultcode = p.wait()
-        if resultcode == 0:
-            state = 'complete'
-        else:
-            state = 'failed'
-        send_job_status(cmd.uuid, state, output=output)
-    else:
-        logger.error("Command: '%s' not found in amq_config's list of valid commands." % cmd.command)
-# ***
-# * Control Commands
-# ***
+        self.CONTROL_QUEUE_NAME = "control.reaper.%s" % self.reaper_id
+        self.REPLY_QUEUE_NAME = "reply.reaper.%s" % self.reaper_id # queue for RPC responses
+        self.JOB_QUEUE_NAME = "reaper."+ self.REAPER_TYPE
+        self.logger = logging.getLogger('reaper.%s' % self.reaper_id)
+        self.logger.setLevel(logging.DEBUG)
+        
 
-def shutdown_listeners():
-    shutdown_event.set()
+        # Consume from the job queue...
+        self.chan.exchange_declare(self.JOB_EXCHANGE_NAME, type="direct", durable=True, auto_delete=False)
+        self.chan.queue_declare(queue=self.JOB_QUEUE_NAME, durable=True, exclusive=False, auto_delete=False)
+        self.chan.queue_bind(queue=self.JOB_QUEUE_NAME, exchange=self.JOB_EXCHANGE_NAME, routing_key=self.JOB_QUEUE_NAME)
 
-CONTROL_COMMANDS = {}        
-def control_command_handler(msg):
-    cmd = protocols.unpack(protocols.Command, msg.body)
-    try:
-        CONTROL_COMMANDS[cmd.command](cmd.args)
-        msg.channel.basic_ack(msg.delivery_tag)
-    except:
-        raise
+        # Publish to the status exchange.
+        self.chan.exchange_declare(exchange=self.STATUS_EXCHANGE_NAME, type="fanout", durable=True, auto_delete=False)
+
+        # Notify the dispatcher and accept control commands via the control exchange:
+        self.chan.exchange_declare(self.CONTROL_EXCHANGE_NAME, type='direct')
+        self.chan.queue_declare(queue=self.CONTROL_QUEUE_NAME, durable=False, auto_delete=True)
+        self.chan.queue_bind(queue=self.CONTROL_QUEUE_NAME, exchange=self.CONTROL_EXCHANGE_NAME, routing_key=self.CONTROL_QUEUE_NAME)
+        #self.chan.queue_bind(queue=self.CONTROL_QUEUE_NAME, exchange=self.CONTROL_EXCHANGE_NAME, routing_key="control.reaper")
+        
+        # RPC Service to dispatch
+        self.chan.queue_declare(queue=self.REPLY_QUEUE_NAME, durable=False, auto_delete=True)
+        self.chan.queue_bind(self.REPLY_QUEUE_NAME, self.CONTROL_EXCHANGE_NAME, routing_key=self.REPLY_QUEUE_NAME)
+        self.dispatch_rpc_channel = protocols.rpc_services.RpcChannel(self.CONTROL_EXCHANGE_NAME, self.REPLY_QUEUE_NAME, 'dispatch')
+        self.dispatch = protobuf.DispatchCommandService_Stub(self.dispatch_rpc_channel)
+        self.amqp_rpc_controller = protocols.rpc_services.AmqpRpcController()
+        
+
+        # Init threads to handle message consumption
+        self.shutdown_event = threading.Event()
+        self.control_listener = ConsumptionThread(shutdown_event=self.shutdown_event, name="control_listener")
+        self.job_listener = ConsumptionThread(shutdown_event=self.shutdown_event, name="job_listener")
+
     
-def command_to_dispatch(command, args):
-    serialized_msg = protocols.pack(protocols.Command, {'command':command, 'args':args})
-    chan.basic_publish(Message(serialized_msg), exchange=CONTROL_EXCHANGE_NAME, routing_key='dispatch')
+    def send_job_status(self, uuid, status, output=None):
+        """ Issue a message to the status bus requesting to update a job's status."""
+        args = {'job_id':uuid, 'state':status, 'reaper_id': self.reaper_id}
+        if output != None:
+            args['output'] = output
+        msg_body = protocols.pack(protobuf.JobStatus, args)
+        self.chan.basic_publish( Message(msg_body), exchange=self.STATUS_EXCHANGE_NAME, routing_key='.'.join((self.REAPER_TYPE, 'job')) )
+        self.logger.debug("Sent status %s to %s" % (msg_body, self.STATUS_EXCHANGE_NAME))
+    
+    def job_command_handler(self, msg):
+        cmd = protocols.unpack(protobuf.Command, msg.body)
+        
+        if cmd.command in self.commands:  # only commands allowed by the configuration will be executed
+            self.send_job_status(cmd.uuid,  self.reaper_id)
+            msg.channel.basic_ack(msg.delivery_tag)
+            args = [ self.commands[cmd.command] ] + list(cmd.args)
+            self.logger.debug("Executing %s" % ' '.join(args))
+            p = Popen(args, stdout=PIPE, stderr=STDOUT)
+            output=""
+            while True:
+                line = p.stdout.readline()
+                if line == '' and p.poll() != None:
+                    break
+                output += line
+                sys.stdout.write(line)
+            resultcode = p.wait()
+            if resultcode == 0:
+                state = 'complete'
+            else:
+                state = 'failed'
+            self.send_job_status(cmd.uuid, state, output=output)
+        else:
+            logger.error("Command: '%s' not found in amq_config's list of valid commands." % cmd.command)
+    # ***
+    # * Control Commands
+    # ***
 
-def register_with_dispatch():
-    command_to_dispatch('register_reaper', [REAPER_ID, REAPER_TYPE])
+    def shutdown_listeners(self):
+        self.shutdown_event.set()
 
-def unregister_with_dispatch():
-    command_to_dispatch('unregister_reaper', [REAPER_ID])
+    CONTROL_COMMANDS = {}        
+    def control_command_handler(self, msg):
+        cmd = protocols.unpack(protobuf.Command, msg.body)
+        try:
+            self.CONTROL_COMMANDS[cmd.command](cmd.args)
+            msg.channel.basic_ack(msg.delivery_tag)
+        except:
+            raise
+    
+    def command_to_dispatch(self, command, args):
+        serialized_msg = protocols.pack(protobuf.Command, {'command':command, 'args':args})
+        self.chan.basic_publish(Message(serialized_msg), exchange=self.CONTROL_EXCHANGE_NAME, routing_key='dispatch')
 
-logger.info("Registering and launching message handlers...")
-logger.debug("\tcontrol will consume from %s" % CONTROL_QUEUE_NAME)
-control_listener.channel.basic_consume(queue=CONTROL_QUEUE_NAME, no_ack=False, callback=control_command_handler)
-logger.debug("\tjob will consume from %s" % JOB_QUEUE_NAME)
-job_listener.channel.basic_consume(queue=JOB_QUEUE_NAME, no_ack=False, callback=job_command_handler)
+    def register_with_dispatch(self):
+        #self.command_to_dispatch('register_reaper', [self.reaper_id, self.REAPER_TYPE])
+        #request = protocols.pack(protobuf.ReaperRegistrationRequest, {'reaper_uuid': self.reaper_id, 'reaper_type':self.REAPER_TYPE})
+        request = protobuf.ReaperRegistrationRequest()
+        request.reaper_uuid = self.reaper_id
+        request.reaper_type = self.REAPER_TYPE
+        response = self.dispatch.registerReaper(self.amqp_rpc_controller, request, None)
+        try:
+            assert response.ack == 0 # ACK
+            self.logger.info("Registration Acknowledged")
+        except:
+            print "!!REGISTRATION FAILED!!"
+            self.shutdown()
 
-logger.debug("Launching consume threads...")
-control_listener.start()
-job_listener.start()
+    def unregister_with_dispatch(self):
+        #request = protocols.pack(protobuf.ReaperUnregistrationRequest, {'reaper_uuid': self.reaper_id})
+        request = protobuf.ReaperUnregistrationRequest()
+        request.reaper_uuid = self.reaper_id
+        response = self.dispatch.unregisterReaper(self.amqp_rpc_controller, request, None)
+        try:
+            assert response.ack == 0 # ACK
+            self.logger.info("Unregistration Acknowledged")
+        except:
+            print "!! UNREGISTRATION FAILED !!"
+        
+    def shutdown(self):
+        if not self.shutdown_event.is_set():
+            self.shutdown_event.set()
+            self.logger.info("Set shutdown event.")
+            self.logger.info("Unregistering with dispatch.")
+            self.unregister_with_dispatch()
+            del self.amqp_rpc_controller
+            del self.dispatch
+            del self.dispatch_rpc_channel
+            self.chan.queue_delete(queue=self.CONTROL_QUEUE_NAME)
+            self.chan.queue_delete(queue=self.REPLY_QUEUE_NAME)
+            self.chan.connection.close()
+            self.chan.close()
 
-logger.info("Registering with dispatch...")
-register_with_dispatch()
-#ctag = chan.basic_consume(queue=REAPER_TYPE, no_ack=True, callback=job_command_handler)
-"""
-try:
-    while True:
-        #chan.wait()
-        control_listener.join(0.5)
-        job_listener.join(0.5)
-except e:
-    print "Exception: %s" % str(e)
-"""
-try:
-    while True:
-        pass
-except:
-    shutdown_event.set()
-    logger.info("Set shutdown event.")
-    unregister_with_dispatch()
-    chan.connection.close()
-    #chan.basic_cancel(ctag)
-    chan.close()
+    def launch(self):
+        try:
+            self.logger.info("Registering and launching message handlers...")
+            self.logger.debug("\tcontrol will consume from %s" % self.CONTROL_QUEUE_NAME)
+            self.control_listener.channel.basic_consume(queue=self.CONTROL_QUEUE_NAME, no_ack=False, callback=self.control_command_handler)
+            self.logger.debug("\tjob will consume from %s" % self.JOB_QUEUE_NAME)
+            self.job_listener.channel.basic_consume(queue=self.JOB_QUEUE_NAME, no_ack=False, callback=self.job_command_handler)
+
+            self.logger.debug("Launching consume threads...")
+            self.control_listener.start()
+            self.job_listener.start()
+
+            self.logger.info("Registering with dispatch...")
+            self.register_with_dispatch()
+        except:
+            self.shutdown()
+
+        try:
+            while not self.shutdown_event.is_set():
+                time.sleep(0.1) # keep the thread alive
+        except KeyboardInterrupt:
+            self.shutdown()
+        self.shutdown()
+            
+if __name__ == '__main__':
+    r = Reaper()
+    r.launch()
 
