@@ -75,8 +75,8 @@ class Reaper(object):
 
         # Init threads to handle message consumption
         self.shutdown_event = threading.Event()
-        self.control_listener = ConsumptionThread(shutdown_event=self.shutdown_event, name="control_listener")
-        self.job_listener = ConsumptionThread(shutdown_event=self.shutdown_event, name="job_listener")
+        #self.control_listener = ConsumptionThread(shutdown_event=self.shutdown_event, name="control_listener")
+        self.job_listener = ConsumptionThread(mode='GET', shutdown_event=self.shutdown_event, name="job_listener")
 
     
     def send_job_status(self, uuid, status, output=None):
@@ -93,7 +93,7 @@ class Reaper(object):
         
         if cmd.command in self.commands:  # only commands allowed by the configuration will be executed
             self.send_job_status(cmd.uuid,  self.reaper_id)
-            msg.channel.basic_ack(msg.delivery_tag)
+            #msg.channel.basic_ack(msg.delivery_tag)
             args = [ self.commands[cmd.command] ] + list(cmd.args)
             self.logger.debug("Executing %s" % ' '.join(args))
             p = Popen(args, stdout=PIPE, stderr=STDOUT)
@@ -116,9 +116,9 @@ class Reaper(object):
     # * Control Commands
     # ***
 
-    def shutdown_listeners(self):
-        self.shutdown_event.set()
-
+    
+    '''
+    # obsoleted by RPC
     CONTROL_COMMANDS = {}        
     def control_command_handler(self, msg):
         cmd = protocols.unpack(protobuf.Command, msg.body)
@@ -127,10 +127,12 @@ class Reaper(object):
             msg.channel.basic_ack(msg.delivery_tag)
         except:
             raise
-    
+
+
     def command_to_dispatch(self, command, args):
         serialized_msg = protocols.pack(protobuf.Command, {'command':command, 'args':args})
         self.chan.basic_publish(Message(serialized_msg), exchange=self.CONTROL_EXCHANGE_NAME, routing_key='dispatch')
+    '''
 
     def register_with_dispatch(self):
         #self.command_to_dispatch('register_reaper', [self.reaper_id, self.REAPER_TYPE])
@@ -175,12 +177,13 @@ class Reaper(object):
         try:
             self.logger.info("Registering and launching message handlers...")
             self.logger.debug("\tcontrol will consume from %s" % self.CONTROL_QUEUE_NAME)
-            self.control_listener.channel.basic_consume(queue=self.CONTROL_QUEUE_NAME, no_ack=False, callback=self.control_command_handler)
+            #self.control_listener.channel.basic_consume(queue=self.CONTROL_QUEUE_NAME, no_ack=False, callback=self.control_command_handler)
             self.logger.debug("\tjob will consume from %s" % self.JOB_QUEUE_NAME)
-            self.job_listener.channel.basic_consume(queue=self.JOB_QUEUE_NAME, no_ack=False, callback=self.job_command_handler)
+            #self.job_listener.channel.basic_consume(queue=self.JOB_QUEUE_NAME, no_ack=False, callback=self.job_command_handler)
+            self.job_listener.set_callback(queue=self.JOB_QUEUE_NAME, no_ack=True, callback=self.job_command_handler)
 
             self.logger.debug("Launching consume threads...")
-            self.control_listener.start()
+            #self.control_listener.start()
             self.job_listener.start()
 
             self.logger.info("Registering with dispatch...")

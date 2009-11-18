@@ -1,6 +1,6 @@
 from amqplib import client_0_8 as amqp
 from amq_config import connection_params
-import threading
+import threading, time
 import logging
 logger = logging.getLogger('messagebus')
 logger.setLevel(logging.DEBUG)
@@ -22,10 +22,17 @@ class LazyProperty(object):
         return result
 
 class ConsumptionThread(threading.Thread):
-    def __init__(self, shutdown_event=threading.Event(), connection=connection, name="consumption_thread"):
+    def __init__(self, 
+                 shutdown_event=threading.Event(), 
+                 connection=connection, 
+                 name="consumption_thread",
+                 mode='CONSUME'
+                 ):
         threading.Thread.__init__(self)
         self.daemon = True
         self.name = name
+        if mode not in ('CONSUME','GET'): raise ValueError("%s is not a valid ConsumptionThread mode." % mode)
+        self.mode = mode
         self.shutdown_event = shutdown_event
         logger.debug("%s init complete." % self.name)
         #self.channel = connection.channel()
@@ -48,11 +55,26 @@ class ConsumptionThread(threading.Thread):
             '', # content
         )
         self.channel.connection.method_reader.queue.put(dummy_method)
-        
+    def set_callback(self, **kwargs):
+        if self.mode == 'CONSUME':
+            self.channel.basic_consume(**kwargs)
+        elif self.mode == 'GET':
+            self.queuename = kwargs['queue']
+            self.no_ack = kwargs['no_ack']
+            self.callback = kwargs['callback']
+            
     def run(self):
         logger.info("%s starting consume loop on channel %d" % (self.name, self.channel.channel_id) )
-        while self.channel.callbacks and not self.shutdown_event.is_set():
-            self.channel.wait()
+        if self.mode == 'CONSUME':
+            while self.channel.callbacks and not self.shutdown_event.is_set():
+                self.channel.wait()
+        elif self.mode == 'GET':
+            while not self.shutdown_event.is_set():
+                msg = self.channel.basic_get(queue=self.queuename, no_ack=self.no_ack)
+                if msg:
+                    self.callback(msg)
+                else:
+                    time.sleep(0.1)
         logger.info("%s terminating, channel %d" % (self.name, self.channel.channel_id) )
 
 class MessageBus(object):
