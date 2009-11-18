@@ -1,5 +1,6 @@
 import sys, os, glob
 import md5
+sys.path.insert(0,'../..')
 
 from django.core.management import setup_environ
 from ngt import settings
@@ -7,7 +8,7 @@ setup_environ(settings)
 from ngt.assets.models import Asset
 from ngt.utils.tracker import Tracker
 
-rootpath='/big/sourcedata/moc'
+rootpath='/big/assets/mocsource'
 
 def generate_volnames():
     for file in glob.glob(os.path.join(rootpath,'mgsc_1*')):
@@ -38,14 +39,15 @@ def main():
 
         hashes = {}
         for filepath, md5sum in generate_image_sums("%s_md5.txt" % os.path.join(rootpath, volname)):
-            file_name = '/'.join(filepath.split('/')[-2:]).upper()
+            file_name = '/'.join(filepath.split('/')[-2:])
             hashes[file_name] = md5sum
-        assets = Asset.objects.filter(volume=volname.split('/')[-1].upper()).filter(md5_check=None)
+        assets = Asset.objects.filter(volume=volname.split('/')[-1]).filter(md5_check=None)
         if assets.count() < 1:
             print "Nothing to hash."
             continue
         for asset in Tracker(name=volname, iter=assets.iterator(), target=assets.count(), progress=True):
-            asset.md5_check = getmd5(asset.file_path) == hashes[asset.file_name]
+            key = '/'.join(asset.relative_file_path.split('/')[2:])
+            asset.md5_check = getmd5(asset.file_path) == hashes[key]
             asset.save()
 
 if __name__ == '__main__':
