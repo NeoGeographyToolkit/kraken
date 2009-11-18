@@ -5,7 +5,7 @@ def which(command):
     return Popen(('which', command), stdout=PIPE).stdout.read().strip()
 
 connection_params = {
-    'host': "localhost:5672",
+    'host': "wwt10one.local:5672",
     'userid': "guest",
     'password': "guest",
     'virtual_host': "/",
