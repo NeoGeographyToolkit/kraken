@@ -66,12 +66,12 @@ message ReaperCommandRequest{
 }
 
 message ReaperStatusRequest {
-    required string reaper_uuid = 1;
+    //required string reaper_uuid = 1;
 }
 
 message ReaperStatusResponse{
-    required string reaper_uuid = 1;
-    required string new_status = 2;
+    //required string reaper_uuid = 1;
+    required string status = 2;
 }
 
 
