@@ -29,7 +29,7 @@ command_map = {
 }
 
 
-JOB_RELEASE_LIMIT = 5
+JOB_RELEASE_LIMIT = 100
 job_semaphore = threading.Semaphore(JOB_RELEASE_LIMIT)
 
 ###

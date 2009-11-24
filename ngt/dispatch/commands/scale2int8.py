@@ -52,12 +52,17 @@ def stretch(infile, outfile, minval, maxval):
     )
     return isis_run("Converting to int8: %s --> %s" % (infile,outfile), args)
 
+def convert(infile, outfile):
+    minval, maxval = getminmax(infile)
+    
+    retcode = stretch(infile, outfile, minval, maxval)
+    #sys.exit(retcode)
+    return retcode
 
 if __name__ == '__main__':
     from optparse import OptionParser
     usage = '''USAGE: scale2int8.py sourceimage.cub  destination.cub  '''
     parser = OptionParser(usage=usage)
-    parser.add_option("-m", "--map", default='Sinusoidal', dest='map_projection', help='ISIS name of a map projection to use.')
     (options, args) = parser.parse_args()
     if len(args) < 1:
         parser.print_help()
@@ -65,9 +70,7 @@ if __name__ == '__main__':
     elif len(args) > 1:
         outfile = args[1]
     else:
-        outfile = DEFAULT_OUTPATH + os.path.splitext(os.path.basename(args[0]))[0] + ".cub"
+        outfile = DEFAULT_OUTPATH + os.path.splitext(os.path.basename(args[0]))[0] + "_8bit.cub"
     infile = args[0]
-    minval, maxval = getminmax(infile)
-    
-    retcode = stretch(infile, outfile, minval, maxval)
+    retcode = convert(infile, outfile)
     sys.exit(retcode)
