@@ -7,19 +7,19 @@ from subprocess import Popen, PIPE
 DEFAULT_OUTPATH = "out/"
 
 if os.path.dirname(__file__).strip():
-    COMMAND_PATH = os.path.dirname(__file__)
+    COMMAND_PATH = os.path.abspath(os.path.dirname(__file__))
 else:
-    COMMAND_PATH = '.' # because this file lives in the command path
+    COMMAND_PATH = os.path.abspath(os.getcwd())
 print "command path is %s" % COMMAND_PATH
 
 def isis_run(message, args):
     print message
     #print os.path.join(COMMAND_PATH, 'isis.sh')
-    p = Popen([os.path.join(COMMAND_PATH, 'isis.sh')]+list(args))
+    os.chdir('/tmp/')
+    p = Popen([os.path.join(COMMAND_PATH, 'isis.sh')]+list(args), shell=False)
     return p.wait()
     
 def getminmax(file):
-    stats = isis_run("Computing stats for %s" % file, (stats, 'from='+file))
     p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'stats', 'from='+file ], stdout=PIPE)
     stats = p.communicate()[0]
     tokens = stats.split('\n')
@@ -38,15 +38,15 @@ def getminmax(file):
     return (minimum, maximum)
     
 def stretch(infile, outfile, minval, maxval):
-    # stretch from=test.cub to=out.cub+8bit pairs=\"in_min:1 in_max:254\" null=0 lis=1 lrs=1 his=255 hrs=255
+    # stretch from=/home/ted/e1501055.cub to=/home/ted/e1501055_8bit.cub+8bit+0:254 pairs="0.092769:1 0.183480:254" null=0 lis=1 lrs=1 his=255 hrs=255 
     args = (
         'stretch',
         'from='+infile,
         'to='+outfile+'+8bit+0:255',
-        'pairs=\"%f:1 %f:255\"' % (minval, maxval),
+        'pairs=%f:1 %f:255' % (minval, maxval),
         'null=0',
         'lis=1',
-        'lrs=1'
+        'lrs=1',
         'his=255',
         'hrs=255',
     )
