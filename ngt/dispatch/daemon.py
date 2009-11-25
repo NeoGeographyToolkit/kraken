@@ -37,6 +37,8 @@ job_semaphore = threading.Semaphore(JOB_RELEASE_LIMIT)
 ###
 
 def register_reaper(msgbytes):
+    # TODO: Handle the corner case where a reaper has been expired or soft-deleted, and tries to register itself again.
+    # Currently this would result in a ProgrammerError from psycopg
     request = protocols.unpack(protobuf.ReaperRegistrationRequest, msgbytes)
     
     try:
@@ -69,20 +71,30 @@ def update_status(msgbytes):
     try:
         job = Job.objects.get(uuid=request.job_id)
         job.status = request.state
+        if job.processor and job.processor != request.reaper_id:
+            logger.warning("Status update for job %s came from a different reaper than we expected.  This jobs processor attribute will be set to the latest reaper that reported." % job.uuid)
+        job.processor = request.reaper_id
         if 'output' in request:
             job.output = request.output
         job.save()
         if 'reaper_id' in request and request['reaper_id']:
             try:
-                r = Reaper.objects.get(uuid=request['reaper_id'])
+                r = Reaper.objects.get(uuid=request.reaper_id)
                 if request.state in job_completers:
                     r.jobcount += 1
                     r.save()
             except Reaper.DoesNotExist:
-                # <shrug>
+                # <shrug> Log a warning, register the reaper, and increment its jobcount
                 logger.warning("Dispatch received a status message from unregistered reaper %s.  Probably not good." % request['reaper_id'])
+                register_reaper(protocols.pack(protobuf.ReaperRegistrationRequest, {'reaper_uuid':request.reaper_id, 'reaper_type':'generic'}))
+                r = Reaper.objects.get(uuid=request.reaper_id)
+                    if request.state in job_completers:
+                        r.jobcount += 1
+                        r.save()
         if request.state in job_completers:
             job_semaphore.release()
+            if job.creates_new_asset:
+                job.spawn_output_asset()
         return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
     except Job.DoesNotExist:
         logger.error("Couldn't find a job with uuid %s on status update." % request.uuid)
@@ -197,6 +209,9 @@ if __name__ == '__main__':
     init()
     try:
         while True:
+            if not mb.consumption_thread.is_alive():
+                logger.error("Consumtion thread died.  Shutting down dispatch.")
+                self.shutdown()
             time.sleep(0.01)
     except KeyboardInterrupt:
         logger.info("Got a keyboard interrupt.  Shutting down dispatch.")

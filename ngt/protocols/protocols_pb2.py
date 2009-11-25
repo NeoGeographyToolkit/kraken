@@ -293,13 +293,6 @@ _REAPERSTATUSREQUEST = descriptor.Descriptor(
   filename='protocols.proto',
   containing_type=None,
   fields=[
-    descriptor.FieldDescriptor(
-      name='reaper_uuid', full_name='ReaperStatusRequest.reaper_uuid', index=0,
-      number=1, type=9, cpp_type=9, label=2,
-      default_value=unicode("", "utf-8"),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
   ],
   extensions=[
   ],
@@ -316,14 +309,7 @@ _REAPERSTATUSRESPONSE = descriptor.Descriptor(
   containing_type=None,
   fields=[
     descriptor.FieldDescriptor(
-      name='reaper_uuid', full_name='ReaperStatusResponse.reaper_uuid', index=0,
-      number=1, type=9, cpp_type=9, label=2,
-      default_value=unicode("", "utf-8"),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    descriptor.FieldDescriptor(
-      name='new_status', full_name='ReaperStatusResponse.new_status', index=1,
+      name='status', full_name='ReaperStatusResponse.status', index=0,
       number=2, type=9, cpp_type=9, label=2,
       default_value=unicode("", "utf-8"),
       message_type=None, enum_type=None, containing_type=None,
