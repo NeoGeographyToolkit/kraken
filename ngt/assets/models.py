@@ -1,7 +1,7 @@
 from ngt import settings
 if not settings.DISABLE_GEO:
         from django.contrib.gis.db import models
-        from pds.models import Product
+        #from pds.models import Product
 else:
     from django.db import models
 import os
@@ -14,7 +14,8 @@ class Asset(models.Model):
     product_id = models.TextField(max_length=512, null=True) # only meaningful if this asset is associated with a single product
 
     if not settings.DISABLE_GEO:
-            products = models.ManyToManyField(Product, related_name='ngt_assets')
+            #products = models.ManyToManyField(Product, related_name='ngt_assets')
+            pass
     parents = models.ManyToManyField('Asset', symmetrical=False, related_name='children')
     is_original = models.BooleanField(default=False)
     #file_name = models.FilePathField(max_length=4096) #4096 being the linux kernel's default maximum absolute path length

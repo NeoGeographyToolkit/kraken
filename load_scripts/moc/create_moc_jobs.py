@@ -15,30 +15,38 @@ from ngt.utils.tracker import Tracker
 ROOTPATH='/big/assets/mocsource/'
 DESTPATH='/big/assets/moc/'
 
-def generate_jobs(queryset):
+def generate_jobs(jobset):
     track = None
+    queryset = jobset.assets
     for asset in queryset.get_query_set():
         if not track:
             track = Tracker(target=queryset.count())
         job = Job(command='moc-stage')
         sourcefile = asset.file_path
-        dest_name = os.path.splitext(asset.file_name.lower())[0] + '.cub'
+        basename = '/'.join(asset.file_path.split('/')[-2:])
+        dest_name = os.path.splitext(basename)[0] + '.cub'
         destfile =  os.path.join(DESTPATH, asset.volume.lower(), dest_name)
-        if abs(asset.footprint.centroid.y) > 85:
+        try:
+            centerlat = asset.footprint.centroid.y
+        except AttributeError:  # indicates an incomplete or funnky geometry
+            centerlat = asset.footprint.convex_hull.centroid.y
+        if abs(centerlat) > 85:
             map_projection = 'PolarStereographic'
         else:
             map_projection = 'Sinusoidal'
 
         job.arguments = json.dumps( ("%s %s --map %s" % (sourcefile, destfile, map_projection) ).split(' '))
         track.next()
+        job.jobset = jobset
         job.save()
         job.assets.add(asset)
         yield job
 
 @transaction.commit_on_success
 def populate_jobs(jobset):
-    for job in Tracker(iter=generate_jobs(jobset.assets), target=jobset.assets.count(), progress=True):
+    for job in Tracker(iter=generate_jobs(jobset), target=jobset.assets.count(), progress=True):
         jobset.jobs.add(job)
+        pass
 
     transaction.commit()
     return jobset.jobs
