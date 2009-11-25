@@ -21,6 +21,7 @@ class AmqpRpcController(_RpcController):
   def __init__(self):
       self.m_failed = False
       self.m_failed_reason = ''
+      self.m_timeout_flag = False
       self.m_timeout_millis = 5000 # 5 Seconds
 
   # Client-side methods below
@@ -31,7 +32,9 @@ class AmqpRpcController(_RpcController):
     After the RpcController has been reset, it may be reused in
     a new call. Must not be called while an RPC is in progress.
     """
-    self.__init__()
+    self.m_failed = False
+    self.m_failed_reason = ''
+    self.m_timeout_flag = False
 
   def Failed(self):
     """Returns true if the call failed.
@@ -49,6 +52,9 @@ class AmqpRpcController(_RpcController):
         return self.m_failed_reason
     else:
         return None
+        
+  def TimedOut(self):
+      return self.m_timeout_flag
 
   def StartCancel(self):
     """Initiate cancellation.
@@ -74,6 +80,10 @@ class AmqpRpcController(_RpcController):
     """
     self.m_failed = True
     self.m_failed_reason = reason
+
+  def SetTimedOut(self):
+      self.m_timeout_flag = True
+      self.SetFailed("RPC call timed out.")
 
   def IsCanceled(self):
     """Checks if the client cancelled the RPC.
@@ -198,6 +208,7 @@ class RpcChannel(object):
     are less strict in one important way:  the request object doesn't have to
     be of any specific class as long as its descriptor is method.input_type.
     """
+    rpc_controller.Reset()
     request_wrapper = protocols.pack(protocols.RpcRequestWrapper,
         {   'requestor': self.response_queue,
             'method': method_descriptor.name,
@@ -217,9 +228,6 @@ class RpcChannel(object):
     logger.debug("Waiting for a response on queue '%s'" % self.response_queue)
     response = None
     timeout_flag = False
-    def donotcall(msg):
-        logger.error("%s should never have been consumed." % str(msg))
-    #self.messagebus.basic_consume(queue=self.response_queue, callback=donotcall)
     t0 = datetime.now()
     while not response:
         delta_t = datetime.now() - t0
@@ -231,7 +239,7 @@ class RpcChannel(object):
     
     if timeout_flag:
         logger.debug("RPC method '%s' timed out," % method_descriptor.name)
-        rpc_controller.SetFailed("Timed out.")
+        rpc_controller.SetTimedOut()
         if done:
             done(None)
         return None

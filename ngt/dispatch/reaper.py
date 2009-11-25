@@ -75,7 +75,7 @@ class Reaper(object):
 
         # Init threads to handle message consumption
         self.shutdown_event = threading.Event()
-        #self.control_listener = ConsumptionThread(shutdown_event=self.shutdown_event, name="control_listener")
+        self.control_listener = ConsumptionThread(mode='CONSUME', shutdown_event=self.shutdown_event, name="control_listener")
         self.job_listener = ConsumptionThread(mode='GET', shutdown_event=self.shutdown_event, name="job_listener")
 
     
@@ -92,7 +92,7 @@ class Reaper(object):
         cmd = protocols.unpack(protobuf.Command, msg.body)
         
         if cmd.command in self.commands:  # only commands allowed by the configuration will be executed
-            self.send_job_status(cmd.uuid,  self.reaper_id)
+            self.send_job_status(cmd.uuid,  'processing')
             #msg.channel.basic_ack(msg.delivery_tag)
             args = [ self.commands[cmd.command] ] + list(cmd.args)
             self.logger.debug("Executing %s" % ' '.join(args))
@@ -115,8 +115,40 @@ class Reaper(object):
     # ***
     # * Control Commands
     # ***
-
     
+    def _rpc_status(self, msg):
+        return protcols.pack(protobuf.ReaperStatusResponse, {'status': 'UP'})
+    
+    CONTROL_COMMAND_MAP = {
+        'GetStatus': _rpc_status
+    }
+    
+    def control_command_handler(msg, command_map=CONTROL_COMMAND_MAP):
+        """ Unpack a message and process commands 
+            Speaks the command protocol.
+        """
+        #cmd = protocols.unpack(protocols.Command, msg.body)
+        request = WireMessage.unpack_request(msg.body)
+        logger.debug("command_handler got a message: %s" % str(request))
+        response = dotdict()
+        if request.method in command_map:
+            try:
+                response.payload = globals()[command_map[request.method]](request.payload)
+                response.error = False
+            except Exception, e:
+                logger.error("Error in command '%s': %s %s" % (request.method, str(Exception),  e))
+                response.payload = ''
+                response.error = True
+                response.error_string = str(e)
+        else:
+            logger.error("Invalid Command: %s" % request.method)
+            response.payload = None
+            response.error = True
+            response.error_text = "Invalid Command: %s" % request.method
+
+        control_listener.channel.basic_ack(msg.delivery_tag)
+        wireresponse = WireMessage.pack_response(response)
+        control_listener.channel.basic_publish(Message(wireresponse), routing_key=request.requestor)
     '''
     # obsoleted by RPC
     CONTROL_COMMANDS = {}        
@@ -143,8 +175,11 @@ class Reaper(object):
         response = self.dispatch.registerReaper(self.amqp_rpc_controller, request, None)
         try:
             assert response.ack == 0 # ACK
+            self.is_registered = True
             self.logger.info("Registration Acknowledged")
         except:
+            assert self.amqp_rpc_controller.TimedOut()
+            self.is_registered = False
             print "!!REGISTRATION FAILED!!"
             self.shutdown()
 
@@ -163,8 +198,9 @@ class Reaper(object):
         if not self.shutdown_event.is_set():
             self.shutdown_event.set()
             self.logger.info("Set shutdown event.")
-            self.logger.info("Unregistering with dispatch.")
-            self.unregister_with_dispatch()
+            if self.is_registered:
+                self.logger.info("Unregistering with dispatch.")
+                self.unregister_with_dispatch()
             del self.amqp_rpc_controller
             del self.dispatch
             del self.dispatch_rpc_channel
@@ -176,8 +212,10 @@ class Reaper(object):
     def launch(self):
         try:
             self.logger.info("Registering and launching message handlers...")
+            
             self.logger.debug("\tcontrol will consume from %s" % self.CONTROL_QUEUE_NAME)
-            #self.control_listener.channel.basic_consume(queue=self.CONTROL_QUEUE_NAME, no_ack=False, callback=self.control_command_handler)
+            self.control_listener.set_callback(queue=self.CONTROL_QUEUE_NAME, no_ack=False, callback=self.control_command_handler)
+            
             self.logger.debug("\tjob will consume from %s" % self.JOB_QUEUE_NAME)
             #self.job_listener.channel.basic_consume(queue=self.JOB_QUEUE_NAME, no_ack=False, callback=self.job_command_handler)
             self.job_listener.set_callback(queue=self.JOB_QUEUE_NAME, no_ack=True, callback=self.job_command_handler)
