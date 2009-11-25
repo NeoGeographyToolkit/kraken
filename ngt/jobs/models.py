@@ -36,6 +36,7 @@ class Job(models.Model):
     creates_new_asset = models.BooleanField(default=True) # if this is set, the dispatcher will create a new asset when the job is completed
     outfile_argument_index = medels.SmallIntegerField(default=1) # index of the output filename in the argument list.  Used to generate output asset records.
     
+    
     def _generate_uuid(self):
         '''Returns a unique job ID that is the MD5 hash of the local
         hostname, the local time of day, and the command & arguments for this job.'''
