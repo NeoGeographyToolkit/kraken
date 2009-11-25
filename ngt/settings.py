@@ -167,6 +167,6 @@ if not DISABLE_GEO:
             from django.contrib.gis.admin.options import GeoModelAdmin
             print "Adding django.contrib.gis to INSTALLED_APPS."
             INSTALLED_APPS += ('django.contrib.gis',)
-            INSTALLED_APPS += ('pds',)
+            #INSTALLED_APPS += ('pds',)
         except ImportError:
             logger.warning("Could not import GeoModelAdmin. (GEOS may be missing).  geodjango will be disabled.")

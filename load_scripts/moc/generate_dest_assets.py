@@ -18,14 +18,11 @@ ROOTPATH='/big/assets/mocsource/'
 DESTPATH='/big/assets/moc/'
 
 
-@transaction.commit_on_success
+@transaction.autocommit
 def main():
     errlog = open('err.log', 'w')
     JOBSET = 3
-    print "DELETING MOCPROCD ASSETS"
-    Asset.objects.filter(class_label="mocprocd moc image").delete()
-    print "Done."
-    jobs = Job.objects.filter(jobset_id=JOBSET, status='complete')
+    jobs = Job.objects.filter(jobset__id=JOBSET, status='complete')
     failures = 0
     for job in Tracker(iter=jobs):
         asset_o = job.assets.all()[0]
@@ -57,6 +54,4 @@ def delete_cruft():
     print "Done."
         
 if __name__ == '__main__':
-    delete_cruft()
     main()
-        
