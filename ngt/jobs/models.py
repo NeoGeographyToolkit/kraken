@@ -2,10 +2,10 @@ from django.db import models
 import os, time, hashlib, datetime
 import uuid
 from ngt.messaging.messagebus import MessageBus
-from ngt.assets.models import Asset, DATA_ROOT
 import json
 from ngt import protocols
 from ngt.protocols import protobuf
+from ngt.assets.models import Asset, DATA_ROOT
 
 messagebus = MessageBus()
 
@@ -30,11 +30,11 @@ class Job(models.Model):
     arguments = models.TextField(null=True) # an array seriaized as json
     status = models.CharField(max_length=32, default='new')
     processor = models.CharField(max_length=32, null=True, default=None)
-    assets = models.ManyToManyField(Asset, related_name='jobs')
+    assets = models.ManyToManyField('assets.Asset', related_name='jobs')
     output = models.TextField(null=True)
     
     creates_new_asset = models.BooleanField(default=True) # if this is set, the dispatcher will create a new asset when the job is completed
-    outfile_argument_index = medels.SmallIntegerField(default=1) # index of the output filename in the argument list.  Used to generate output asset records.
+    outfile_argument_index = models.SmallIntegerField(default=1) # index of the output filename in the argument list.  Used to generate output asset records.
     
     
     def _generate_uuid(self):
@@ -87,7 +87,7 @@ models.signals.pre_save.connect(set_uuid, sender=Job)
 
 class JobSet(models.Model):
     name = models.CharField(max_length=256)
-    assets = models.ManyToManyField(Asset) # this collection of assets can be used to populate jobs
+    assets = models.ManyToManyField('assets.Asset') # this collection of assets can be used to populate jobs
     #jobs = models.ManyToManyField(Job, editable=False) # now a foreign key in the Job model
     status = models.CharField(max_length=32, default='new')
     command = models.CharField(max_length=64)
@@ -114,7 +114,6 @@ class JobSet(models.Model):
         for job in self.jobs.filter(status='new'):
             job.enqueue()
             
-
 
 """
 I'd like jobs to be populated from the JobSet's properties by a post-save signal...

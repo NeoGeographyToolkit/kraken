@@ -5,7 +5,6 @@ if not settings.DISABLE_GEO:
 else:
     from django.db import models
 import os
-from ngt.jobs.models import Job
 
 #DATA_ROOT = '/big/sourcedata/moc'
 DATA_ROOT = '/big/assets/'
@@ -22,7 +21,7 @@ class Asset(models.Model):
     status = models.TextField(max_length=128, null=True)
     md5_check = models.BooleanField(null=True)
     class_label = models.TextField(max_length=512, null=True)
-    creator_job = models.ForeignKey(Job, null=True, related_name='output_assets')
+    creator_job = models.ForeignKey('jobs.Job', null=True, related_name='output_assets')
 
     # MOC specific stuff
     instrument_name = models.TextField(max_length=128, null=True)
@@ -46,3 +45,5 @@ class Asset(models.Model):
         """ Read only attribute: to set the file path, use relative_file_path """
         #return os.path.join(DATA_ROOT, self.volume.lower(), self.file_name.lower())
         return os.path.join(DATA_ROOT, self.relative_file_path)
+
+from ngt.jobs.models import Job # this needs to come after the Asset class def to avoid a circular import
