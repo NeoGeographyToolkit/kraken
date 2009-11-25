@@ -34,7 +34,7 @@ class Job(models.Model):
     output = models.TextField(null=True)
     
     creates_new_asset = models.BooleanField(default=True)
-    outfile_argument_index = medels.SmallIntegerField(default=1) # index of the output filename in the argument list.  Used to generate output asset records.
+    outfile_argument_index = models.SmallIntegerField(default=1) # index of the output filename in the argument list.  Used to generate output asset records.
     output_assets = models.ManyToManyField(Asset, related_name='jobs')
     
     def _generate_uuid(self):

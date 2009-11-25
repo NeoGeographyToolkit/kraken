@@ -13,12 +13,8 @@ class Asset(models.Model):
     volume = models.TextField(max_length=256, null=True)
     product_id = models.TextField(max_length=512, null=True) # only meaningful if this asset is associated with a single product
 
-    if not settings.DISABLE_GEO:
-            #products = models.ManyToManyField(Product, related_name='ngt_assets')
-            pass
     parents = models.ManyToManyField('Asset', symmetrical=False, related_name='children')
     is_original = models.BooleanField(default=False)
-    #file_name = models.FilePathField(max_length=4096) #4096 being the linux kernel's default maximum absolute path length
     relative_file_path = models.FilePathField(max_length=4096) #4096 being the linux kernel's default maximum absolute path length
     name = models.TextField(max_length=512, null=True)
     
