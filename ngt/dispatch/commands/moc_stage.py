@@ -7,9 +7,9 @@ from subprocess import Popen
 DEFAULT_OUTPATH = "out/"
 
 if os.path.dirname(__file__).strip():
-    COMMAND_PATH = os.path.dirname(__file__)
+    COMMAND_PATH = os.path.abspath(os.path.dirname(__file__))
 else:
-    COMMAND_PATH = '.' # because this file lives in the command path
+    COMMAND_PATH = os.path.abspath(os.getcwd()) # because this file lives in the command path
 print "command path is %s" % COMMAND_PATH
 
 def isis_run(message, args):
@@ -39,6 +39,7 @@ if __name__ == '__main__':
     parser = OptionParser(usage=usage)
     parser.add_option("-m", "--map", default='Sinusoidal', dest='map_projection', help='ISIS name of a map projection to use.')
     (options, args) = parser.parse_args()
+    os.chdir('/tmp/')
     if len(args) < 1:
         parser.print_help()
         sys.exit(1)
