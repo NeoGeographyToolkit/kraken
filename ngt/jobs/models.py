@@ -33,9 +33,8 @@ class Job(models.Model):
     assets = models.ManyToManyField(Asset, related_name='jobs')
     output = models.TextField(null=True)
     
-    creates_new_asset = models.BooleanField(default=True)
+    creates_new_asset = models.BooleanField(default=True) # if this is set, the dispatcher will create a new asset when the job is completed
     outfile_argument_index = medels.SmallIntegerField(default=1) # index of the output filename in the argument list.  Used to generate output asset records.
-    output_assets = models.ManyToManyField(Asset, related_name='jobs')
     
     def _generate_uuid(self):
         '''Returns a unique job ID that is the MD5 hash of the local
@@ -70,12 +69,12 @@ class Job(models.Model):
         asset_n = copy(asset_o)
         asset_n.id = None
         asset_n.is_original = False
+        asset_n.creator_job = self
         args = json.loads(self.arguments)
         asset_n.relative_file_path = args[self.outfile_argument_index].replace(DATA_ROOT,'')
         assert os.path.exists(asset_n.file_path)
         asset_n.class_label = self.jobset.output_asset_label or self.jobset.name
         asset_n.save()
-        self.output_assets.add(asset_n)
         asset_n.parents.add(asset_o)
         
     
