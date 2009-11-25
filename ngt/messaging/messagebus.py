@@ -44,17 +44,18 @@ class ConsumptionThread(threading.Thread):
     def ack(self, delivery_tag):
         self.channel.basic_ack(delivery_tag)
         
-    def bump(self):
-        ''' Push a dummy method onto the queue for this consumer's channel
-            This *might* help break out of the wait cycle on shutdown.
-        '''
-        dummy_method = (
-            self.channel.channel_id, # channel_id
-            (20,40), # method_sig
-            [], # args
-            '', # content
-        )
-        self.channel.connection.method_reader.queue.put(dummy_method)
+#    def bump(self):
+#        ''' Push a dummy method onto the queue for this consumer's channel
+#            This *might* help break out of the wait cycle on shutdown.
+#        '''
+#        dummy_method = (
+#            self.channel.channel_id, # channel_id
+#            (20,40), # method_sig
+#            [], # args
+#            '', # content
+#        )
+#        self.channel.connection.method_reader.queue.put(dummy_method)
+        
     def set_callback(self, **kwargs):
         if self.mode == 'CONSUME':
             self.channel.basic_consume(**kwargs)
