@@ -5,7 +5,7 @@ from ngt.messaging.messagebus import MessageBus
 import json
 from ngt import protocols
 from ngt.protocols import protobuf
-from ngt.assets.models import Asset, DATA_ROOT
+#from ngt.assets.models import Asset, DATA_ROOT
 
 messagebus = MessageBus()
 
@@ -114,6 +114,7 @@ class JobSet(models.Model):
         for job in self.jobs.filter(status='new'):
             job.enqueue()
             
+from ngt.assets.models import Asset, DATA_ROOT # putting this here helps avoid circular imports
 
 """
 I'd like jobs to be populated from the JobSet's properties by a post-save signal...
