@@ -6,7 +6,8 @@ from subprocess import Popen, PIPE, STDOUT
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))    
 import protocols
 import protocols.rpc_services
-from protocols import protobuf
+from protocols.rpc_services import WireMessage
+from protocols import protobuf, dotdict
 
 import logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -43,6 +44,7 @@ class Reaper(object):
         self.reaper_id = uuid.uuid1().hex
         self.messagebus = MessageBus()
         self.chan = self.messagebus.channel
+        self.is_registered = None
         
         self.CONTROL_QUEUE_NAME = "control.reaper.%s" % self.reaper_id
         self.REPLY_QUEUE_NAME = "reply.reaper.%s" % self.reaper_id # queue for RPC responses
@@ -75,7 +77,7 @@ class Reaper(object):
 
         # Init threads to handle message consumption
         self.shutdown_event = threading.Event()
-        self.control_listener = ConsumptionThread(mode='CONSUME', shutdown_event=self.shutdown_event, name="control_listener")
+        self.control_listener = ConsumptionThread(mode='GET', shutdown_event=self.shutdown_event, name="control_listener")
         self.job_listener = ConsumptionThread(mode='GET', shutdown_event=self.shutdown_event, name="job_listener")
 
     
@@ -111,44 +113,46 @@ class Reaper(object):
                 state = 'failed'
             self.send_job_status(cmd.uuid, state, output=output)
         else:
-            logger.error("Command: '%s' not found in amq_config's list of valid commands." % cmd.command)
+            self.logger.error("Command: '%s' not found in amq_config's list of valid commands." % cmd.command)
     # ***
     # * Control Commands
     # ***
     
     def _rpc_status(self, msg):
-        return protcols.pack(protobuf.ReaperStatusResponse, {'status': 'UP'})
+        return protocols.pack(protobuf.ReaperStatusResponse, {'status': 'UP'})
     
     CONTROL_COMMAND_MAP = {
         'GetStatus': _rpc_status
     }
     
-    def control_command_handler(msg, command_map=CONTROL_COMMAND_MAP):
+    def control_command_handler(self, msg, command_map=CONTROL_COMMAND_MAP):
         """ Unpack a message and process commands 
             Speaks the command protocol.
         """
         #cmd = protocols.unpack(protocols.Command, msg.body)
+        self.logger.debug("command_handler got a message.")
         request = WireMessage.unpack_request(msg.body)
-        logger.debug("command_handler got a message: %s" % str(request))
+        self.logger.debug("command msg contents: %s" % str(request))
         response = dotdict()
         if request.method in command_map:
             try:
-                response.payload = globals()[command_map[request.method]](request.payload)
+                response.payload = command_map[request.method].__call__(self, request.payload)
                 response.error = False
             except Exception, e:
-                logger.error("Error in command '%s': %s %s" % (request.method, str(Exception),  e))
+                #self.logger.error("Error in command '%s': %s %s" % (request.method, str(Exception),  e))
+                sys.excepthook(*sys.exc_info())
                 response.payload = ''
                 response.error = True
                 response.error_string = str(e)
         else:
-            logger.error("Invalid Command: %s" % request.method)
+            self.logger.error("Invalid Command: %s" % request.method)
             response.payload = None
             response.error = True
             response.error_text = "Invalid Command: %s" % request.method
 
-        control_listener.channel.basic_ack(msg.delivery_tag)
+        self.control_listener.channel.basic_ack(msg.delivery_tag)
         wireresponse = WireMessage.pack_response(response)
-        control_listener.channel.basic_publish(Message(wireresponse), routing_key=request.requestor)
+        self.control_listener.channel.basic_publish(Message(wireresponse), routing_key=request.requestor)
     '''
     # obsoleted by RPC
     CONTROL_COMMANDS = {}        
@@ -204,7 +208,7 @@ class Reaper(object):
             del self.amqp_rpc_controller
             del self.dispatch
             del self.dispatch_rpc_channel
-            self.chan.queue_delete(queue=self.CONTROL_QUEUE_NAME)
+            self.chan.queue_delete(queue=self.CONTROL_QUEUE_NAME, if_unused=False, if_empty=False)
             self.chan.queue_delete(queue=self.REPLY_QUEUE_NAME)
             self.chan.connection.close()
             self.chan.close()
@@ -221,7 +225,7 @@ class Reaper(object):
             self.job_listener.set_callback(queue=self.JOB_QUEUE_NAME, no_ack=True, callback=self.job_command_handler)
 
             self.logger.debug("Launching consume threads...")
-            #self.control_listener.start()
+            self.control_listener.start()
             self.job_listener.start()
 
             self.logger.info("Registering with dispatch...")
