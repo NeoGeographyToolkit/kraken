@@ -88,9 +88,9 @@ def update_status(msgbytes):
                 logger.warning("Dispatch received a status message from unregistered reaper %s.  Probably not good." % request['reaper_id'])
                 register_reaper(protocols.pack(protobuf.ReaperRegistrationRequest, {'reaper_uuid':request.reaper_id, 'reaper_type':'generic'}))
                 r = Reaper.objects.get(uuid=request.reaper_id)
-                    if request.state in job_completers:
-                        r.jobcount += 1
-                        r.save()
+                if request.state in job_completers:
+                    r.jobcount += 1
+                    r.save()
         if request.state in job_completers:
             job_semaphore.release()
             if job.creates_new_asset:

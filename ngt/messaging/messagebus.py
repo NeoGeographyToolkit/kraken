@@ -3,7 +3,7 @@ from amq_config import connection_params
 import threading, time
 import logging
 logger = logging.getLogger('messagebus')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 DEFAULT_EXCHANGE = 'amq.direct'
 
@@ -26,16 +26,22 @@ class ConsumptionThread(threading.Thread):
                  shutdown_event=threading.Event(), 
                  connection=connection, 
                  name="consumption_thread",
-                 mode='CONSUME'
+                 mode='CONSUME',
+                 polling_interval=0.5,
                  ):
         threading.Thread.__init__(self)
         self.daemon = True
         self.name = name
         if mode not in ('CONSUME','GET'): raise ValueError("%s is not a valid ConsumptionThread mode." % mode)
         self.mode = mode
+        self.polling_interval = polling_interval
         self.shutdown_event = shutdown_event
         logger.debug("%s init complete." % self.name)
         #self.channel = connection.channel()
+        
+        # The socket lock may help prevent consumers from blocking each other.
+        if not hasattr(connection, 'socket_lock'):
+            connection.socket_lock = threading.Lock()
     
     @LazyProperty
     def channel(self):
@@ -64,18 +70,37 @@ class ConsumptionThread(threading.Thread):
             self.no_ack = kwargs['no_ack']
             self.callback = kwargs['callback']
             
+    def start(self, *args, **kwargs):
+        logger.debug("start() was called on %s" % self.name)
+        return threading.Thread.start(self, *args, **kwargs)
+            
     def run(self):
-        logger.info("%s starting consume loop on channel %d" % (self.name, self.channel.channel_id) )
+        logger.debug("run() was called on %s" % self.name)
+        logger.debug("%s starting %s loop on channel %d" % (self.name, self.mode, self.channel.channel_id) )
+        time.sleep(0.5)
         if self.mode == 'CONSUME':
             while self.channel.callbacks and not self.shutdown_event.is_set():
                 self.channel.wait()
         elif self.mode == 'GET':
+            logger.debug("GET loop will poll queue %s" % self.queuename)
+            if logger.level <= 10:
+                logger.debug("Polling notifications ON.")
+                count = 0
             while not self.shutdown_event.is_set():
+                if logger.level <= 10:
+                    count += 1
+                    if count % 10 == 0:
+                        pass
+                    logger.debug("Polling on channel %d (%d)" % (self.channel.channel_id, count))
+                connection.socket_lock.acquire()
                 msg = self.channel.basic_get(queue=self.queuename, no_ack=self.no_ack)
+                connection.socket_lock.release()
                 if msg:
+                    logger.debug("%s recieved a msg on channel %d." % (self.name, self.channel.channel_id))
                     self.callback(msg)
                 else:
-                    time.sleep(0.1)
+                    time.sleep(self.polling_interval)
+                #logger.debug("channel %d continue" % self.channel.channel_id)
         logger.info("%s terminating, channel %d" % (self.name, self.channel.channel_id) )
 
 class MessageBus(object):
