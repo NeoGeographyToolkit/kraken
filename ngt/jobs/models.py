@@ -98,7 +98,7 @@ class JobSet(models.Model):
     def __unicode__(self):
         return self.name
         
-    def simple_populate(self):
+    def simple_populate(self, creates_new_asset=True):
         """Create one-parameter jobs for each of this batch's assets"""
         print "Creating jobs for %s" % str(self.assets.all())
         for asset in self.assets.all():
@@ -106,6 +106,7 @@ class JobSet(models.Model):
             self.jobs.create(
                 command=self.command, 
                 arguments='["%s"]' % asset.file_path, #json-decodable lists of one
+                creates_new_asset = creates_new_asset,
             )
     
     def execute(self):

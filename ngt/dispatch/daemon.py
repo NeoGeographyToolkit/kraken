@@ -94,7 +94,12 @@ def update_status(msgbytes):
         if request.state in job_completers:
             job_semaphore.release()
             if job.creates_new_asset:
-                job.spawn_output_asset()
+                try:
+                    job.spawn_output_asset()
+                except:
+                    logger.error("ASSET CREATION FAILED FOR JOB %s" % job.uuid)
+                    job.status = "asset_creation_fail"
+                    job.save()
         return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
     except Job.DoesNotExist:
         logger.error("Couldn't find a job with uuid %s on status update." % request.uuid)
@@ -164,15 +169,19 @@ def enqueue_jobs(logger, job_semaphore, shutdown_event):
     while True:
         if shutdown_event.is_set():
             break
-        for jobset in JobSet.objects.filter(active=True):
+        active_jobsets = JobSet.objects.filter(active=True)
+        jobset_count = active_jobsets.count()
+        for jobset in active_jobsets:
             try:
                 job = jobset.jobs.filter(Q(status='new') | Q(status='requeue') )[0]
                 job_semaphore.acquire()
                 job.enqueue()
                 time.sleep(0.5)
             except IndexError:
-                logger.info("Ran out of jobs to enqueue. Dispatch thread will exit.")
-                return True
+                jobset_count -= 1
+                if jobset_count == 0:
+                    logger.info("Ran out of jobs to enqueue. Dispatch thread will exit.")
+                    return True
 
     
 def init():
@@ -211,7 +220,7 @@ if __name__ == '__main__':
         while True:
             if not mb.consumption_thread.is_alive():
                 logger.error("Consumtion thread died.  Shutting down dispatch.")
-                self.shutdown()
+                shutdown()
             time.sleep(0.01)
     except KeyboardInterrupt:
         logger.info("Got a keyboard interrupt.  Shutting down dispatch.")
