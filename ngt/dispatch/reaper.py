@@ -9,15 +9,15 @@ import protocols.rpc_services
 from protocols.rpc_services import WireMessage
 from protocols import protobuf, dotdict
 
-import logging
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
-logging.getLogger('messagebus').setLevel(logging.DEBUG)
-
 from amqplib import client_0_8 as amqp
 from amqplib.client_0_8.basic_message import Message
 from messaging.amq_config import connection_params, which
 from messaging.messagebus import MessageBus, ConsumptionThread
 from threading import Event
+
+import logging
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+logging.getLogger('messagebus').setLevel(logging.DEBUG)
 
 if os.path.dirname(__file__).strip():
     COMMAND_PATH = os.path.join(os.path.dirname(__file__), 'commands')
