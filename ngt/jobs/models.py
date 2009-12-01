@@ -36,6 +36,8 @@ class Job(models.Model):
     creates_new_asset = models.BooleanField(default=True) # if this is set, the dispatcher will create a new asset when the job is completed
     outfile_argument_index = models.SmallIntegerField(default=1) # index of the output filename in the argument list.  Used to generate output asset records.
     
+    if not settings.DISABLE_GEO:
+            footprint = models.PolygonField(null=True, srid=949900)
     
     def _generate_uuid(self):
         '''Returns a unique job ID that is the MD5 hash of the local
@@ -99,7 +101,9 @@ class JobSet(models.Model):
         return self.name
         
     def simple_populate(self, creates_new_asset=True):
-        """Create one-parameter jobs for each of this batch's assets"""
+        """ Create one-parameter jobs for each of this batch's assets
+            Only really useful for testing.
+        """
         print "Creating jobs for %s" % str(self.assets.all())
         for asset in self.assets.all():
             print "About to create a job for %s" % str(asset)
