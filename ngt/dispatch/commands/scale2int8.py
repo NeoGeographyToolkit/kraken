@@ -41,11 +41,11 @@ def haserrors(cubefile):
     p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'getkey', 'from='+cubefile, 'key=DataQualityDesc', 'recursive=true'], stdout=PIPE)
     outp = p.communicate()[0]
     lines = outp.split('\n')
-    result = lines[-1].strip()
-    if result == 'OK':
+    result = [l.strip() for l in lines]
+    if 'OK' in result:
         print "No errors in cube."
         return False
-    elif result == 'ERRORS':
+    elif 'ERRORS' in result:
         print "Errors found in cube.  This on will be failed and skipped."
         return True
     else:
