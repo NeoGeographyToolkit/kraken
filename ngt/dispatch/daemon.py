@@ -42,7 +42,11 @@ def register_reaper(msgbytes):
     request = protocols.unpack(protobuf.ReaperRegistrationRequest, msgbytes)
     
     try:
-        Reaper.objects.get(uuid=request.reaper_uuid)
+        #r = Reaper.objects.get(uuid=request.reaper_uuid)
+        r = Reaper.objects.any().get(uuid=request.reaper_uuid) # will get deleted or expired reapers, too
+        r.deleted = False
+        r.expired = False
+        r.save()
     except Reaper.DoesNotExist:
         r = Reaper(uuid=request.reaper_uuid, type=request.reaper_type)
         r.save()
