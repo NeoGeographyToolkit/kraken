@@ -64,13 +64,14 @@ def create__mocproc_jobset():
     return set
     
     
-@transaction.commit_on_successs
+@transaction.commit_on_success
 def create_scale2int8_jobset():
     assets = Asset.objects.filter(class_label='mocprocd image')
     set = JobSet()
     set.name = "int8 scaling"
     set.command = 'scale2int8'
     set.output_asset_label = "scaled image int8"
+    set.save()
     for asset in Tracker(iter=assets.iterator(), target=assets.count(), progress=True):
         set.assets.add(asset)
     return set
@@ -90,5 +91,3 @@ def populate_scale2int8_jobs(jobset):
         
         job.save()
         job.assets.add(asset)
-        #jobset.jobs.add(job)
-    
