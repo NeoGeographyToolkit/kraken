@@ -44,6 +44,7 @@ def register_reaper(msgbytes):
     try:
         #r = Reaper.objects.get(uuid=request.reaper_uuid)
         r = Reaper.objects.any().get(uuid=request.reaper_uuid) # will get deleted or expired reapers, too
+        logger.info("Reaper exists.  Reurrecting.")
         r.deleted = False
         r.expired = False
         r.save()
