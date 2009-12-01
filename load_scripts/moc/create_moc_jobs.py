@@ -91,7 +91,6 @@ def populate_scale2int8_jobs(jobset):
         
         job.save()
         job.assets.add(asset)
-        #jobset.jobs.add(job)
     
 @transaction.commit_on_success
 def fix_scale2int8_jobs(jobset):
