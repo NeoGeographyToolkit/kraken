@@ -86,8 +86,20 @@ def populate_scale2int8_jobs(jobset):
         job = Job()
         job.jobset = jobset
         job.command = jobset.command
-        job.args = json.dumps([asset.file_path, destname])
+        job.arguments = json.dumps([asset.file_path, destname])
         job.footprint = asset.footprint
         
         job.save()
         job.assets.add(asset)
+    
+@transaction.commit_on_success
+def fix_scale2int8_jobs(jobset):
+    "Oops I  screwed up the argumets."
+    DESTPATH='/big/assets/moc_int8/'
+    for job in Tracker(iter=jobset.jobs.iterator(), target=jobset.assets.count(), progress=True):
+        args = json.loads(job.arguments)
+        basename = '/'.join(args[0].split('/')[-2:])
+        destname = os.path.join(DESTPATH, basename)
+        args[1] = destname
+        job.arguments = json.dumps(args)
+        job.save()
