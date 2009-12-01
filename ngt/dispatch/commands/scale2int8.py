@@ -86,8 +86,8 @@ if __name__ == '__main__':
     else:
         outfile = DEFAULT_OUTPATH + os.path.splitext(os.path.basename(args[0]))[0] + "_8bit.cub"
     infile = args[0]
-    if haserrors(infile):
-        sys.exit(6)
+    #if haserrors(infile):
+    #    sys.exit(6)
     if not os.path.exists(os.path.dirname(outfile)):
         os.makedirs(os.path.dirname(outfile))
     retcode = convert(infile, outfile)
