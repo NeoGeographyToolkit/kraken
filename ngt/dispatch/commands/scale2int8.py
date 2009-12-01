@@ -37,6 +37,18 @@ def getminmax(file):
     print "min: %f\tmax: %f" % (minimum, maximum)
     return (minimum, maximum)
     
+def haserrors(cubefile):
+    p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'getkey', 'from='+cubefile, 'key=DataQualityDesc', 'recursive=true'], stdout=PIPE)
+    outp = p.communicate()[0]
+    lines = outp.split('\n')
+    result = lines[-1].strip()
+    if result == 'OK':
+        return False
+    elif result == 'ERRORS':
+        return True
+    else:
+        raise Exception, "Unexpected result from getkey."
+    
 def stretch(infile, outfile, minval, maxval):
     # stretch from=/home/ted/e1501055.cub to=/home/ted/e1501055_8bit.cub+8bit+0:254 pairs="0.092769:1 0.183480:254" null=0 lis=1 lrs=1 his=255 hrs=255 
     args = (
@@ -72,6 +84,8 @@ if __name__ == '__main__':
     else:
         outfile = DEFAULT_OUTPATH + os.path.splitext(os.path.basename(args[0]))[0] + "_8bit.cub"
     infile = args[0]
+    if haserrors(infile):
+        sys.exit(6)
     if not os.path.exists(os.path.dirname(outfile)):
         os.makedirs(os.path.dirname(outfile))
     retcode = convert(infile, outfile)
