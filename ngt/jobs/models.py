@@ -1,4 +1,8 @@
-from django.db import models
+from ngt import settings
+if not settings.DISABLE_GEO:
+    from django.contrib.gis.db import models
+else:
+    from django.db import models
 import os, time, hashlib, datetime
 import uuid
 from ngt.messaging.messagebus import MessageBus
