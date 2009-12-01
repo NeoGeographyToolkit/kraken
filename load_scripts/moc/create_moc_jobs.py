@@ -83,11 +83,12 @@ def populate_scale2int8_jobs(jobset):
         basename = '/'.join(asset.file_path.split('/')[-2:])
         destname = os.path.join((DESTPATH, basename))
         job = Job()
+        job.jobset = jobset
         job.command = jobset.command
         job.args = json.dumps([asset.file_path, destname])
         job.footprint = asset.footprint
         
         job.save()
         job.assets.add(asset)
-        jobset.jobs.add(job)
+        #jobset.jobs.add(job)
     
