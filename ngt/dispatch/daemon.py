@@ -98,6 +98,7 @@ def update_status(msgbytes):
                     job.spawn_output_asset()
                 except:
                     logger.error("ASSET CREATION FAILED FOR JOB %s" % job.uuid)
+                    sys.excepthook(*sys.exc_info())
                     job.status = "asset_creation_fail"
                     job.save()
         return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
