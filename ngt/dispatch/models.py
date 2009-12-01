@@ -20,6 +20,8 @@ class ReaperManager(models.Manager):
         return super(ReaperManager, self).get_query_set().filter(deleted=True)
     def expired(self):
         return super(ReaperManager, self).get_queryset().filter(expired=True)
+    def any(self):
+        return super(ReaperManager, self).get_queryset()
         
 class Reaper(models.Model):
     objects = ReaperManager()
