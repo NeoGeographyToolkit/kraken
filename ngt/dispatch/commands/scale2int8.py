@@ -43,8 +43,10 @@ def haserrors(cubefile):
     lines = outp.split('\n')
     result = lines[-1].strip()
     if result == 'OK':
+        print "No errors in cube."
         return False
     elif result == 'ERRORS':
+        print "Errors found in cube.  This on will be failed and skipped."
         return True
     else:
         raise Exception, "Unexpected result from getkey."
