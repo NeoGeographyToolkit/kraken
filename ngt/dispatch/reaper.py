@@ -17,7 +17,7 @@ from threading import Event
 
 import logging
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
-logging.getLogger('messagebus').setLevel(logging.DEBUG)
+#logging.getLogger('messagebus').setLevel(logging.DEBUG)
 
 if os.path.dirname(__file__).strip():
     COMMAND_PATH = os.path.join(os.path.dirname(__file__), 'commands')
@@ -121,8 +121,14 @@ class Reaper(object):
     def _rpc_status(self, msg):
         return protocols.pack(protobuf.ReaperStatusResponse, {'status': 'UP'})
     
+    def _rpc_shutdown(self, msg):
+        response = protocols.pack(protopuf.ReaperStatusResponse, {'status': 'shutdown'})
+        self.shutdown(delay=0.3) 
+        return response
+    
     CONTROL_COMMAND_MAP = {
-        'GetStatus': _rpc_status
+        'GetStatus': _rpc_status,
+        'Shutdown': _rpc_shutdown
     }
     
     def control_command_handler(self, msg, command_map=CONTROL_COMMAND_MAP):
@@ -198,7 +204,10 @@ class Reaper(object):
         except:
             print "!! UNREGISTRATION FAILED !!"
         
-    def shutdown(self):
+    def shutdown(self, delay=None):
+        self.logger.info("Shutdown initiated.")
+        if delay:
+            time.sleep(delay)
         if not self.shutdown_event.is_set():
             self.shutdown_event.set()
             self.logger.info("Set shutdown event.")
@@ -226,7 +235,9 @@ class Reaper(object):
 
             self.logger.debug("Launching consume threads...")
             self.control_listener.start()
+            time.sleep(0.25)
             self.job_listener.start()
+            time.sleep(0.25)
 
             self.logger.info("Registering with dispatch...")
             self.register_with_dispatch()
