@@ -73,7 +73,8 @@ class Job(models.Model):
         """
         assert self.assets.count() == 1
         asset_o = self.assets.all()[0]
-        asset_n = copy(asset_o)
+        asset_n = Asset()
+        asset_n.__dict = asset_o.__dict__
         asset_n.id = None
         asset_n.is_original = False
         asset_n.creator_job = self
