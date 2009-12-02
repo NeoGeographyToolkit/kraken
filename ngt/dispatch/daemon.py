@@ -111,7 +111,9 @@ def update_status(msgbytes):
             job_semaphore.release()
             if job.creates_new_asset:
                 try:
+                    dblock.acquire()
                     job.spawn_output_asset()
+                    dblock.release()
                 except:
                     logger.error("ASSET CREATION FAILED FOR JOB %s" % job.uuid)
                     sys.excepthook(*sys.exc_info())
@@ -196,7 +198,9 @@ def enqueue_jobs(logger, job_semaphore, shutdown_event):
             try:
                 job_semaphore.acquire()
                 job = jobset.jobs.filter(Q(status='new') | Q(status='requeue') )[0]
+                dblock.acquire()
                 job.enqueue()
+                dblock.release()
                 time.sleep(0.5)
             except IndexError:
                 jobset_count -= 1
