@@ -44,6 +44,7 @@ def register_reaper(msgbytes):
     try:
         #r = Reaper.objects.get(uuid=request.reaper_uuid)
         r = Reaper.objects.any().get(uuid=request.reaper_uuid) # will get deleted or expired reapers, too
+        logger.info("Reaper exists.  Reurrecting.")
         r.deleted = False
         r.expired = False
         r.save()
@@ -75,8 +76,8 @@ def update_status(msgbytes):
     try:
         job = Job.objects.get(uuid=request.job_id)
         job.status = request.state
-        if job.processor and job.processor != request.reaper_id:
-            logger.warning("Status update for job %s came from a different reaper than we expected.  This jobs processor attribute will be set to the latest reaper that reported." % job.uuid)
+        #if job.processor and job.processor != request.reaper_id:
+            #logger.warning("Status update for job %s came from a different reaper than we expected.  This jobs processor attribute will be set to the latest reaper that reported." % job.uuid)
         job.processor = request.reaper_id
         if 'output' in request:
             job.output = request.output
@@ -177,9 +178,11 @@ def enqueue_jobs(logger, job_semaphore, shutdown_event):
         active_jobsets = JobSet.objects.filter(active=True)
         jobset_count = active_jobsets.count()
         for jobset in active_jobsets:
+            if shutdown_event.is_set():
+                break
             try:
-                job = jobset.jobs.filter(Q(status='new') | Q(status='requeue') )[0]
                 job_semaphore.acquire()
+                job = jobset.jobs.filter(Q(status='new') | Q(status='requeue') )[0]
                 job.enqueue()
                 time.sleep(0.5)
             except IndexError:
