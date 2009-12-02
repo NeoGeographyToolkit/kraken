@@ -19,11 +19,12 @@ class ReaperManager(models.Manager):
     def deleted(self):
         return super(ReaperManager, self).get_query_set().filter(deleted=True)
     def expired(self):
-        return super(ReaperManager, self).get_queryset().filter(expired=True)
+        return super(ReaperManager, self).get_query_set().filter(expired=True)
     def any(self):
         return super(ReaperManager, self).all()
         
 class Reaper(models.Model):
+    any_objects = models.Manager()
     objects = ReaperManager()
     class Meta:
         app_label = 'dispatch'
