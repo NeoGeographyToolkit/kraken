@@ -31,6 +31,7 @@ command_map = {
 
 JOB_RELEASE_LIMIT = 100
 job_semaphore = threading.Semaphore(JOB_RELEASE_LIMIT)
+dblock = threading.Lock()
 
 ###
 # COMMANDS
@@ -47,10 +48,14 @@ def register_reaper(msgbytes):
         logger.info("Reaper exists.  Reurrecting.")
         r.deleted = False
         r.expired = False
+        dblock.acquire()
         r.save()
+        dblock.release()
     except Reaper.DoesNotExist:
         r = Reaper(uuid=request.reaper_uuid, type=request.reaper_type)
+        dblock.acquire()
         r.save()
+        dblock.release()
         logger.info("Registered reaper: %s" % request.reaper_uuid)
     return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
 
@@ -81,13 +86,17 @@ def update_status(msgbytes):
         job.processor = request.reaper_id
         if 'output' in request:
             job.output = request.output
+        dblock.acquire()
         job.save()
+        dblock.release()
         if 'reaper_id' in request and request['reaper_id']:
             try:
                 r = Reaper.objects.get(uuid=request.reaper_id)
                 if request.state in job_completers:
                     r.jobcount += 1
+                    dblock.acquire()
                     r.save()
+                    dblock.release()
             except Reaper.DoesNotExist:
                 # <shrug> Log a warning, register the reaper, and increment its jobcount
                 logger.warning("Dispatch received a status message from unregistered reaper %s.  Probably not good." % request['reaper_id'])
@@ -95,7 +104,9 @@ def update_status(msgbytes):
                 r = Reaper.objects.get(uuid=request.reaper_id)
                 if request.state in job_completers:
                     r.jobcount += 1
+                    dblock.acquire()
                     r.save()
+                    dblock.release()
         if request.state in job_completers:
             job_semaphore.release()
             if job.creates_new_asset:
@@ -105,7 +116,9 @@ def update_status(msgbytes):
                     logger.error("ASSET CREATION FAILED FOR JOB %s" % job.uuid)
                     sys.excepthook(*sys.exc_info())
                     job.status = "asset_creation_fail"
+                    dblock.acquire()
                     job.save()
+                    dblock.release()
         return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
     except Job.DoesNotExist:
         logger.error("Couldn't find a job with uuid %s on status update." % request.uuid)
