@@ -11,6 +11,9 @@ from ngt import protocols
 from ngt.protocols import protobuf
 #from ngt.assets.models import Asset, DATA_ROOT
 
+import logging
+logger = logging.getLogger('job_models')
+
 messagebus = MessageBus()
 
 messagebus.channel.exchange_declare(exchange="Job_Exchange", type="direct", durable=True, auto_delete=False,)
@@ -63,7 +66,9 @@ class Job(models.Model):
         }
         message_body = protocols.pack(protobuf.Command, cmd)
         self.status = 'queued'
+        logger.debug("job.enqueue: about to save record")
         self.save()
+        logger.debug("job.enqueue: record saved. Publishing to wire.")   
         messagebus.publish(message_body, exchange='Job_Exchange', routing_key='reaper.generic') #routing key is the name of the intended reaper type
         print "Enqueued %s" % self.uuid
         

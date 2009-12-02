@@ -10,8 +10,9 @@ from models import Reaper
 from ngt.jobs.models import Job, JobSet
 from django.db.models import Q
 
-logger = logging.getLogger('dispatch')
+logger = logging.getLogger('feeder')
 logger.setLevel(logging.DEBUG)
+logging.getLogger('job_models').setLevel(logging.DEBUG)
 
 JOB_MIN = 10
 JOB_MAX = 60
@@ -30,8 +31,8 @@ def enqueue_jobs():
         for jobset in active_jobsets:
             try:
                 greenlight.wait()
-                job = jobset.jobs.filter(Q(status='new') | Q(status='requeue') )[0]
                 dblock.acquire()
+                job = jobset.jobs.filter(Q(status='new') | Q(status='requeue') )[0]
                 job.enqueue()
                 dblock.release()
                 time.sleep(0.01)
