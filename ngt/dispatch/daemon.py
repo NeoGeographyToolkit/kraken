@@ -109,7 +109,7 @@ def update_status(msgbytes):
                     dblock.release()
         if request.state in job_completers:
             job_semaphore.release()
-            if job.creates_new_asset:
+            if request.state == 'complete' and job.creates_new_asset:
                 try:
                     dblock.acquire()
                     job.spawn_output_asset()
