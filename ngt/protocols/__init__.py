@@ -1,7 +1,7 @@
 #from command_pb2 import Command
 #from status_pb2 import Status
 from protocols_pb2 import RpcRequestWrapper, RpcResponseWrapper
-import protocols_pb2 as protobuf
+import protocols_pb2 as protobuf # FOR REFACTOR: protobuf is a terrible alias name for this module and it's infected everything that uses it.
 import logging
 logger = logging.getLogger('protocol')
 
