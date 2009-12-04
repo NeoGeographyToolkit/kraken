@@ -32,6 +32,7 @@ class Reaper(object):
         'test': '../messaging/fake_command.py',
         'moc-stage': os.path.join(COMMAND_PATH, 'moc_stage.py'), # convert and map-project MOC images
         'scale2int8': os.path.join(COMMAND_PATH, 'scale2int8.py'), 
+        'mosaic': '/big/software/visionworkbench/bin/image2plate',
     }
 
 
