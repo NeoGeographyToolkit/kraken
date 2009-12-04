@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import sys, logging, threading, os, atexit, time
+import sys, logging, threading, os, atexit, time, itertools
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))    
 #from ngt.protocols import * # <-- WireMessage, dotdict, pack, unpack
 import ngt.protocols as protocols
@@ -25,6 +25,7 @@ from django.db.models import Q
 command_map = {
     'registerReaper': 'register_reaper',
     'unregisterReaper': 'unregister_reaper',
+    'getJob': 'get_next_job',
     'shutdown': '_shutdown',
 }
 
@@ -68,7 +69,28 @@ def unregister_reaper(msgbytes):
     except Reaper.DoesNotExist:
         logger.error("Tried to delete an unregistered reaper, UUID %s" % reaper_uuid)
     return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
-        
+
+####
+# Job Fetching Logic
+####
+
+dblock.acquire()        
+active_jobsets = itertools.cycle(JobSet.objects.filter(active=True))
+dblock.release()
+
+def get_next_job(msgbytes):
+    request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
+    statuses_we_want = ('new','requeue')
+    QUERY_SIZE=50
+    job = None
+    while not job:
+        jobset = active_jobsets.next()
+        query_offset=0
+        while not job:
+            jobs = jobset.jobs.filter(status__in=statuses_we_want))[query_offset:QUERY_SIZE]
+            for job in jobs:
+                if check_readiness(job):
+                    break
 
 
 def update_status(msgbytes):
