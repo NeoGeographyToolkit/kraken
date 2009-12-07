@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-import sys, logging, threading, os, atexit, time, itertools
+import sys, logging, threading, os, atexit, time
+import itertools, traceback, json
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))    
 #from ngt.protocols import * # <-- WireMessage, dotdict, pack, unpack
 import ngt.protocols as protocols
@@ -9,7 +10,10 @@ from ngt.messaging.messagebus import MessageBus
 from amqplib.client_0_8 import Message
 
 logger = logging.getLogger('dispatch')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
+#logging.getLogger('protocol').setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
+
 
 mb = MessageBus()
 
@@ -43,10 +47,11 @@ def register_reaper(msgbytes):
     # Currently this would result in a ProgrammerError from psycopg
     request = protocols.unpack(protobuf.ReaperRegistrationRequest, msgbytes)
     
+    logger.info("Got registration request from reaper %s" % request.reaper_uuid)
     try:
         #r = Reaper.objects.get(uuid=request.reaper_uuid)
         r = Reaper.objects.any().get(uuid=request.reaper_uuid) # will get deleted or expired reapers, too
-        logger.info("Reaper exists.  Reurrecting.")
+        logger.info("Reaper exists.  Resurrecting.")
         r.deleted = False
         r.expired = False
         dblock.acquire()
@@ -74,24 +79,67 @@ def unregister_reaper(msgbytes):
 # Job Fetching Logic
 ####
 
-dblock.acquire()        
-active_jobsets = itertools.cycle(JobSet.objects.filter(active=True))
-dblock.release()
+
+
+def check_readiness(job):
+    '''Return True if the job is ready to be processed, False otherwise.'''
+    return True
+    
+def preprocess_job(job):
+    ''' Anything that needs to get done before the job is dispatched '''
+    return job
+
+def postprocess_job(job):
+    ''' Anything that needs to get done after the job is completed '''
+    return job
+
 
 def get_next_job(msgbytes):
+    logger.debug("Looking for the next job.")
     request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
-    statuses_we_want = ('new','requeue')
-    QUERY_SIZE=50
-    job = None
-    while not job:
+    statuses_to_process = ('new','requeue')
+    QUERY_SIZE=10
+    
+    dblock.acquire()
+    active_jobsets = itertools.cycle(JobSet.objects.filter(active=True))
+    dblock.release()
+    
+    def job_generator():
         jobset = active_jobsets.next()
         query_offset=0
-        while not job:
-            jobs = jobset.jobs.filter(status__in=statuses_we_want))[query_offset:QUERY_SIZE]
-            for job in jobs:
-                if check_readiness(job):
-                    break
-
+        while True:
+            dblock.acquire()
+            jobs = list( jobset.jobs.filter(status__in=statuses_to_process)[query_offset:query_offset + QUERY_SIZE] )
+            dblock.release()
+            logger.debug("Got %d %s jobs from the DB." % (len(jobs), str(jobset) ))
+            if len(jobs) > 0:
+                for job in jobs:
+                    yield job
+            else:
+                jobset = active_jobsets.next()
+                logger.debug("Switching to JobSet %s" % str(jobset))
+                time.sleep(0.1) # so we don't hammer the db with empty requests
+    
+    i = 0
+    for job in job_generator():
+        i += 1
+        logger.debug("Checking job %d" % i)
+        if check_readiness(job):
+            logger.debug("Job %d OK." % i)
+            break
+    else:
+        return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
+    logger.debug("Found usable job in %d iterations" % i)
+            
+    job = preprocess_job(job)
+    response = {
+        'job_available' : True,
+        'uuid' : job.uuid,
+        'command' : job.command,
+        'args' : json.loads(job.arguments),
+        }
+    logger.info("Sending job %s" % job.uuid[:8])
+    return protocols.pack(protobuf.ReaperJobResponse, response)
 
 def update_status(msgbytes):
     '''
@@ -131,6 +179,7 @@ def update_status(msgbytes):
                     dblock.release()
         if request.state in job_completers:
             job_semaphore.release()
+            # TODO: call post_process_job here... move asset creation don the call stack...
             if request.state == 'complete' and job.creates_new_asset:
                 try:
                     dblock.acquire()
@@ -164,8 +213,10 @@ def command_handler(msg):
         try:
             response.payload = globals()[command_map[request.method]](request.payload)
             response.error = False
-        except Exception, e:
-            logger.error("Error in command '%s': %s %s" % (request.method, str(Exception),  e))
+        except Exception as e:
+            logger.error("Error in command '%s': %s %s" % (request.method, type(e),  str(e.args)))
+            # TODO: send a stack trace.
+            traceback.print_tb(sys.exc_info()[2]) # traceback
             response.payload = ''
             response.error = True
             response.error_string = str(e)
@@ -256,10 +307,12 @@ def init():
     logger.debug("Launching consume thread.")
     mb.start_consuming()
 
+    '''
     if '--moc' in sys.argv:
         dispatch_thread = threading.Thread(name="job_dispatcher", target=enqueue_jobs, args=(logger, job_semaphore, shutdown_event) )
         dispatch_thread.daemon = True
         dispatch_thread.start()
+    '''
 
 if __name__ == '__main__':
     init()

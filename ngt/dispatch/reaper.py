@@ -16,7 +16,7 @@ from messaging.messagebus import MessageBus, ConsumptionThread
 from threading import Event
 
 import logging
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 #logging.getLogger('messagebus').setLevel(logging.DEBUG)
 
 if os.path.dirname(__file__).strip():
@@ -52,7 +52,7 @@ class Reaper(object):
         self.REPLY_QUEUE_NAME = "reply.reaper.%s" % self.reaper_id # queue for RPC responses
         self.JOB_QUEUE_NAME = "reaper."+ self.REAPER_TYPE
         self.logger = logging.getLogger('reaper.%s' % self.reaper_id)
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(logging.INFO)
         
 
         # Consume from the job queue...
@@ -96,22 +96,31 @@ class Reaper(object):
         ''' Ask Dispatch for a job and return it.
             If there's no job, return false.
         '''
-        request = protocols.pack(protobuf.ReaperJobRequest, {})
-        response_bytes = self.dispatch.getJob(self.amqp_rpc_controller, request, None)
+        request = protobuf.ReaperJobRequest()
+        self.logger.debug("Requesting job.")
+        response = self.dispatch.getJob(self.amqp_rpc_controller, request, None)
         if not response:
-            assert self.amqp_rpc_controller.TimedOut()
-            return None
+            if self.amqp_rpc_controller.TimedOut():
+                self.logger.debug("Job request timed out.")
+                return None
+            elif  self.ampq_rpc_controller.Failed():
+                self.logger.error("Error in RPC: " + self.amqp_rpc_controller.ErrorText())
+                return None
         elif not response.job_available:
+            self.logger.debug("No jobs available.")
             return None
         else:
+            self.logger.debug("Got a job.")
             return response
                     
      
     def job_request_loop(self):
+        job = None
         while True:
             if self.shutdown_event.is_set():
                 break
-            job = self.get_a_job()
+            if self.is_registered:
+                job = self.get_a_job()
             if job:
                 if job.command in self.commands:  # only commands allowed by the configuration will be executed
                     self.send_job_status(job.uuid,  'processing')
@@ -131,14 +140,13 @@ class Reaper(object):
                         state = 'complete'
                     else:
                         state = 'failed'
+                    self.logger.info("Job %s: %s" % (job.uuid[:8], state) )
                     self.send_job_status(job.uuid, state, output=output)
                 else:
                     self.logger.error("Command: '%s' not found in amq_config's list of valid commands." % job.command)
                     self.send_job_status(job.uuid, 'failed', output="Command: '%s' not found in the list of valid commands for reaper %s" % (job.command, self.uuid))
             else:
-                if self.shutdown_event.is_set():
-                    break
-                time.sleep(JOB_POLL_INTERVAL)
+                time.sleep(self.JOB_POLL_INTERVAL)
     
     """
     def job_command_handler(self, msg):
