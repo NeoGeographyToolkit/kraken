@@ -26,8 +26,10 @@ def enqueue_jobs():
     logger.debug("Job dispatch is launching.")
     Job.objects.filter(status='queued').update(status='requeue')
     while True:
+        dblock.acquire()
         active_jobsets = JobSet.objects.filter(active=True)
         jobset_count = active_jobsets.count()
+        dblock.release()
         for jobset in active_jobsets:
             try:
                 greenlight.wait()
@@ -41,6 +43,7 @@ def enqueue_jobs():
                 if jobset_count == 0:
                     logger.info("Ran out of jobs to enqueue. Dispatch thread will exit.")
                     return True
+                    
                     
 class TrafficLight(threading.Thread):
     def __init__(self):

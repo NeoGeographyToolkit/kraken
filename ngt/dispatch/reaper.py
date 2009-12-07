@@ -16,7 +16,7 @@ from messaging.messagebus import MessageBus, ConsumptionThread
 from threading import Event
 
 import logging
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 #logging.getLogger('messagebus').setLevel(logging.DEBUG)
 
 if os.path.dirname(__file__).strip():
@@ -34,6 +34,7 @@ class Reaper(object):
         'scale2int8': os.path.join(COMMAND_PATH, 'scale2int8.py'), 
         'mosaic': '/big/software/visionworkbench/bin/image2plate',
     }
+    JOB_POLL_INTERVAL = 1 #seconds
 
 
     REAPER_TYPE = 'generic'
@@ -52,7 +53,7 @@ class Reaper(object):
         self.REPLY_QUEUE_NAME = "reply.reaper.%s" % self.reaper_id # queue for RPC responses
         self.JOB_QUEUE_NAME = "reaper."+ self.REAPER_TYPE
         self.logger = logging.getLogger('reaper.%s' % self.reaper_id)
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(logging.INFO)
         
 
         # Consume from the job queue...
@@ -80,7 +81,7 @@ class Reaper(object):
         # Init threads to handle message consumption
         self.shutdown_event = threading.Event()
         self.control_listener = ConsumptionThread(mode='GET', shutdown_event=self.shutdown_event, name="control_listener")
-        self.job_listener = ConsumptionThread(mode='GET', shutdown_event=self.shutdown_event, name="job_listener")
+        #self.job_listener = ConsumptionThread(mode='GET', shutdown_event=self.shutdown_event, name="job_listener")
 
     
     def send_job_status(self, uuid, status, output=None):
@@ -92,6 +93,63 @@ class Reaper(object):
         self.chan.basic_publish( Message(msg_body), exchange=self.STATUS_EXCHANGE_NAME, routing_key='.'.join((self.REAPER_TYPE, 'job')) )
         self.logger.debug("Sent status %s to %s" % (msg_body, self.STATUS_EXCHANGE_NAME))
     
+    def get_a_job(self):
+        ''' Ask Dispatch for a job and return it.
+            If there's no job, return false.
+        '''
+        request = protobuf.ReaperJobRequest()
+        self.logger.debug("Requesting job.")
+        response = self.dispatch.getJob(self.amqp_rpc_controller, request, None)
+        if not response:
+            if self.amqp_rpc_controller.TimedOut():
+                self.logger.debug("Job request timed out.")
+                return None
+            elif  self.ampq_rpc_controller.Failed():
+                self.logger.error("Error in RPC: " + self.amqp_rpc_controller.ErrorText())
+                return None
+        elif not response.job_available:
+            self.logger.debug("No jobs available.")
+            return None
+        else:
+            self.logger.debug("Got a job.")
+            return response
+                    
+     
+    def job_request_loop(self):
+        job = None
+        while True:
+            if self.shutdown_event.is_set():
+                break
+            if self.is_registered:
+                job = self.get_a_job()
+            if job:
+                if job.command in self.commands:  # only commands allowed by the configuration will be executed
+                    self.send_job_status(job.uuid,  'processing')
+                    #msg.channel.basic_ack(msg.delivery_tag)
+                    args = [ self.commands[job.command] ] + list(job.args)
+                    self.logger.debug("Executing %s" % ' '.join(args))
+                    p = Popen(args, stdout=PIPE, stderr=STDOUT)
+                    output=""
+                    while True:
+                        line = p.stdout.readline()
+                        if line == '' and p.poll() != None:
+                            break
+                        output += line
+                        sys.stdout.write(line)
+                    resultcode = p.wait()
+                    if resultcode == 0:
+                        state = 'complete'
+                    else:
+                        state = 'failed'
+                    self.logger.info("Job %s: %s" % (job.uuid[:8], state) )
+                    self.send_job_status(job.uuid, state, output=output)
+                else:
+                    self.logger.error("Command: '%s' not found in amq_config's list of valid commands." % job.command)
+                    self.send_job_status(job.uuid, 'failed', output="Command: '%s' not found in the list of valid commands for reaper %s" % (job.command, self.uuid))
+            else:
+                time.sleep(self.JOB_POLL_INTERVAL)
+    
+    """
     def job_command_handler(self, msg):
         cmd = protocols.unpack(protobuf.Command, msg.body)
         
@@ -116,9 +174,10 @@ class Reaper(object):
             self.send_job_status(cmd.uuid, state, output=output)
         else:
             self.logger.error("Command: '%s' not found in amq_config's list of valid commands." % cmd.command)
-    # ***
-    # * Control Commands
-    # ***
+      """
+    ####
+    #  Control Commands
+    ####
     
     def _rpc_status(self, msg):
         return protocols.pack(protobuf.ReaperStatusResponse, {'status': 'UP'})
@@ -161,22 +220,6 @@ class Reaper(object):
         self.control_listener.channel.basic_ack(msg.delivery_tag)
         wireresponse = WireMessage.pack_response(response)
         self.control_listener.channel.basic_publish(Message(wireresponse), routing_key=request.requestor)
-    '''
-    # obsoleted by RPC
-    CONTROL_COMMANDS = {}        
-    def control_command_handler(self, msg):
-        cmd = protocols.unpack(protobuf.Command, msg.body)
-        try:
-            self.CONTROL_COMMANDS[cmd.command](cmd.args)
-            msg.channel.basic_ack(msg.delivery_tag)
-        except:
-            raise
-
-
-    def command_to_dispatch(self, command, args):
-        serialized_msg = protocols.pack(protobuf.Command, {'command':command, 'args':args})
-        self.chan.basic_publish(Message(serialized_msg), exchange=self.CONTROL_EXCHANGE_NAME, routing_key='dispatch')
-    '''
 
     def register_with_dispatch(self):
         #self.command_to_dispatch('register_reaper', [self.reaper_id, self.REAPER_TYPE])
@@ -233,12 +276,14 @@ class Reaper(object):
             
             self.logger.debug("\tjob will consume from %s" % self.JOB_QUEUE_NAME)
             #self.job_listener.channel.basic_consume(queue=self.JOB_QUEUE_NAME, no_ack=False, callback=self.job_command_handler)
-            self.job_listener.set_callback(queue=self.JOB_QUEUE_NAME, no_ack=True, callback=self.job_command_handler)
+            #self.job_listener.set_callback(queue=self.JOB_QUEUE_NAME, no_ack=True, callback=self.job_command_handler)
 
             self.logger.debug("Launching consume threads...")
             self.control_listener.start()
             time.sleep(0.25)
-            self.job_listener.start()
+            #self.job_listener.start()
+            self.job_loop = threading.Thread(name="job_loop", target=self.job_request_loop)
+            self.job_loop.start()
             time.sleep(0.25)
 
             self.logger.info("Registering with dispatch...")

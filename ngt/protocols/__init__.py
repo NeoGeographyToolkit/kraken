@@ -1,7 +1,7 @@
 #from command_pb2 import Command
 #from status_pb2 import Status
 from protocols_pb2 import RpcRequestWrapper, RpcResponseWrapper
-import protocols_pb2 as protobuf
+import protocols_pb2 as protobuf # FOR REFACTOR: protobuf is a terrible alias name for this module and it's infected everything that uses it.
 import logging
 logger = logging.getLogger('protocol')
 
@@ -29,8 +29,9 @@ def pack(msgclass, data):
         except:
             raise AttributeError("%s doesn't have an attribute named %s." % (str(msgclass), k))
         field_descriptor = msg.DESCRIPTOR.fields_by_name[k]
-        if hasattr(v, '__iter__'):
-            assert field_descriptor.label == field_descriptor.LABEL_REPEATED # verify this is a repeated field
+        logger.debug("Packing %s (%s)" % (k, field_descriptor.label) )
+        if field_descriptor.label == field_descriptor.LABEL_REPEATED:
+            assert hasattr(v, '__iter__')
             field = getattr(msg, k)
             for i in v:
                 field.append(i)

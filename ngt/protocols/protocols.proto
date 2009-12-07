@@ -50,9 +50,21 @@ message ReaperUnregistrationRequest{
     required string reaper_uuid = 1;
 }
 
+message ReaperJobRequest {
+    repeated string allowed_commands = 1; // leaving this empty means dispatch ought to respond with any job it has
+}
+
+message ReaperJobResponse {
+    required bool job_available = 1; // if this is false, reaper won't expect the other fields to be present
+    optional string uuid = 2;  // uuid of the job
+    required string command = 3;
+    repeated string args = 4;
+}
+
 service DispatchCommandService{
     rpc registerReaper(ReaperRegistrationRequest) returns (AckResponse);
     rpc unregisterReaper(ReaperUnregistrationRequest) returns (AckResponse);
+    rpc getJob(ReaperJobRequest) returns (ReaperJobResponse);
 }
 
 // #####
