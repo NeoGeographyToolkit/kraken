@@ -251,6 +251,71 @@ _REAPERUNREGISTRATIONREQUEST = descriptor.Descriptor(
   options=None)
 
 
+_REAPERJOBREQUEST = descriptor.Descriptor(
+  name='ReaperJobRequest',
+  full_name='ReaperJobRequest',
+  filename='protocols.proto',
+  containing_type=None,
+  fields=[
+    descriptor.FieldDescriptor(
+      name='allowed_commands', full_name='ReaperJobRequest.allowed_commands', index=0,
+      number=1, type=9, cpp_type=9, label=3,
+      default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+  ],
+  extensions=[
+  ],
+  nested_types=[],  # TODO(robinson): Implement.
+  enum_types=[
+  ],
+  options=None)
+
+
+_REAPERJOBRESPONSE = descriptor.Descriptor(
+  name='ReaperJobResponse',
+  full_name='ReaperJobResponse',
+  filename='protocols.proto',
+  containing_type=None,
+  fields=[
+    descriptor.FieldDescriptor(
+      name='job_available', full_name='ReaperJobResponse.job_available', index=0,
+      number=1, type=8, cpp_type=7, label=2,
+      default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    descriptor.FieldDescriptor(
+      name='uuid', full_name='ReaperJobResponse.uuid', index=1,
+      number=2, type=9, cpp_type=9, label=1,
+      default_value=unicode("", "utf-8"),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    descriptor.FieldDescriptor(
+      name='command', full_name='ReaperJobResponse.command', index=2,
+      number=3, type=9, cpp_type=9, label=2,
+      default_value=unicode("", "utf-8"),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    descriptor.FieldDescriptor(
+      name='args', full_name='ReaperJobResponse.args', index=3,
+      number=4, type=9, cpp_type=9, label=3,
+      default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+  ],
+  extensions=[
+  ],
+  nested_types=[],  # TODO(robinson): Implement.
+  enum_types=[
+  ],
+  options=None)
+
+
 _REAPERCOMMANDREQUEST = descriptor.Descriptor(
   name='ReaperCommandRequest',
   full_name='ReaperCommandRequest',
@@ -376,6 +441,14 @@ class ReaperUnregistrationRequest(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType
   DESCRIPTOR = _REAPERUNREGISTRATIONREQUEST
 
+class ReaperJobRequest(message.Message):
+  __metaclass__ = reflection.GeneratedProtocolMessageType
+  DESCRIPTOR = _REAPERJOBREQUEST
+
+class ReaperJobResponse(message.Message):
+  __metaclass__ = reflection.GeneratedProtocolMessageType
+  DESCRIPTOR = _REAPERJOBRESPONSE
+
 class ReaperCommandRequest(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType
   DESCRIPTOR = _REAPERCOMMANDREQUEST
@@ -415,6 +488,15 @@ _DISPATCHCOMMANDSERVICE = descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=_REAPERUNREGISTRATIONREQUEST,
     output_type=_ACKRESPONSE,
+    options=None,
+  ),
+  descriptor.MethodDescriptor(
+    name='getJob',
+    full_name='DispatchCommandService.getJob',
+    index=2,
+    containing_service=None,
+    input_type=_REAPERJOBREQUEST,
+    output_type=_REAPERJOBRESPONSE,
     options=None,
   ),
 ])
