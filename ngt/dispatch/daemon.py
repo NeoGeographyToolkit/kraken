@@ -36,7 +36,6 @@ command_map = {
 
 
 JOB_RELEASE_LIMIT = 100
-job_semaphore = threading.Semaphore(JOB_RELEASE_LIMIT)
 dblock = threading.Lock()
 
 ###
@@ -50,9 +49,8 @@ def register_reaper(msgbytes):
     
     logger.info("Got registration request from reaper %s" % request.reaper_uuid)
     try:
-        #r = Reaper.objects.get(uuid=request.reaper_uuid)
-        r = Reaper.objects.any().get(uuid=request.reaper_uuid) # will get deleted or expired reapers, too
-        logger.info("Reaper exists.  Resurrecting.")
+        r = Reaper.objects.get(uuid=request.reaper_uuid) # will get deleted or expired reapers, too
+        logger.info("Reaper %s exists.  Resurrecting." % request.reaper_uuid[:8])
         r.deleted = False
         r.expired = False
         dblock.acquire()
@@ -197,7 +195,6 @@ def update_status(msgbytes):
                     job.save()
                     dblock.release()
         postprocess_job(job)
-        job_semaphore.release()
         return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
     except Job.DoesNotExist:
         logger.error("Couldn't find a job with uuid %s on status update." % request.uuid)
@@ -262,31 +259,6 @@ def shutdown():
     _shutdown()
 
 
-def enqueue_jobs(logger, job_semaphore, shutdown_event):
-    ''' Loop and enqueue jobs if the maximum queue size hasn't been exceeded '''
-    logger.debug("Job dispatch is launching.")
-    Job.objects.filter(status='queued').update(status='requeue')
-    while True:
-        if shutdown_event.is_set():
-            break
-        active_jobsets = JobSet.objects.filter(active=True)
-        jobset_count = active_jobsets.count()
-        for jobset in active_jobsets:
-            if shutdown_event.is_set():
-                break
-            try:
-                job_semaphore.acquire()
-                job = jobset.jobs.filter(Q(status='new') | Q(status='requeue') )[0]
-                dblock.acquire()
-                job.enqueue()
-                dblock.release()
-                time.sleep(0.5)
-            except IndexError:
-                jobset_count -= 1
-                if jobset_count == 0:
-                    logger.info("Ran out of jobs to enqueue. Dispatch thread will exit.")
-                    return True
-
     
 def init():
     logger.debug("dispatch daemon initializing")
@@ -316,12 +288,6 @@ def init():
     logger.debug("Launching consume thread.")
     mb.start_consuming()
 
-    '''
-    if '--moc' in sys.argv:
-        dispatch_thread = threading.Thread(name="job_dispatcher", target=enqueue_jobs, args=(logger, job_semaphore, shutdown_event) )
-        dispatch_thread.daemon = True
-        dispatch_thread.start()
-    '''
 
 if __name__ == '__main__':
     init()

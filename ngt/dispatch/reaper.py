@@ -149,32 +149,7 @@ class Reaper(object):
             else:
                 time.sleep(self.JOB_POLL_INTERVAL)
     
-    """
-    def job_command_handler(self, msg):
-        cmd = protocols.unpack(protobuf.Command, msg.body)
-        
-        if cmd.command in self.commands:  # only commands allowed by the configuration will be executed
-            self.send_job_status(cmd.uuid,  'processing')
-            #msg.channel.basic_ack(msg.delivery_tag)
-            args = [ self.commands[cmd.command] ] + list(cmd.args)
-            self.logger.debug("Executing %s" % ' '.join(args))
-            p = Popen(args, stdout=PIPE, stderr=STDOUT)
-            output=""
-            while True:
-                line = p.stdout.readline()
-                if line == '' and p.poll() != None:
-                    break
-                output += line
-                sys.stdout.write(line)
-            resultcode = p.wait()
-            if resultcode == 0:
-                state = 'complete'
-            else:
-                state = 'failed'
-            self.send_job_status(cmd.uuid, state, output=output)
-        else:
-            self.logger.error("Command: '%s' not found in amq_config's list of valid commands." % cmd.command)
-      """
+    
     ####
     #  Control Commands
     ####
@@ -196,7 +171,6 @@ class Reaper(object):
         """ Unpack a message and process commands 
             Speaks the command protocol.
         """
-        #cmd = protocols.unpack(protocols.Command, msg.body)
         self.logger.debug("command_handler got a message.")
         request = WireMessage.unpack_request(msg.body)
         self.logger.debug("command msg contents: %s" % str(request))
@@ -222,8 +196,6 @@ class Reaper(object):
         self.control_listener.channel.basic_publish(Message(wireresponse), routing_key=request.requestor)
 
     def register_with_dispatch(self):
-        #self.command_to_dispatch('register_reaper', [self.reaper_id, self.REAPER_TYPE])
-        #request = protocols.pack(protobuf.ReaperRegistrationRequest, {'reaper_uuid': self.reaper_id, 'reaper_type':self.REAPER_TYPE})
         request = protobuf.ReaperRegistrationRequest()
         request.reaper_uuid = self.reaper_id
         request.reaper_type = self.REAPER_TYPE
@@ -239,7 +211,6 @@ class Reaper(object):
             self.shutdown()
 
     def unregister_with_dispatch(self):
-        #request = protocols.pack(protobuf.ReaperUnregistrationRequest, {'reaper_uuid': self.reaper_id})
         request = protobuf.ReaperUnregistrationRequest()
         request.reaper_uuid = self.reaper_id
         response = self.dispatch.unregisterReaper(self.amqp_rpc_controller, request, None)
@@ -275,8 +246,6 @@ class Reaper(object):
             self.control_listener.set_callback(queue=self.CONTROL_QUEUE_NAME, no_ack=False, callback=self.control_command_handler)
             
             self.logger.debug("\tjob will consume from %s" % self.JOB_QUEUE_NAME)
-            #self.job_listener.channel.basic_consume(queue=self.JOB_QUEUE_NAME, no_ack=False, callback=self.job_command_handler)
-            #self.job_listener.set_callback(queue=self.JOB_QUEUE_NAME, no_ack=True, callback=self.job_command_handler)
 
             self.logger.debug("Launching consume threads...")
             self.control_listener.start()
