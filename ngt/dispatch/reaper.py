@@ -127,7 +127,7 @@ class Reaper(object):
                     self.send_job_status(job.uuid,  'processing')
                     #msg.channel.basic_ack(msg.delivery_tag)
                     args = [ self.commands[job.command] ] + list(job.args)
-                    self.logger.debug("Executing %s" % ' '.join(args))
+                    self.logger.info("Executing %s" % ' '.join(args))
                     p = Popen(args, stdout=PIPE, stderr=STDOUT)
                     output=""
                     while True:
