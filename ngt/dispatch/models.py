@@ -14,8 +14,8 @@ from django.db import models
 
 class ReaperManager(models.Manager):
     ''' Manage soft deletion and expiration of reapers '''
-    def get_query_set(self):
-        return super(ReaperManager, self).get_query_set().filter(deleted=False, expired=False)
+    #def get_query_set(self):
+    #    return super(ReaperManager, self).get_query_set().filter(deleted=False, expired=False)
     def deleted(self):
         return super(ReaperManager, self).get_query_set().filter(deleted=True)
     def expired(self):
