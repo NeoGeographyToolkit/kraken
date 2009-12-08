@@ -8,6 +8,7 @@ from ngt.protocols import protobuf, dotdict
 from ngt.protocols.rpc_services import WireMessage
 from ngt.messaging.messagebus import MessageBus
 from amqplib.client_0_8 import Message
+#from commands import jobcommands
 
 logger = logging.getLogger('dispatch')
 logger.setLevel(logging.INFO)
@@ -139,6 +140,10 @@ def get_next_job(msgbytes):
         'args' : json.loads(job.arguments),
         }
     logger.info("Sending job %s" % job.uuid[:8])
+    job.status = "dispatched"
+    dblock.acquire()
+    job.save()
+    dblock.release()
     return protocols.pack(protobuf.ReaperJobResponse, response)
 
 def update_status(msgbytes):
@@ -178,7 +183,6 @@ def update_status(msgbytes):
                     r.save()
                     dblock.release()
         if request.state in job_completers:
-            job_semaphore.release()
             # TODO: call post_process_job here... move asset creation don the call stack...
             if request.state == 'complete' and job.creates_new_asset:
                 try:
@@ -192,6 +196,8 @@ def update_status(msgbytes):
                     dblock.acquire()
                     job.save()
                     dblock.release()
+        postprocess_job(job)
+        job_semaphore.release()
         return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
     except Job.DoesNotExist:
         logger.error("Couldn't find a job with uuid %s on status update." % request.uuid)
@@ -291,11 +297,14 @@ def init():
     atexit.register(shutdown)
     
     # setup command queue
+    CONTROL_QUEUE = 'control.dispatch'
     logger.debug("Setting up Command listener")
     mb.exchange_declare('Control_Exchange', type='direct')
-    mb.queue_declare('control.dispatch',auto_delete=True)
-    mb.queue_bind(queue='control.dispatch', exchange='Control_Exchange', routing_key='dispatch')
-    command_ctag = mb.basic_consume(callback=command_handler, queue='control.dispatch')
+    mb.queue_declare(CONTROL_QUEUE,auto_delete=True)
+    logger.info ("Purging control queue")
+    mb.queue_purge(CONTROL_QUEUE)
+    mb.queue_bind(queue=CONTROL_QUEUE, exchange='Control_Exchange', routing_key='dispatch')
+    command_ctag = mb.basic_consume(callback=command_handler, queue=CONTROL_QUEUE)
 
     # setup status queue
     logger.debug("Setting up status listener.")
