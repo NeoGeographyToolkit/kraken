@@ -11,7 +11,7 @@ from ngt.jobs.models import Job, JobSet
 from django.db.models import Q
 
 logger = logging.getLogger('feeder')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 logging.getLogger('job_models').setLevel(logging.DEBUG)
 
 JOB_MIN = 10
