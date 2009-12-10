@@ -53,7 +53,7 @@ class Reaper(object):
         self.REPLY_QUEUE_NAME = "reply.reaper.%s" % self.reaper_id # queue for RPC responses
         self.JOB_QUEUE_NAME = "reaper."+ self.REAPER_TYPE
         self.logger = logging.getLogger('reaper.%s' % self.reaper_id)
-        self.logger.setLevel(logging.INFO)
+        self.logger.setLevel(logging.DEBUG)
         
 
         # Consume from the job queue...
@@ -160,7 +160,7 @@ class Reaper(object):
     
     def _rpc_shutdown(self, msg):
         response = protocols.pack(protobuf.ReaperStatusResponse, {'status': 'shutting down'})
-        self.shutdown(delay=0.3) 
+        self.shutdown(delay=1) 
         return response
     
     CONTROL_COMMAND_MAP = {
@@ -196,6 +196,7 @@ class Reaper(object):
         self.control_listener.channel.basic_ack(msg.delivery_tag)
         response_bytes = protocols.pack(protobuf.RpcResponseWrapper, response)
         self.control_listener.channel.basic_publish(Message(response_bytes), routing_key=request.requestor)
+        self.logger.debug("Sent response")
 
     def register_with_dispatch(self):
         request = protobuf.ReaperRegistrationRequest()
@@ -213,9 +214,12 @@ class Reaper(object):
             self.shutdown()
 
     def unregister_with_dispatch(self):
+        self.logger.debug("unregister_with_dispatch was called.")
         request = protobuf.ReaperUnregistrationRequest()
         request.reaper_uuid = self.reaper_id
+        self.logger.debug("Sending unregistration request.")
         response = self.dispatch.unregisterReaper(self.amqp_rpc_controller, request, None)
+        self.logger.debug("unregistration request call finished.")
         try:
             assert response.ack == 0 # ACK
             self.logger.info("Unregistration Acknowledged")
@@ -229,11 +233,11 @@ class Reaper(object):
         if not self.shutdown_event.is_set():
             self.shutdown_event.set()
             self.logger.info("Set shutdown event.")
-            #self.control_listener.join()
-            self.job_loop.join()
             if self.is_registered:
                 self.logger.info("Unregistering with dispatch.")
                 self.unregister_with_dispatch()
+            #self.control_listener.join()
+            self.job_loop.join()
             del self.amqp_rpc_controller
             del self.dispatch
             del self.dispatch_rpc_channel
@@ -273,7 +277,7 @@ class Reaper(object):
                 time.sleep(0.1) # keep the thread alive
         except KeyboardInterrupt:
             self.shutdown()
-        self.shutdown()
+        #self.shutdown()
             
 if __name__ == '__main__':
     r = Reaper()
