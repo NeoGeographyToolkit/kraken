@@ -8,10 +8,10 @@ from ngt.protocols import protobuf, dotdict
 from ngt.protocols.rpc_services import WireMessage
 from ngt.messaging.messagebus import MessageBus
 from amqplib.client_0_8 import Message
-#from commands import jobcommands
+from commands import jobcommands
 
 logger = logging.getLogger('dispatch')
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 #logging.getLogger('protocol').setLevel(logging.DEBUG)
 logging.getLogger().setLevel(logging.INFO)
 
@@ -37,6 +37,21 @@ command_map = {
 
 JOB_RELEASE_LIMIT = 100
 dblock = threading.Lock()
+
+def create_jobcommand_map():
+    ''' Create a map of command names to JobCommand subclasses from the jobcommand module '''
+    jobcommand_map = {}
+    # [type(getattr(jobcommands,o)) == type and issubclass(getattr(jobcommands,o), jobcommands.JobCommand) for o in dir(jobcommands)]
+    for name in dir(jobcommands):
+        obj = getattr(jobcommands, name)
+        if type(obj) == type and issubclass(obj, jobcommands.JobCommand):
+            if obj.name in jobcommand_map:
+                raise ValueError("Duplicate jobcommand name: %s" % obj.name)
+            jobcommand_map[obj.name] = obj
+    return jobcommand_map
+jobcommand_map = create_jobcommand_map()
+logger.debug("jobcommand_map initialized: %s" % str(jobcommand_map))
+assert 'mosaic' in jobcommand_map # TODO: delete this assert
 
 ###
 # COMMANDS
@@ -82,15 +97,24 @@ def unregister_reaper(msgbytes):
 
 def check_readiness(job):
     '''Return True if the job is ready to be processed, False otherwise.'''
-    return True
+    if job.command in jobcommand_map:
+        return jobcommand_map[job.command].check_readiness(job)
+    else:
+        return True
     
 def preprocess_job(job):
     ''' Anything that needs to get done before the job is dispatched '''
-    return job
+    if job.command in jobcommand_map:
+        return jobcommand_map[job.command].preprocess_job(job)
+    else:
+        return job
 
 def postprocess_job(job):
     ''' Anything that needs to get done after the job is completed '''
-    return job
+    if job.command in jobcommand_map:
+        return jobcommand_map[job.command].postprocess_job(job)
+    else:
+        return job
 
 
 def get_next_job(msgbytes):
@@ -141,6 +165,7 @@ def get_next_job(msgbytes):
     job.status = "dispatched"
     dblock.acquire()
     job.save()
+    job = None
     dblock.release()
     return protocols.pack(protobuf.ReaperJobResponse, response)
 
