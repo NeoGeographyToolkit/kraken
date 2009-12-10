@@ -13,6 +13,7 @@ from amqplib.client_0_8.basic_message import Message
 from messaging.amq_config import connection_params, which
 from messaging.messagebus import MessageBus, ConsumptionThread
 from threading import Event
+#import signal
 
 import logging
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
@@ -240,10 +241,14 @@ class Reaper(object):
             self.chan.queue_delete(queue=self.REPLY_QUEUE_NAME)
             self.chan.connection.close()
             self.chan.close()
+#    def _sig_shutdown(self, signum, frame):
+#        self.logger.info("Got signal. Shutting down.")
+#        self.shutdown()
 
     def launch(self):
         try:
             self.logger.info("Registering and launching message handlers...")
+            #signal.signal(signal.SIGINT, self._sig_shutdown)
             
             self.logger.debug("\tcontrol will consume from %s" % self.CONTROL_QUEUE_NAME)
             self.control_listener.set_callback(queue=self.CONTROL_QUEUE_NAME, no_ack=False, callback=self.control_command_handler)
