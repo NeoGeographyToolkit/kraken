@@ -220,7 +220,7 @@ def update_status(msgbytes):
                     dblock.acquire()
                     job.save()
                     dblock.release()
-        postprocess_job(job, state)
+        postprocess_job(job, request.state)
         return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
     except Job.DoesNotExist:
         logger.error("Couldn't find a job with uuid %s on status update." % request.uuid)
