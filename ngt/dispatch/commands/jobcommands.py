@@ -55,12 +55,12 @@ class MosaicJobCommand(JobCommand):
         if m:
             transaction_id = int(m.groups()[0])
         else:
-            transaction_id = 0
+            transaction_id = None
         m = re.search('Platefile ID: (\d+)', output)
         if m:
             platefile_id = int(m.groups()[0])
         else:
-            platefile_id = 0
+            platefile_id = None
         return transaction_id, platefile_id
 
     @classmethod
@@ -69,16 +69,17 @@ class MosaicJobCommand(JobCommand):
             del klass.current_footprints[job.uuid]
         if state == 'failed':
             transaction_id, platefile_id = klass.get_plate_info(job.output)
-            idx_transaction_failed = {
-                'platefile_id': platefile_id,
-                'transaction_id': transaction_id
-            }
-            request = {
-                'requestor': '',
-                'method': 'IndexTransactionFailed',
-                'payload': protocols.pack(protobuf.IndexTransactionFailed, idx_transaction_failed),
-            }
-            msg = Message(protocols.pack(protobuf.RpcRequestWrapper, request))
-            klass.messagebus.basic_publish(msg, exchange='ngt.platefile.index', routing_key='index')
+            if transaction_id and platefile_id:
+                idx_transaction_failed = {
+                    'platefile_id': platefile_id,
+                    'transaction_id': transaction_id
+                }
+                request = {
+                    'requestor': '',
+                    'method': 'IndexTransactionFailed',
+                    'payload': protocols.pack(protobuf.IndexTransactionFailed, idx_transaction_failed),
+                }
+                msg = Message(protocols.pack(protobuf.RpcRequestWrapper, request))
+                klass.messagebus.basic_publish(msg, exchange='ngt.platefile.index', routing_key='index')
         
         return job
