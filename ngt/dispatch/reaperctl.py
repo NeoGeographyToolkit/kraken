@@ -30,14 +30,14 @@ class RpcRig(object):
     REPLY_QUEUE_NAME = 'reaperctl.reply'
     CONTROL_EXCHANGE_NAME = 'Control_Exchange'
     
-    def __init__(self, target_uuid):
+    def __init__(self, target_uuid, timeout_ms=1000):
         self.messagebus = MessageBus()
         self.TARGET_QUEUE = "control.reaper.%s" % target_uuid
         self.messagebus.queue_declare(queue=self.REPLY_QUEUE_NAME, durable=False, auto_delete=True)
         self.messagebus.queue_bind(self.REPLY_QUEUE_NAME, self.CONTROL_EXCHANGE_NAME, routing_key=self.REPLY_QUEUE_NAME)
         self.rpc_channel = protocols.rpc_services.RpcChannel(self.CONTROL_EXCHANGE_NAME, self.REPLY_QUEUE_NAME, self.TARGET_QUEUE)
         self.service = protobuf.ReaperCommandService_Stub(self.rpc_channel)
-        self.controller = protocols.rpc_services.AmqpRpcController()
+        self.controller = protocols.rpc_services.AmqpRpcController(timeout_ms=timeout_ms)
         
     def __getattr__(self, name):
         ''' Delegate object access to the service stub '''
@@ -51,7 +51,7 @@ def find_reaper(partial_uuid):
     return r[0]
         
 def list_reapers():
-    reapers = Reaper.objects.order_by('status')
+    reapers = Reaper.objects.filter(deleted=False, expired=False).order_by('status')
     for r in reapers:
         print "%s\t%s\t%s" % (r.status, r.uuid, r.jobcount)
         
@@ -66,6 +66,11 @@ def shutdown_reaper(uuid):
     #reaper.status = response.status
     #reaper.save()
     
+def shutdown_all():
+    reapers = Reaper.objects.filter(deleted=False, expired=False).order_by('status')
+    for r in reapers:
+        logger.info("Shutting down reaper %s" % r.uuid[:8])
+        shutdown_reaper(r.uuid)
         
 def rpc_status(uuid):
     ''' Query a reaper for its status, and set it to unreachable if the request times out. '''
@@ -87,7 +92,7 @@ def rpc_status(uuid):
     return reaper.status
 
 def poll_all_status():
-    reapers = Reaper.objects.order_by('status')
+    reapers = Reaper.objects.filter(deleted=False, expired=False).order_by('status')
     if reapers.count() < 1:
         print "No reapers running."
     for r in reapers:
@@ -101,4 +106,5 @@ def expire_unreachable():
         if status == 'unreachable':
             print "Expiring %s" % r.uuid[0:8]
             r.expired = True
+            r.status = 'expired'
             r.save()

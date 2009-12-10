@@ -18,11 +18,11 @@ class AmqpRpcController(_RpcController):
   This RpcController implementation can mediate method calls via amqp.
   """
   
-  def __init__(self):
+  def __init__(self, timeout_ms=5000):
       self.m_failed = False
       self.m_failed_reason = ''
       self.m_timeout_flag = False
-      self.m_timeout_millis = 5000 # 5 Seconds
+      self.m_timeout_millis = timeout_ms # 5 Seconds
 
   # Client-side methods below
 

@@ -274,6 +274,7 @@ def consume_loop(mb, shutdown_event):
         
 
 def _shutdown(*args):
+    logger.info("Initiating Shutdown")
     mb.shutdown_event.set()
     time.sleep(2)
     sys.exit(1)
