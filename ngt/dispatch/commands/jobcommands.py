@@ -17,11 +17,10 @@ class JobCommand(object):
         return job
         
 import re
-from amqplib.client_0_8 imort Message
-from messaging.messagebus import MessageBus
-import protocols
-import protocols.rpc_services
-from protocols import protobuf, dotdict
+from amqplib.client_0_8 import Message
+from ngt.messaging.messagebus import MessageBus
+from ngt import protocols
+from ngt.protocols import protobuf, dotdict
 
 class MosaicJobCommand(JobCommand): 
     name = 'mosaic'
@@ -33,32 +32,41 @@ class MosaicJobCommand(JobCommand):
 
     @classmethod
     def check_readiness(klass, job):
-        footprint = job.assets[0].footprint.prepared
-        for other_footprint in klass.current_footprints:
-            if other_footprint.touches(footprint):
-                return False
+        if job.assets.all()[0].footprint:
+            import pdb; pdb.set_trace()
+            footprint = job.assets.all()[0].footprint.prepared
+            for other_footprint in klass.current_footprints.values():
+                if other_footprint.touches(footprint):
+                    return False
+            else:
+                return True
         else:
             return True
 
     @classmethod
     def preprocess_job(klass, job):
-        klass.current_footprints[job.uuid] = job.assets[0].footprint.prepared
+        if job.assets.all()[0].footprint:
+            klass.current_footprints[job.uuid] = job.assets.all()[0].footprint.prepared
         return job
 
     @classmethod
-    def get_plate_info(output):
+    def get_plate_info(klass, output):
         m = re.search('Transaction ID: (\d+)', output)
-        assert m
-        transaction_id = int(m.groups()[0])
+        if m:
+            transaction_id = int(m.groups()[0])
+        else:
+            transaction_id = 0
         m = re.search('Platefile ID: (\d+)', output)
-        assert m
-        platefile_id = int(m.groups()[0])
-        
+        if m:
+            platefile_id = int(m.groups()[0])
+        else:
+            platefile_id = 0
         return transaction_id, platefile_id
 
     @classmethod
     def postprocess_job(klass, job, state):
-        del klass.current_footprints[job.uuid]
+        if job.uuid in klass.current_footprints:
+            del klass.current_footprints[job.uuid]
         if state == 'failed':
             transaction_id, platefile_id = klass.get_plate_info(job.output)
             idx_transaction_failed = {
@@ -70,7 +78,7 @@ class MosaicJobCommand(JobCommand):
                 'method': 'IndexTransactionFailed',
                 'payload': protocols.pack(protobuf.IndexTransactionFailed, idx_transaction_failed),
             }
-            msg = Message(protocols.pack(protobuf.RpcRequestWrapper, request)
+            msg = Message(protocols.pack(protobuf.RpcRequestWrapper, request))
             klass.messagebus.basic_publish(msg, exchange='ngt.platefile.index', routing_key='index')
         
         return job
