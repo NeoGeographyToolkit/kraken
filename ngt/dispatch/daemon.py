@@ -149,6 +149,8 @@ def get_next_job(msgbytes):
         if check_readiness(job):
             logger.debug("Job %d OK." % i)
             break
+        else:
+            logger.debug("Job %d rejected by JobCommand for %s" (i, job.command))
     else:
         return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
     logger.debug("Found usable job in %d iterations" % i)
