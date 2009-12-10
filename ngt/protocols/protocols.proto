@@ -36,6 +36,13 @@ message AckResponse {
     optional AckState ack = 1 [default = ACK];
 }
 
+message BroxtonRequestWrapper {
+    required uint32 sequence_number = 1;
+    required string requestor = 2;
+    required string method = 3;
+    required bytes payload = 4;
+    }
+
 // #####
 // # Index Server Communication
 // #####
