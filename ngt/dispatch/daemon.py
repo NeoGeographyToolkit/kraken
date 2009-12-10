@@ -2,10 +2,9 @@
 import sys, logging, threading, os, atexit, time
 import itertools, traceback, json
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))    
-#from ngt.protocols import * # <-- WireMessage, dotdict, pack, unpack
+#from ngt.protocols import * # <-- dotdict, pack, unpack
 import ngt.protocols as protocols
 from ngt.protocols import protobuf, dotdict
-from ngt.protocols.rpc_services import WireMessage
 from ngt.messaging.messagebus import MessageBus
 from amqplib.client_0_8 import Message
 #from commands import jobcommands
@@ -209,8 +208,8 @@ def command_handler(msg):
         Speaks the command protocol.
     """
     #cmd = protocols.unpack(protocols.Command, msg.body)
-    request = WireMessage.unpack_request(msg.body)
-    logger.debug("command_handler got a message: %s" % str(request))
+    request = protocols.unpack(protobuf.RpcRequestWrapper, msg.body)
+    logger.debug("command_handler got a command: %s" % str(request.method))
     response = dotdict()
     if request.method in command_map:
         try:
@@ -230,8 +229,8 @@ def command_handler(msg):
         response.error_text = "Invalid Command: %s" % request.method
 
     mb.basic_ack(msg.delivery_tag)
-    wireresponse = WireMessage.pack_response(response)
-    mb.basic_publish(Message(wireresponse), routing_key=request.requestor)
+    response_bytes = protocols.pack(protobuf.RpcResponseWrapper, response)
+    mb.basic_publish(Message(response_bytes), routing_key=request.requestor)
         
 def status_handler(msg):
     logger.debug("GOT STATUS: %s" % msg.body)

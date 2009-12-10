@@ -6,7 +6,6 @@ from subprocess import Popen, PIPE, STDOUT
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))    
 import protocols
 import protocols.rpc_services
-from protocols.rpc_services import WireMessage
 from protocols import protobuf, dotdict
 
 from amqplib import client_0_8 as amqp
@@ -172,7 +171,7 @@ class Reaper(object):
             Speaks the command protocol.
         """
         self.logger.debug("command_handler got a message.")
-        request = WireMessage.unpack_request(msg.body)
+        request = protocols.unpack(protobuf.RpcRequestWrapper, msg.body)
         self.logger.debug("command msg contents: %s" % str(request))
         response = dotdict()
         if request.method in command_map:
@@ -192,8 +191,8 @@ class Reaper(object):
             response.error_text = "Invalid Command: %s" % request.method
 
         self.control_listener.channel.basic_ack(msg.delivery_tag)
-        wireresponse = WireMessage.pack_response(response)
-        self.control_listener.channel.basic_publish(Message(wireresponse), routing_key=request.requestor)
+        response_bytes = protocols.pack(protobuf.RpcResponseWrapper, response)
+        self.control_listener.channel.basic_publish(Message(response_bytes), routing_key=request.requestor)
 
     def register_with_dispatch(self):
         request = protobuf.ReaperRegistrationRequest()

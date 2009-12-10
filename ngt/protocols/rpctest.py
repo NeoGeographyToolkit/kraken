@@ -1,8 +1,8 @@
 import threading, time, sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import protocols
+import protocols.rpc_services
 from protocols import protobuf
-from protocols.rpc_services import WireMessage
 from pprint import pprint
 from messaging.messagebus import MessageBus, amqp
 
@@ -39,23 +39,20 @@ class Bouncer(threading.Thread):
         return protocols.pack(response_msg_class,response)
 
     def handlemsg(self, msg):
-       """ Accepts an AMQP Message with a WireMessage payload.
-           Decodes the wiremessage and dispatches its RpcRequestWrapper payload (raw bytes) to the appropriate handler command.
-           Takes the response, wraps it in an RpcResponseWrapper Message, wraps THAT in a WireMessage, and sends it back to the requestor.
+       """ Accepts an AMQP Message.
+           Dispatches its RpcRequestWrapper payload (raw bytes) to the appropriate handler command.
+           Takes the response, wraps it in an RpcResponseWrapper Message and sends it back to the requestor.
        """
-       #wiremessage = WireMessage(msg.body)
-       #pprint(protocols.unpack(protocols.RpcRequestWrapper, wiremessage.serialized_bytes))
-       #wrapped_request = wiremessage.parse_as_message(protocols.RpcRequestWrapper)
-       wrapped_request = WireMessage.unpack_request(msg.body)
+       wrapped_request = protocols.unpack(protobuf.RpcRequestWrapper, msg.body)
        request_bytes = wrapped_request.payload
        
        assert wrapped_request.method == 'Echo' # or multiplex here to dispatch to different methods
        
        try:
            response_bytes = self.bounce(request_bytes)
-           wireresponse = WireMessage.pack_response({'payload':response_bytes, 'error':False})
+           wireresponse = protocols.pack(protobuf.RpcResponseWrapper, {'payload':response_bytes, 'error':False})
        except Exception, e:
-           wireresponse = WireMessage.pack_response({'payload':'', 'error':True, 'error_string': str(e)})
+           wireresponse = protocols.pack(protobuf.RpcResponseWrapper, {'payload':'', 'error':True, 'error_string': str(e)})
        
        self.mb.basic_publish(amqp.Message(wireresponse), exchange='amq.direct', routing_key=wrapped_request.requestor)
        print "Bouncer published a result with key '%s'" % wrapped_request.requestor
@@ -79,7 +76,7 @@ flag = threading.Event()
 def test():
     bouncer = Bouncer()
     bouncer.start()
-    channel = protocols.rpcServices.RpcChannel('amq.direct', 'test', Bouncer.queuename)
+    channel = protocols.rpc_services.RpcChannel('amq.direct', 'test', Bouncer.queuename)
     service = protobuf.TestService_Stub(channel)
     controller = protocols.rpc_services.AmqpRpcController()
     request = protobuf.EchoMessage()
