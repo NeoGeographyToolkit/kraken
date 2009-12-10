@@ -10,7 +10,7 @@ from amqplib.client_0_8 import Message
 from commands import jobcommands
 
 logger = logging.getLogger('dispatch')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 #logging.getLogger('protocol').setLevel(logging.DEBUG)
 logging.getLogger().setLevel(logging.INFO)
 

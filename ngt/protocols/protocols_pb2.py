@@ -461,6 +461,21 @@ _REAPERSTATUSRESPONSE = descriptor.Descriptor(
   options=None)
 
 
+_REAPERSHUTDOWNREQUEST = descriptor.Descriptor(
+  name='ReaperShutdownRequest',
+  full_name='ReaperShutdownRequest',
+  filename='protocols.proto',
+  containing_type=None,
+  fields=[
+  ],
+  extensions=[
+  ],
+  nested_types=[],  # TODO(robinson): Implement.
+  enum_types=[
+  ],
+  options=None)
+
+
 _ECHOMESSAGE = descriptor.Descriptor(
   name='EchoMessage',
   full_name='EchoMessage',
@@ -541,6 +556,10 @@ class ReaperStatusResponse(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType
   DESCRIPTOR = _REAPERSTATUSRESPONSE
 
+class ReaperShutdownRequest(message.Message):
+  __metaclass__ = reflection.GeneratedProtocolMessageType
+  DESCRIPTOR = _REAPERSHUTDOWNREQUEST
+
 class EchoMessage(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType
   DESCRIPTOR = _ECHOMESSAGE
@@ -611,6 +630,15 @@ _REAPERCOMMANDSERVICE = descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=_ECHOMESSAGE,
     output_type=_ECHOMESSAGE,
+    options=None,
+  ),
+  descriptor.MethodDescriptor(
+    name='Shutdown',
+    full_name='ReaperCommandService.Shutdown',
+    index=2,
+    containing_service=None,
+    input_type=_REAPERSHUTDOWNREQUEST,
+    output_type=_REAPERSTATUSRESPONSE,
     options=None,
   ),
 ])

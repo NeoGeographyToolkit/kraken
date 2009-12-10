@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import sys, os, uuid, time
+import sys, os, uuid, time, traceback
 import threading
 from subprocess import Popen, PIPE, STDOUT
 
@@ -147,6 +147,7 @@ class Reaper(object):
                     self.send_job_status(job.uuid, 'failed', output="Command: '%s' not found in the list of valid commands for reaper %s" % (job.command, self.uuid))
             else:
                 time.sleep(self.JOB_POLL_INTERVAL)
+            self.logger.debug("Reached end of job loop.")
     
     
     ####
@@ -157,7 +158,7 @@ class Reaper(object):
         return protocols.pack(protobuf.ReaperStatusResponse, {'status': 'UP'})
     
     def _rpc_shutdown(self, msg):
-        response = protocols.pack(protopuf.ReaperStatusResponse, {'status': 'shutdown'})
+        response = protocols.pack(protobuf.ReaperStatusResponse, {'status': 'shutting down'})
         self.shutdown(delay=0.3) 
         return response
     
@@ -181,6 +182,7 @@ class Reaper(object):
             except Exception, e:
                 #self.logger.error("Error in command '%s': %s %s" % (request.method, str(Exception),  e))
                 sys.excepthook(*sys.exc_info())
+                #traceback.print_tb(sys.last_traceback)
                 response.payload = ''
                 response.error = True
                 response.error_string = str(e)
@@ -226,7 +228,7 @@ class Reaper(object):
         if not self.shutdown_event.is_set():
             self.shutdown_event.set()
             self.logger.info("Set shutdown event.")
-            self.control_listener.join()
+            #self.control_listener.join()
             self.job_loop.join()
             if self.is_registered:
                 self.logger.info("Unregistering with dispatch.")
