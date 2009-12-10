@@ -200,6 +200,35 @@ _ACKRESPONSE = descriptor.Descriptor(
   options=None)
 
 
+_INDEXTRANSACTIONFAILED = descriptor.Descriptor(
+  name='IndexTransactionFailed',
+  full_name='IndexTransactionFailed',
+  filename='protocols.proto',
+  containing_type=None,
+  fields=[
+    descriptor.FieldDescriptor(
+      name='platefile_id', full_name='IndexTransactionFailed.platefile_id', index=0,
+      number=1, type=5, cpp_type=1, label=2,
+      default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    descriptor.FieldDescriptor(
+      name='transaction_id', full_name='IndexTransactionFailed.transaction_id', index=1,
+      number=2, type=5, cpp_type=1, label=2,
+      default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+  ],
+  extensions=[
+  ],
+  nested_types=[],  # TODO(robinson): Implement.
+  enum_types=[
+  ],
+  options=None)
+
+
 _REAPERREGISTRATIONREQUEST = descriptor.Descriptor(
   name='ReaperRegistrationRequest',
   full_name='ReaperRegistrationRequest',
@@ -432,6 +461,10 @@ class RpcResponseWrapper(message.Message):
 class AckResponse(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType
   DESCRIPTOR = _ACKRESPONSE
+
+class IndexTransactionFailed(message.Message):
+  __metaclass__ = reflection.GeneratedProtocolMessageType
+  DESCRIPTOR = _INDEXTRANSACTIONFAILED
 
 class ReaperRegistrationRequest(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType

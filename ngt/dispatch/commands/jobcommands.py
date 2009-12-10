@@ -13,13 +13,23 @@ class JobCommand(object):
         return job
     
     @classmethod
-    def postprocess_job(klass, job):
+    def postprocess_job(klass, job, state):
         return job
         
+import re
+from amqplib.client_0_8 imort Message
+from messaging.messagebus import MessageBus
+import protocols
+import protocols.rpc_services
+from protocols import protobuf, dotdict
+
 class MosaicJobCommand(JobCommand): 
     name = 'mosaic'
     number_of_args = 2
     current_footprints = {}
+    
+    messagebus = MessageBus()
+    messagebus.exchange_declare('ngt.platefile.index','direct')
 
     @classmethod
     def check_readiness(klass, job):
@@ -36,6 +46,31 @@ class MosaicJobCommand(JobCommand):
         return job
 
     @classmethod
-    def postprocess_job(klass, job):
+    def get_plate_info(output):
+        m = re.search('Transaction ID: (\d+)', output)
+        assert m
+        transaction_id = int(m.groups()[0])
+        m = re.search('Platefile ID: (\d+)', output)
+        assert m
+        platefile_id = int(m.groups()[0])
+        
+        return transaction_id, platefile_id
+
+    @classmethod
+    def postprocess_job(klass, job, state):
         del klass.current_footprints[job.uuid]
-        return job  
+        if state == 'failed':
+            transaction_id, platefile_id = klass.get_plate_info(job.output)
+            idx_transaction_failed = {
+                'platefile_id': platefile_id,
+                'transaction_id': transaction_id
+            }
+            request = {
+                'requestor': '',
+                'method': 'IndexTransactionFailed',
+                'payload': protocols.pack(protobuf.IndexTransactionFailed, idx_transaction_failed),
+            }
+            msg = Message(protocols.pack(protobuf.RpcRequestWrapper, request)
+            klass.messagebus.basic_publish(msg, exchange='ngt.platefile.index', routing_key='index')
+        
+        return job
