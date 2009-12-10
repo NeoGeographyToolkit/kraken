@@ -226,6 +226,8 @@ class Reaper(object):
         if not self.shutdown_event.is_set():
             self.shutdown_event.set()
             self.logger.info("Set shutdown event.")
+            self.control_listener.join()
+            self.job_loop.join()
             if self.is_registered:
                 self.logger.info("Unregistering with dispatch.")
                 self.unregister_with_dispatch()
