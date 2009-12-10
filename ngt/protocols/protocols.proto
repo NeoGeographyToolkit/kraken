@@ -36,6 +36,14 @@ message AckResponse {
     optional AckState ack = 1 [default = ACK];
 }
 
+// #####
+// # Index Server Communication
+// #####
+
+message IndexTransactionFailed {
+    required int32 platefile_id = 1;
+    required int32 transaction_id = 2;
+}
 
 // #####
 // # Dispatch Control Service

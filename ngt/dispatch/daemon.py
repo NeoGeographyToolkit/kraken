@@ -108,10 +108,10 @@ def preprocess_job(job):
     else:
         return job
 
-def postprocess_job(job):
+def postprocess_job(job, state):
     ''' Anything that needs to get done after the job is completed '''
     if job.command in jobcommand_map:
-        return jobcommand_map[job.command].postprocess_job(job)
+        return jobcommand_map[job.command].postprocess_job(job, state)
     else:
         return job
 
@@ -220,7 +220,7 @@ def update_status(msgbytes):
                     dblock.acquire()
                     job.save()
                     dblock.release()
-        postprocess_job(job)
+        postprocess_job(job, state)
         return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
     except Job.DoesNotExist:
         logger.error("Couldn't find a job with uuid %s on status update." % request.uuid)
