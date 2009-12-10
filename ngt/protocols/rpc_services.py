@@ -107,68 +107,6 @@ class AmqpRpcController(_RpcController):
     """
     raise NotImplementedError
 
-class WireMessage(object):
-    '''
-    A handy utility class for serializing/deserializing protocol
-    buffers over the wire.  Store the buffer as a stream of bytes with
-    the size of the message at the beginning of the stream.
-    '''
-    def __init__(self, bytesource):
-        if google.protobuf.message.Message in type(bytesource).mro(): # check if bytesource is a Message subclass
-            self.size = bytesource.ByteSize()
-            self.serialized_bytes = bytesource.SerializeToString()
-            # TODO: insert size at head of bytestring, cast as int32 bytes
-            # This needs to be done for compatability with the C++ WireRequests... don't forget to pop'em off in payload_bytes
-        elif type(bytesource) == str:
-            self.size = len(bytesource)
-            # TODO: insert size at head of bytestring, cast as int32 bytes
-            self.serialized_bytes = bytesource
-        else:
-            raise ValueError("WireMesssage constructor wants a protobuf Message or string, but got a %s" % str(type(bytesource)))
-            
-    @property
-    def payload_bytes(self):
-        # TODO: pop the size bytes off the head of the string...
-        return self.serialized_bytes
-    
-    def parse_as_message(self, pbmsgclass):
-        msgbytes = self.payload_bytes
-        pbmsg = pbmsgclass()
-        pbmsg.ParseFromString(msgbytes)
-        return pbmsg
-
-    @classmethod
-    def pack_request(klass, response_dict):
-       """ Takes a dict and returns bytes ready for the wire. 
-           The response dict needs to have the appropriate fields for an RpcResponse Wrapper protobuf:
-           message RpcRequestWrapper {
-             required string requestor = 1;
-             required string method = 2;
-             required bytes payload = 3;
-           }
-       """
-       return klass(protocols.pack(protocols.RpcRequestWrapper, response_dict)).serialized_bytes
-
-    @classmethod
-    def unpack_request(klass, bytes):
-        return protocols.unpack(protocols.RpcRequestWrapper, klass(bytes).payload_bytes)
-    
-    @classmethod
-    def pack_response(klass, response_dict):
-        """ Takes a dict and returns a bytes ready for the wire. 
-            The response dict needs to have the appropriate fields for an RpcResponse Wrapper protobuf:
-            message RpcResponseWrapper {
-              required bytes payload = 1;
-              required bool error = 2 [ default = false ];
-              optional string error_string = 3;
-            }
-        """
-        return klass(protocols.pack(protocols.RpcResponseWrapper, response_dict)).serialized_bytes
-
-    @classmethod    
-    def unpack_response(klass, bytes):
-       return protocols.unpack(protocols.RpcRequestWrapper, klass(bytes).payload_bytes)
-        
 
 class RpcChannel(object):
 
@@ -209,7 +147,7 @@ class RpcChannel(object):
     be of any specific class as long as its descriptor is method.input_type.
     """
     rpc_controller.Reset()
-    request_wrapper = protocols.pack(protocols.RpcRequestWrapper,
+    wrapped_request_bytes = protocols.pack(protocols.RpcRequestWrapper,
         {   'requestor': self.response_queue,
             'method': method_descriptor.name,
             'payload': request.SerializeToString()
@@ -218,9 +156,8 @@ class RpcChannel(object):
     #print ' '.join([hex(ord(c))[2:] for c in request.SerializeToString()])    
     #print ' '.join([hex(ord(c))[2:] for c in request_wrapper])
     
-    wire_request = WireMessage(request_wrapper)
     logger.debug("About to publish to exchange '%s' with key '%s'" % (self.exchange, self.request_routing_key))
-    self.messagebus.basic_publish(amqp.Message(wire_request.serialized_bytes),
+    self.messagebus.basic_publish(amqp.Message(wrapped_request_bytes),
                     exchange=self.exchange,
                     routing_key=self.request_routing_key)
     
@@ -246,8 +183,7 @@ class RpcChannel(object):
     else:
         logger.debug("Got some sort of response")
     
-        wire_response = WireMessage(response.body)
-        response_wrapper = wire_response.parse_as_message(protocols.RpcResponseWrapper)
+        response_wrapper = protocols.unpack(protocols.RpcResponseWrapper, response.body)
         if response_wrapper.error:
             logger.error("RPC response error: %s" % response_wrapper.error_string)
             rpc_controller.SetFailed(response_wrapper.error)
