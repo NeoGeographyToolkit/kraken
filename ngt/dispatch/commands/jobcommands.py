@@ -77,10 +77,10 @@ class MosaicJobCommand(JobCommand):
                 request = {
                     'sequence_number': 0,
                     'requestor': '',
-                    'method': 'IndexTransactionFailed',
+                    'method': 'TransactionFailed',
                     'payload': protocols.pack(protobuf.IndexTransactionFailed, idx_transaction_failed),
                 }
                 msg = Message(protocols.pack(protobuf.BroxtonRequestWrapper, request))
-                klass.messagebus.basic_publish(msg, exchange='ngt.platefile.index', routing_key='index')
+                klass.messagebus.basic_publish(msg, exchange='ngt.platefile.index_0', routing_key='index')
         
         return job
