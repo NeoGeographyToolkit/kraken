@@ -90,7 +90,21 @@ class Reaper(object):
         if output != None:
             args['output'] = output
         msg_body = protocols.pack(protobuf.JobStatus, args)
-        self.chan.basic_publish( Message(msg_body), exchange=self.STATUS_EXCHANGE_NAME, routing_key='.'.join((self.REAPER_TYPE, 'job')) )
+        retries = 0
+        while retries < 5:
+            try:
+                self.chan.basic_publish( Message(msg_body), exchange=self.STATUS_EXCHANGE_NAME, routing_key='.'.join((self.REAPER_TYPE, 'job')) )
+                break
+            except OSError as e:
+                logger.error(str(e))
+                if e.errno == 32 and retries < 4:
+                    if retries > 0:
+                        logger.exception("Status publish failed more than once! (Errno 32, Broken Pipe)")
+                    retries += 1
+                    logger.error("Retrying.")
+                    continue
+                else:
+                    raise
         self.logger.debug("Sent status %s to %s" % (msg_body, self.STATUS_EXCHANGE_NAME))
     
     def get_a_job(self):
