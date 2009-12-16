@@ -7,7 +7,6 @@ admin.autodiscover()
 
 urlpatterns = patterns('',
                        (r'^(\+\+.*\+\+/)?geo', 'ngt.geo.views.rpc_handler'),
-                       (r'^tiepoints/$', 'ngt.tiepoints.views.index'),
                        (r'^assets/?$', 'ngt.assets.views.list'),
                        (r'^assets/(\d+)$', 'ngt.assets.views.'),
                        (r'^static/(?P<path>.*)$', 'django.views.static.serve', {'document_root': settings.MEDIA_ROOT }),

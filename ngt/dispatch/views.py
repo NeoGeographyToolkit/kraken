@@ -1,6 +1,6 @@
 from django.http import HttpResponse
 from django.shortcuts import render_to_response
-from ngt.messaging.queue import MessageBus
+from ngt.messaging.messagebus import MessageBus
 from ngt.dispatch.forms import JobForm
 
 mbus = MessageBus()
