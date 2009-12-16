@@ -44,6 +44,9 @@ class RpcRig(object):
         if hasattr(self, 'service'):
             return object.__getattribute__(self.service, name)
 
+def active_reapers():
+    return Reaper.objects.filter(deleted=False, expired=False).order_by('status')
+
 def find_reaper(partial_uuid):
     r = Reaper.objects.filter(uuid__istartswith=partial_uuid)
     if r.count() > 1:
@@ -51,7 +54,7 @@ def find_reaper(partial_uuid):
     return r[0]
         
 def list_reapers():
-    reapers = Reaper.objects.filter(deleted=False, expired=False).order_by('status')
+    reapers = active_reapers()
     for r in reapers:
         print "%s\t%s\t%s" % (r.status, r.uuid, r.jobcount)
         
@@ -67,7 +70,7 @@ def shutdown_reaper(uuid):
     #reaper.save()
     
 def shutdown_all():
-    reapers = Reaper.objects.filter(deleted=False, expired=False).order_by('status')
+    reapers = active_reapers()
     for r in reapers:
         logger.info("Shutting down reaper %s" % r.uuid[:8])
         shutdown_reaper(r.uuid)
@@ -92,7 +95,7 @@ def rpc_status(uuid):
     return reaper.status
 
 def poll_all_status():
-    reapers = Reaper.objects.filter(deleted=False, expired=False).order_by('status')
+    reapers = active_reapers()
     if reapers.count() < 1:
         print "No reapers running."
     for r in reapers:
