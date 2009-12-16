@@ -3,6 +3,7 @@
 {% block content %}
 <table id="jobsets" class="centered">
   <tr>
+    <th>#</th>
     <th>Name</th>
     <th>Command</th>
     <th>Assets</th>
@@ -10,6 +11,7 @@
   </tr>
 {% for jobset in jobsets %}
 <tr>
+    <td><a href="{% url bigboard.views.jobset_detail jobset_id=jobset.id %}">{{jobset.id}}</a></td>
     <td><a href="{% url bigboard.views.jobset_detail jobset_id=jobset.id %}">{{jobset.name}}</a></td>
     <td>{{jobset.command}}</td>
     <td>{{jobset.assets.count}}</td>
