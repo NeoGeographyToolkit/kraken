@@ -67,6 +67,7 @@ message ReaperUnregistrationRequest{
 
 message ReaperJobRequest {
     repeated string allowed_commands = 1; // leaving this empty means dispatch ought to respond with any job it has
+    optional string reaper_uuid = 2; // ID the reaper requesting a job.
 }
 
 message ReaperJobResponse {
@@ -76,10 +77,29 @@ message ReaperJobResponse {
     repeated string args = 4;
 }
 
+message ReaperJobStartRequest {
+    required string job_id = 1;
+    optional string state = 2;
+    optional string reaper_id = 3;
+    optional string start_time = 4;
+    optional int32 pid = 5;
+}
+
+message ReaperJobEndRequest{
+    required string job_id = 1;
+    optional string state = 2;
+    optional string end_time = 3;
+    optional string output = 4;
+}
+
 service DispatchCommandService{
     rpc registerReaper(ReaperRegistrationRequest) returns (AckResponse);
     rpc unregisterReaper(ReaperUnregistrationRequest) returns (AckResponse);
     rpc getJob(ReaperJobRequest) returns (ReaperJobResponse);
+    
+    // Job Status updates
+    rpc jobStarted(ReaperJobStartRequest) returns (AckResponse);
+    rpc jobEnded(ReaperJobEndRequest) returns (AckResponse);
 }
 
 // #####

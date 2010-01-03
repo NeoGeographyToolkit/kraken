@@ -1,5 +1,5 @@
 from django.db import models
-
+from ngt.jobs.models import Job
 
 # Let's see if we can do this without modelling Nodes...
 #class Node(models.Model):
@@ -34,6 +34,7 @@ class Reaper(models.Model):
     creation_time = models.DateTimeField(auto_now_add=True)
     modification_time = models.DateTimeField(auto_now=True)
     last_job_finished = models.DateTimeField(null=True, default=None)
+    current_job = models.ForeignKey(Job, null=True)
     status = models.CharField(max_length=128, default='up')
     ip = models.IPAddressField(null=True)
     jobcount = models.IntegerField(default=0)

@@ -11,6 +11,10 @@ logger = logging.getLogger('amqprpc')
 logger.setLevel(logging.INFO)
 logger.debug("Testing logger.")
 
+class SanityError(Exception):
+    ''' Raise this when things that should never happen happen. '''
+    pass
+
 class AmqpRpcController(_RpcController):
 
   """An RpcController mediates a single method call.

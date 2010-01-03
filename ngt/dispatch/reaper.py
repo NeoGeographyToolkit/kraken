@@ -2,6 +2,7 @@
 import sys, os, uuid, time, traceback
 import threading
 from subprocess import Popen, PIPE, STDOUT
+from datetime import datetime
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))    
 import protocols
@@ -25,6 +26,7 @@ else:
     COMMAND_PATH = './commands' 
 print "command path is %s" % COMMAND_PATH
 
+RPC_RETRIES = 3 # number of times to retry on RPC timeouts
 
 class Reaper(object):
 
@@ -107,26 +109,102 @@ class Reaper(object):
                     raise
         self.logger.debug("Sent status %s to %s" % (msg_body, self.STATUS_EXCHANGE_NAME))
     
-    def get_a_job(self):
+    
+    ####
+    # RPC calls to dispatch
+    ####
+    
+    def _rpc_failure(self):
+        '''Should be called when RPC calls fail (i.e. return value == None)'''
+        if self.amqp_rpc_controller.TimedOut():
+                self.logger.error("RPC request timed out.")
+        elif self.amqp_rpc_controller.Failed():
+                self.logger.error("Error in RPC: " + str(self.amqp_rpc_controller.ErrorText()))
+        else:
+            assert False # If this happens, we're missing a failure state.
+        self.amqp_rpc_controller.Reset()
+                
+    def _get_a_job(self):
         ''' Ask Dispatch for a job and return it.
             If there's no job, return false.
         '''
         request = protobuf.ReaperJobRequest()
+        request.reaper_uuid = self.reaper_id
         self.logger.debug("Requesting job.")
         response = self.dispatch.getJob(self.amqp_rpc_controller, request, None)
         if not response:
-            if self.amqp_rpc_controller.TimedOut():
-                self.logger.debug("Job request timed out.")
-                return None
-            elif  self.ampq_rpc_controller.Failed():
-                self.logger.error("Error in RPC: " + self.amqp_rpc_controller.ErrorText())
-                return None
+            self._rpc_failure()
+            return None
         elif not response.job_available:
             self.logger.debug("No jobs available.")
             return None
         else:
             self.logger.debug("Got a job.")
             return response
+            
+    def _report_job_start(self, job, subp, start_time):
+        ''' Send back info that's only acessible once the job is running '''
+        # note that "job" here is a Protobuf object
+        request = protobuf.ReaperJobStartRequest()
+        request.job_id = job.uuid
+        request.state = 'processing'
+        request.reaper_id = self.reaper_id
+        request.start_time = start_time.isoformat()
+        request.pid = subp.pid
+        
+        # TODO: Implement retries the right way: in AmqpRpcController (it should have an auto-retry value you set on instantiation)
+        retries = 0
+        while True:
+            response = self.dispatch.jobStarted(self.amqp_rpc_controller, request, None)
+            if not response:
+                if self.amqp_rpc_controller.TimedOut() and retries <= RPC_RETRIES:
+                    retries += 1
+                    self.logger.warning("AMQRPC request timed out.  Retrying %d" % retries)
+                    self.amqp_rpc_controller.Reset()
+                    continue
+                else:
+                    self._rpc_failure()
+                    # TODO: cancel the job?  fail the job? sleep and retry?
+                    break  
+            if response.ack == protobuf.AckResponse.NOACK: 
+                # this is bad.  something happened on the server side.  probably invalid job_id
+                self.logger.error("Got Negative ACK trying to report job start.  Something's horribly wrong with dispatch. (job uuid: %s)" % job.uuid)
+                # TODO: cancel the job when this happens... or retry?
+                raise rpc_services.SanityError("Got Negative ACK trying to report job start.  Something's horribly wrong with dispatch. (job uuid: %s)" % job.uuid)
+            elif response.ack == protobuf.AckResponse.ACK:
+                # We're good!
+                break
+            
+    def _report_job_end(self, job, state, end_time, output):
+        # note that "job" here is a Protobuf object
+        request = protobuf.ReaperJobEndRequest()
+        request.job_id = job.uuid
+        request.state = state
+        request.end_time = end_time.isoformat()
+        request.output = output
+        
+        # TODO: Implement retries the right way: in AmqpRpcController (it should have an auto-retry value you set on instantiation)
+        retries = 0
+        while True:
+            response = self.dispatch.jobEnded(self.amqp_rpc_controller, request, None)
+            if not response:
+                if self.amqp_rpc_controller.TimedOut() and retries <= RPC_RETRIES:
+                    retries += 1
+                    self.logger.warning("AMQRPC request timed out. Retrying (%d)" % retries)
+                    self.amqp_rpc_controller.Reset()
+                    continue
+                else:
+                    self._rpc_failure()
+                    # TODO: cancel the job?  fail the job? sleep and retry?
+                    break  
+            if response.ack == protobuf.AckResponse.NOACK: 
+                # this is bad.  something happened on the server side.  probably invalid job_id
+                self.logger.error("Got Negative ACK trying to report job end.  Something's horribly wrong with dispatch. (job uuid: %s)" % job.uuid)
+                # TODO: cancel the job when this happens... or retry?
+                raise rpc_services.SanityError("Got Negative ACK trying to report job end.  Something's horribly wrong with dispatch. (job uuid: %s)" % job.uuid)
+            elif response.ack == protobuf.AckResponse.ACK:
+                # We're good!
+                break
                     
      
     def job_request_loop(self):
@@ -135,14 +213,16 @@ class Reaper(object):
             if self.shutdown_event.is_set():
                 break
             if self.is_registered:
-                job = self.get_a_job()
+                job = self._get_a_job()
             if job:
                 if job.command in self.commands:  # only commands allowed by the configuration will be executed
-                    self.send_job_status(job.uuid,  'processing')
+                    #self.send_job_status(job.uuid,  'processing')
                     #msg.channel.basic_ack(msg.delivery_tag)
                     args = [ self.commands[job.command] ] + list(job.args)
                     self.logger.info("Executing %s" % ' '.join(args))
+                    start_time = datetime.utcnow()
                     p = Popen(args, stdout=PIPE, stderr=STDOUT)
+                    self._report_job_start(job, p, start_time) # note that "job" here is a Protobuf object
                     output=""
                     while True:
                         line = p.stdout.readline()
@@ -151,15 +231,18 @@ class Reaper(object):
                         output += line
                         sys.stdout.write(line)
                     resultcode = p.wait()
+                    end_time = datetime.utcnow()
                     if resultcode == 0:
                         state = 'complete'
                     else:
                         state = 'failed'
                     self.logger.info("Job %s: %s" % (job.uuid[:8], state) )
-                    self.send_job_status(job.uuid, state, output=output)
+                    #self.send_job_status(job.uuid, state, output=output)
+                    self._report_job_end(job, state, end_time, output)
                 else:
                     self.logger.error("Command: '%s' not found in amq_config's list of valid commands." % job.command)
-                    self.send_job_status(job.uuid, 'failed', output="Command: '%s' not found in the list of valid commands for reaper %s" % (job.command, self.uuid))
+                    #self.send_job_status(job.uuid, 'failed', output="Command: '%s' not found in the list of valid commands for reaper %s" % (job.command, self.uuid))
+                    self._report_job_end(job, 'failed', end_time, "Command: '%s' not found in the list of valid commands for reaper %s" % (job.command, self.uuid))
             else:
                 time.sleep(self.JOB_POLL_INTERVAL)
             self.logger.debug("Reached end of job loop.")
@@ -174,7 +257,7 @@ class Reaper(object):
     
     def _rpc_shutdown(self, msg):
         response = protocols.pack(protobuf.ReaperStatusResponse, {'status': 'shutting down'})
-        self.shutdown(delay=1) 
+        self.shutdown(delay=1)
         return response
     
     CONTROL_COMMAND_MAP = {
@@ -210,7 +293,7 @@ class Reaper(object):
         self.control_listener.channel.basic_ack(msg.delivery_tag)
         response_bytes = protocols.pack(protobuf.RpcResponseWrapper, response)
         self.control_listener.channel.basic_publish(Message(response_bytes), routing_key=request.requestor)
-        self.logger.debug("Sent response")
+        self.logger.debug("Sent response to a control command (%s)" % request.method)
 
     def register_with_dispatch(self):
         request = protobuf.ReaperRegistrationRequest()
@@ -224,7 +307,7 @@ class Reaper(object):
         except:
             assert self.amqp_rpc_controller.TimedOut()
             self.is_registered = False
-            print "!!REGISTRATION FAILED!!"
+            self.logger.error("!!REGISTRATION FAILED!!")
             self.shutdown()
 
     def unregister_with_dispatch(self):
@@ -238,7 +321,7 @@ class Reaper(object):
             assert response.ack == 0 # ACK
             self.logger.info("Unregistration Acknowledged")
         except:
-            print "!! UNREGISTRATION FAILED !!"
+            self.logger.error( "!! UNREGISTRATION FAILED !!")
         
     def shutdown(self, delay=None):
         self.logger.info("Shutdown initiated.")

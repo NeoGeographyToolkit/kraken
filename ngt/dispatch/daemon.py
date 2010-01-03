@@ -30,6 +30,8 @@ command_map = {
     'registerReaper': 'register_reaper',
     'unregisterReaper': 'unregister_reaper',
     'getJob': 'get_next_job',
+    'jobStarted': 'job_started',
+    'jobEnded': 'job_ended',
     'shutdown': '_shutdown',
 }
 
@@ -164,11 +166,73 @@ def get_next_job(msgbytes):
         }
     logger.info("Sending job %s" % job.uuid[:8])
     job.status = "dispatched"
+    job.processor = request.reaper_uuid
     dblock.acquire()
     job.save()
     job = None
     dblock.release()
     return protocols.pack(protobuf.ReaperJobResponse, response)
+    
+####
+# Job Status Updates
+###
+
+def job_does_not_exist(uuid):
+    logger.warning("Got a status update about a nonexistant job.  UUID: %s" % uuid)
+    
+def reaper_does_not_exist(reaper_uuid):
+    # <shrug> Log a warning, register the reaper
+   logger.warning("Dispatch received a status message from unregistered reaper %s.  Probably not good.  Reaper record will be created." % request['reaper_id'])
+   register_reaper(protocols.pack(protobuf.ReaperRegistrationRequest, {'reaper_uuid':reaper_uuid, 'reaper_type':'generic'}))
+
+def verify_reaper_id(job_uuid, reported_uuid, recorded_uuid):
+    ''' Warn if a status message comes back from a reaper other than the one we expect for a given job. '''
+    try:
+        assert reported_uuid == recorded_uuid
+    except AssertionError:
+        tup = (job_uuid[:8], reported_uuid[:8], recorded_uuid[:8])
+        logger.warning("Job %s expected to be handled by Reaper %s, but a status message came from reaper %s.  Probably not good." % tup )
+
+def job_started(msgbytes):
+    '''Update the Job record to with properties defined at job start (pid, start_time,...)'''
+    request = protocols.unpack(protobuf.ReaperJobStartRequest, msgbytes)
+    try:
+        dblock.acquire()
+        job = Job.objects.get(uuid=request.job_id)
+    except Job.DoesNotExist:
+        job_does_not_exist(request.job_id)
+        return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.NOACK})
+    verify_reaper_id(request.job_id, request.reaper_id, job.processor)
+    # TODO: get reaper & set current job...
+    
+    job.time_started = request.start_time.replace('T',' ') # django DateTimeField should be able to parse it this way. (pyiso8601 would be the alternative).
+    job.pid = request.pid
+    job.status = request.state or 'processing'
+    
+    job.save() 
+    dblock.release()
+    
+    # ...
+    return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
+
+def job_ended(msgbytes):
+    '''Update job record with properties defined at job end time ()'''
+    request = protocols.unpack(protobuf.ReaperJobEndRequest, msgbytes)
+    logger.info("Job %s ended: %s" % (request.job_id[:8], request.state))
+    dblock.acquire()
+    try:
+        job = Job.objects.get(uuid=request.job_id)
+    except Job.DoesNotExist:
+        job_does_not_exist(request.job_id)
+        return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.NOACK})
+        
+    job.status = request.state or 'ended'
+    job.time_ended = request.end_time.replace('T',' ') # django DateTimeField should be able to parse it this way. (pyiso8601 would be the alternative).
+    job.output = request.output
+    job.save()
+    # TODO: get reaper and increment job count
+    dblock.release()
+    return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
 
 def update_status(msgbytes):
     '''
@@ -182,7 +246,7 @@ def update_status(msgbytes):
         job.status = request.state
         #if job.processor and job.processor != request.reaper_id:
             #logger.warning("Status update for job %s came from a different reaper than we expected.  This jobs processor attribute will be set to the latest reaper that reported." % job.uuid)
-        job.processor = request.reaper_id
+        job.processor = request.reaper_id # set once, then call verify_reaper_id
         if 'output' in request:
             job.output = request.output
         dblock.acquire()
