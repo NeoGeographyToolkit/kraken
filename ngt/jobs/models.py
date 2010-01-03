@@ -39,6 +39,10 @@ class Job(models.Model):
     processor = models.CharField(max_length=32, null=True, default=None)
     assets = models.ManyToManyField('assets.Asset', related_name='jobs')
     output = models.TextField(null=True)
+
+    time_started = models.DateTimeField(null=True, default=None)
+    time_ended = models.DateTimeField(null=True, default=None)
+    pid = models.IntegerField(null=True)
     
     creates_new_asset = models.BooleanField(default=True) # if this is set, the dispatcher will create a new asset when the job is completed
     outfile_argument_index = models.SmallIntegerField(default=1) # index of the output filename in the argument list.  Used to generate output asset records.
