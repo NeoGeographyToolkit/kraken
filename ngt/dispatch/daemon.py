@@ -12,7 +12,7 @@ from commands import jobcommands
 logger = logging.getLogger('dispatch')
 logger.setLevel(logging.INFO)
 #logging.getLogger('protocol').setLevel(logging.DEBUG)
-logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().setLevel(logging.DEBUG)
 
 
 mb = MessageBus()
@@ -164,7 +164,7 @@ def get_next_job(msgbytes):
         'command' : job.command,
         'args' : json.loads(job.arguments),
         }
-    logger.info("Sending job %s" % job.uuid[:8])
+    logger.info("Sending job %s to reaper %s" % (job.uuid[:8], request.reaper_uuid[:8]))
     job.status = "dispatched"
     job.processor = request.reaper_uuid
     dblock.acquire()
@@ -182,7 +182,7 @@ def job_does_not_exist(uuid):
     
 def reaper_does_not_exist(reaper_uuid):
     # <shrug> Log a warning, register the reaper
-   logger.warning("Dispatch received a status message from unregistered reaper %s.  Probably not good.  Reaper record will be created." % request['reaper_id'])
+   logger.warning("Dispatch received a status message from unregistered reaper %s.  Reaper record will be created." % request['reaper_id'])
    register_reaper(protocols.pack(protobuf.ReaperRegistrationRequest, {'reaper_uuid':reaper_uuid, 'reaper_type':'generic'}))
 
 def verify_reaper_id(job_uuid, reported_uuid, recorded_uuid):
@@ -196,6 +196,7 @@ def verify_reaper_id(job_uuid, reported_uuid, recorded_uuid):
 def job_started(msgbytes):
     '''Update the Job record to with properties defined at job start (pid, start_time,...)'''
     request = protocols.unpack(protobuf.ReaperJobStartRequest, msgbytes)
+    logger.debug("Received job start message: %s" % str(request))
     try:
         dblock.acquire()
         job = Job.objects.get(uuid=request.job_id)
@@ -203,13 +204,22 @@ def job_started(msgbytes):
         job_does_not_exist(request.job_id)
         return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.NOACK})
     verify_reaper_id(request.job_id, request.reaper_id, job.processor)
-    # TODO: get reaper & set current job...
     
     job.time_started = request.start_time.replace('T',' ') # django DateTimeField should be able to parse it this way. (pyiso8601 would be the alternative).
     job.pid = request.pid
     job.status = request.state or 'processing'
-    
-    job.save() 
+
+    # get reaper & set current job...
+    job.save()
+    try:
+        reaper = Reaper.objects.get(uuid=request.reaper_id)
+    except Reaper.DoesNotExist:
+        # <shrug> Log a warning, register the reaper
+        logger.warning("Dispatch received a status message from unregistered reaper %s.  Probably not good." % request['reaper_id'])
+        register_reaper(protocols.pack(protobuf.ReaperRegistrationRequest, {'reaper_uuid':request.reaper_id, 'reaper_type':'generic'}))
+        reaper = Reaper.objects.get(uuid=request.reaper_id)
+    reaper.current_job = job    
+    reaper.save()
     dblock.release()
     
     # ...
@@ -219,6 +229,7 @@ def job_ended(msgbytes):
     '''Update job record with properties defined at job end time ()'''
     request = protocols.unpack(protobuf.ReaperJobEndRequest, msgbytes)
     logger.info("Job %s ended: %s" % (request.job_id[:8], request.state))
+    logger.debug("ReaperJobEndRequest: %s" % str(request))
     dblock.acquire()
     try:
         job = Job.objects.get(uuid=request.job_id)
@@ -231,6 +242,16 @@ def job_ended(msgbytes):
     job.output = request.output
     job.save()
     # TODO: get reaper and increment job count
+    try:
+        reaper = Reaper.objects.get(uuid=job.processor)
+        reaper.jobcount += 1
+        reaper.current_job_id = None
+        reaper.save()
+    except Reaper.DoesNotExist:
+        # <shrug> Log a warning
+        logger.warning("A job ended that was assigned to an unregistered reaper %s.  Probably not good." % request.reaper_id)
+        
+        
     dblock.release()
     return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
 
