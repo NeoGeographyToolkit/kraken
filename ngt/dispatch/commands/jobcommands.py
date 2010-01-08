@@ -21,6 +21,8 @@ from amqplib.client_0_8 import Message
 from ngt.messaging.messagebus import MessageBus
 from ngt import protocols
 from ngt.protocols import protobuf, dotdict
+import logging
+logger=logging.getLogger('dispatch')
 
 class MosaicJobCommand(JobCommand): 
     name = 'mosaic'
@@ -28,7 +30,7 @@ class MosaicJobCommand(JobCommand):
     current_footprints = {}
     
     messagebus = MessageBus()
-    messagebus.exchange_declare('ngt.platefile.index','direct')
+    messagebus.exchange_declare('ngt.platefile.index_0','direct')
 
     @classmethod
     def check_readiness(klass, job):
@@ -81,6 +83,7 @@ class MosaicJobCommand(JobCommand):
                     'payload': protocols.pack(protobuf.IndexTransactionFailed, idx_transaction_failed),
                 }
                 msg = Message(protocols.pack(protobuf.BroxtonRequestWrapper, request))
+                logger.info("sending failure message to index (%d:%d)" % (transaction_id, platefile_id))
                 klass.messagebus.basic_publish(msg, exchange='ngt.platefile.index_0', routing_key='index')
         
         return job

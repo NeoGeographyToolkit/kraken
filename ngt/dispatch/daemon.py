@@ -309,6 +309,8 @@ def init():
     logger.debug("Setting up status listener.")
     mb.exchange_declare('Status_Exchange', type='fanout')
     mb.queue_declare('status.dispatch', auto_delete=False)
+#    logger.info("Purging status queue.")
+#    mb.queue_purge('status.dispatch')
     mb.queue_bind(queue='status.dispatch', exchange='Status_Exchange', routing_key='dispatch')
     status_ctag = mb.basic_consume(callback=status_handler, queue='status.dispatch')
 

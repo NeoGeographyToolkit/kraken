@@ -294,6 +294,7 @@ class Reaper(object):
         #self.shutdown()
             
 if __name__ == '__main__':
+    os.umask(002)
     r = Reaper()
     r.launch()
 
