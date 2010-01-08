@@ -35,7 +35,7 @@ class JobCommand(object):
             return []
             
         
-class image2plateCommand(JobCommand):
+class MipMapCommand(JobCommand):
     name = 'mipmap'
 
     @classmethod

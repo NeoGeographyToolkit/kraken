@@ -11,7 +11,7 @@ from ngt.jobs.models import JobSet, Job
 from ngt.assets.models import Asset
 from ngt.utils.tracker import Tracker
 from ngt.django_extras.db.sequence import Sequence
-from ngt.dispatch.commands.jobcommands import MipMapJob
+from ngt.dispatch.commands.jobcommands import MipMapCommand
 
 ROOTPATH='/big/assets/moc/'
 PLATEFILE = 'pf://index/moc_v1.plate'
@@ -24,7 +24,7 @@ def generate_image2plate_jobs():
         job = Job()
         job.transaction_id = transaction_id_sequence.nextval()
         job.command = 'mipmap'
-        job.arguments = json.dumps(MipMapJob(job, platefile=PLATEFILE))
+        job.arguments = json.dumps(MipMapCommand(job, platefile=PLATEFILE))
         job.footprint = asset.footprint
         #job.save()
         #job.assets.add(asset)
