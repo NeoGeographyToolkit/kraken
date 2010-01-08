@@ -132,6 +132,13 @@ _RPCREQUESTWRAPPER = descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
+    descriptor.FieldDescriptor(
+      name='sequence_number', full_name='RpcRequestWrapper.sequence_number', index=3,
+      number=4, type=13, cpp_type=3, label=2,
+      default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
   ],
   extensions=[
   ],
@@ -165,6 +172,13 @@ _RPCRESPONSEWRAPPER = descriptor.Descriptor(
       name='error_string', full_name='RpcResponseWrapper.error_string', index=2,
       number=3, type=9, cpp_type=9, label=1,
       default_value=unicode("", "utf-8"),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    descriptor.FieldDescriptor(
+      name='sequence_number', full_name='RpcResponseWrapper.sequence_number', index=3,
+      number=4, type=13, cpp_type=3, label=1,
+      default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -374,7 +388,7 @@ _REAPERJOBRESPONSE = descriptor.Descriptor(
       options=None),
     descriptor.FieldDescriptor(
       name='command', full_name='ReaperJobResponse.command', index=2,
-      number=3, type=9, cpp_type=9, label=2,
+      number=3, type=9, cpp_type=9, label=1,
       default_value=unicode("", "utf-8"),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,

@@ -20,12 +20,14 @@ message RpcRequestWrapper {
   required string requestor = 1;
   required string method = 2;
   required bytes payload = 3;
+  required uint32 sequence_number = 4;
 }
 
 message RpcResponseWrapper {
   required bytes payload = 1;
   required bool error = 2 [ default = false ];
   optional string error_string = 3;
+  required uint32 sequence_number = 4;
 }
 
 message AckResponse {
@@ -73,7 +75,7 @@ message ReaperJobRequest {
 message ReaperJobResponse {
     required bool job_available = 1; // if this is false, reaper won't expect the other fields to be present
     optional string uuid = 2;  // uuid of the job
-    required string command = 3;
+    optional string command = 3;
     repeated string args = 4;
 }
 
