@@ -24,11 +24,11 @@ def generate_image2plate_jobs():
         job = Job()
         job.transaction_id = transaction_id_sequence.nextval()
         job.command = 'mipmap'
-        job.arguments = json.dumps(MipMapCommand(job, platefile=PLATEFILE))
+        job.arguments = json.dumps(MipMapCommand.build_arguments(job, platefile=PLATEFILE, file_path=asset.file_path))
         job.footprint = asset.footprint
         #job.save()
         #job.assets.add(asset)
-        print job.command + ' ' + json.loads(job.arguments)
+        print job.command + ' ' + ' '.join(json.loads(job.arguments))
         
 if __name__ == '__main__':
     generate_image2plate_jobs()

@@ -51,20 +51,19 @@ class PostgresSequenceSource(SequenceSource):
 
     # sequence_name = 'seq_transaction_id'
 
-    def __init__(self, name):
-        self.name = name
-    
     def nextval(self):
         #incr and return value[0]
         cur = self.connection.cursor()
-        value = cur.execute("SELECT nextval('%s')" % self.name).fetchone()[0]
+        cur.execute("SELECT nextval('%s')" % self.name)
+        value = cur.fetchone()[0]
         cur.close()
         return value
         
     def currval(self):
         #return value without incrementing
         cur = self.connection.cursor()
-        value = cur.execute("SELECT last_value from %s" % self.name).fetchone()[0]
+        cur.execute("SELECT last_value from %s" % self.name)
+        value = cur.fetchone()[0]
         cur.close()
         return value
         
@@ -73,13 +72,13 @@ class PostgresSequenceSource(SequenceSource):
         cur = self.connection.cursor()
         try:
             # get the currval and return True
-            cur.execute("SELECT last_value from %s" % self.name).fetchone()[0]
+            cur.execute("SELECT last_value from %s" % self.name)
+            cur.fetchone()
             cur.close()
             return True
         except db.backend.Database.ProgrammingError:
             cur.close()
             return False
-        pass
     
     def _create_sequence(self):
         # create the sequence or table
@@ -93,12 +92,12 @@ class Sequence(object):
         backend = db.backend # backend type is defined by django settings
         connection = db.connection
         print "Connection: ", str(connection)
-        if 'postgresqll' in backend.__name__:
+        if 'postgresql' in backend.__name__:
             self.seq_source = PostgresSequenceSource(connection, name)
         elif 'sqlite' in backend.__name__:
             self.seq_source = SqliteSequenceSource(connection, name)
         else:
-            raise ("Invalid DB backend")
+            raise Exception("Invalid DB backend: %s" % backend.__name__)
             
     def nextval(self):
         return self.seq_source.nextval()
