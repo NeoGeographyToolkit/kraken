@@ -40,7 +40,7 @@ class MipMapCommand(JobCommand):
 
     @classmethod
     def build_arguments(klass, job, **kwargs):
-        args = "-t %s %s -o %s" % (job.transaction_id, job.assets.all()[0].file_path, kwargs['platefile'])
+        args = "-t %s %s -o %s" % (job.transaction_id, kwargs['file_path'], kwargs['platefile'])
         return args.split(' ')
         
 class Snapshot(JobCommand):
