@@ -18,7 +18,7 @@ PLATEFILE = 'pf://index/moc_v1.plate'
 transaction_id_sequence = Sequence('seq_transaction_id')
 
 
-def generate_mipmap_jobs():
+def generate_mipmap_jobs(jobset):
     assets = Asset.objects.filter(class_label='scaled image int8')
     for asset in Tracker(iter=assets, target=assets.count(), progress=True):
         job = Job()
@@ -26,6 +26,7 @@ def generate_mipmap_jobs():
         job.command = 'mipmap'
         job.arguments = json.dumps(MipMapCommand.build_arguments(job, platefile=PLATEFILE, file_path=asset.file_path))
         job.footprint = asset.footprint
+        job.jobset = jobset
         job.save()
         job.assets.add(asset)
         yield job
@@ -35,8 +36,7 @@ if __name__ == '__main__':
     jobset.name = "Production MipMap"
     jobset.command = "mipmap"
     jobset.save()
-    for job in:
-        generate_mipmap_jobs()
-        jobset.jobs.add(job)
+    for job in generate_mipmap_jobs(jobset):
+        pass
         
     
