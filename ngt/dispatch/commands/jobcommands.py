@@ -32,7 +32,7 @@ class JobCommand(object):
         if job.assets.all():
             return [job.assets.all()[0].file_path]
         else:
-            return ""
+            return []
             
         
 class image2plateCommand(JobCommand):
@@ -43,14 +43,38 @@ class image2plateCommand(JobCommand):
         args = "-t %s %s -o %s" % (job.transaction_id, job.assets.all()[0].file_path, kwargs['platefile'])
         return args.split(' ')
         
-class StartSnapshotCommand(JobCommand):
+class Snapshot(JobCommand):
+    name = 'snapshot'
+    
+    def build_arguments(klass, job, **kwargs):
+        ### kwargs expected:
+        # region (4-tuple)
+        # level (integer)
+        # transaction_range (2-tuple)
+        # platefile (string)
+        ###
+    
+        regionstr = '%d,%d;%d,%d' % kwargs['region'] # expects a 4-tuple
+        return [
+            '-t', str(job.transaction_id),
+            '--region', '%s@%d' % (regionstr, kwargs['level']),
+            '--transaction-range', '%d:%d' % kwargs['transaction_range'],
+            kwargs['platefile']
+        ]
+
+class StartSnapshot(JobCommand):
     name = 'start_snapshot'
     
     @classmethod
     def build_arguments(klass, job, **kwargs):
+        ### kwargs expected:
+        # transaction_range (2-tuple)
+        # platefile (string)
+        ###
+        
         t_range = kwargs['transaction_range'] # expect a 2-tuple
         description = "Snapshot of transactions %d --> %d" % t_range
-        args = ['--start', '"%s"' % description, '-t', job.transaction_id, kwargs['platefile']]
+        args = ['--start', '"%s"' % description, '-t', str(job.transaction_id), kwargs['platefile']]
         return args
         
     @classmethod
@@ -59,6 +83,16 @@ class StartSnapshotCommand(JobCommand):
         # get corresponding end_snapshot job
         # spawn regular snapshot jobs.  add as depenencies to end_snapshot job
         return job
+        
+    
+        
+class EndSnapshot(JobCommand):
+    name = 'end_snapshot'
+    
+    @classmethod
+    def build_arguments(klass, job, **kwargs):
+        args = ['--finish', '-t', str(job.transaction_id)]
+        return args
         
     
 
