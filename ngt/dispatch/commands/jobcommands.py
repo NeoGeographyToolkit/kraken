@@ -1,4 +1,14 @@
+import json
+import re
+from amqplib.client_0_8 import Message
+from ngt.messaging.messagebus import MessageBus
+from ngt import protocols
+from ngt.protocols import protobuf, dotdict
+import logging
+logger = logging.getLogger('dispatch')
+
 class JobCommand(object):
+    """ Base Class and prototype """
     
     name = None
     number_of_args = 0
@@ -6,9 +16,10 @@ class JobCommand(object):
     @classmethod
     def check_readiness(klass, job):
         ''' Return True if the system is ready to process this job, False otherwise. '''
+        logger.debug("%s:%s is ready to run." % (klass.name, job.uuid[:8]))
         return True
     
-    @classmethod    
+    @classmethod
     def preprocess_job(klass, job):
         return job
     
@@ -16,11 +27,40 @@ class JobCommand(object):
     def postprocess_job(klass, job, state):
         return job
         
-import re
-from amqplib.client_0_8 import Message
-from ngt.messaging.messagebus import MessageBus
-from ngt import protocols
-from ngt.protocols import protobuf, dotdict
+    @classmethod
+    def build_arguments(klass, job, **kwargs):
+        if job.assets.all():
+            return [job.assets.all()[0].file_path]
+        else:
+            return ""
+            
+        
+class image2plateCommand(JobCommand):
+    name = 'mipmap'
+
+    @classmethod
+    def build_arguments(klass, job, **kwargs):
+        args = "-t %s %s -o %s" % (job.transaction_id, job.assets.all()[0].file_path, kwargs['platefile'])
+        return args.split(' ')
+        
+class StartSnapshotCommand(JobCommand):
+    name = 'start_snapshot'
+    
+    @classmethod
+    def build_arguments(klass, job, **kwargs):
+        t_range = kwargs['transaction_range'] # expect a 2-tuple
+        description = "Snapshot of transactions %d --> %d" % t_range
+        args = ['--start', '"%s"' % description, '-t', job.transaction_id, kwargs['platefile']]
+        return args
+        
+    @classmethod
+    def postprocess_job(klass, job, state):
+        # parse pyramid depth (max level) from job output
+        # get corresponding end_snapshot job
+        # spawn regular snapshot jobs.  add as depenencies to end_snapshot job
+        return job
+        
+    
 
 class MosaicJobCommand(JobCommand): 
     name = 'mosaic'
@@ -83,4 +123,44 @@ class MosaicJobCommand(JobCommand):
                 msg = Message(protocols.pack(protobuf.BroxtonRequestWrapper, request))
                 klass.messagebus.basic_publish(msg, exchange='ngt.platefile.index_0', routing_key='index')
         
+        return job
+        
+        
+####
+# For testing dependencies...
+####
+class Fjord(JobCommand):
+    ''' Fjord jobs are only ready 90% of the time and take forever to get going. '''
+    name = 'test_fjord'
+    
+    @classmethod
+    def postprocess_job(klass, job, state):
+        print "Fjord ran."
+        return job
+        
+    @classmethod
+    def preprocess_job(klass, job):
+        import time
+        time.sleep(1)
+        return job
+        
+    @classmethod
+    def check_readiness(klass, job):
+        ''' Be ready 10% of the time. '''
+        import random
+        if random.randint(0,9) == 0:
+            logger.debug("%s:%s is ready to run." % (klass.name, job.uuid[:8]))
+            return True
+        else:
+            logger.debug("%s:%s is not ready to run yet." % (klass.name, job.uuid[:8]))
+            return False
+        
+        
+class Bjorn(JobCommand):
+    '''Bjorn jobs depend on Fjord jobs.'''
+    name = 'test_bjorn'
+    
+    @classmethod
+    def postprocess_job(klass, job, state):
+        print "Bjorn ran."
         return job

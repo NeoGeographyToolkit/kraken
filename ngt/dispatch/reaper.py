@@ -32,6 +32,8 @@ class Reaper(object):
 
     commands = {
         'test': '../messaging/fake_command.py',
+        'test_fjord': '../messaging/fake_command.py',
+        'test_bjorn': '../messaging/fake_command.py',
         'moc-stage': os.path.join(COMMAND_PATH, 'moc_stage.py'), # convert and map-project MOC images
         'scale2int8': os.path.join(COMMAND_PATH, 'scale2int8.py'), 
         'mosaic': '/big/software/visionworkbench/bin/image2plate',
@@ -139,7 +141,7 @@ class Reaper(object):
             self.logger.debug("No jobs available.")
             return None
         else:
-            self.logger.debug("Got a job.")
+            self.logger.debug("Got a job: %s" % response.uuid[:8])
             return response
             
     def _report_job_start(self, job, subp, start_time):
@@ -165,18 +167,20 @@ class Reaper(object):
                 else:
                     self._rpc_failure()
                     # TODO: cancel the job?  fail the job? sleep and retry?
-                    break  
+                    break 
+            self.logger.debug("ACK response: %d" % response.ack)
             if response.ack == protobuf.AckResponse.NOACK: 
                 # this is bad.  something happened on the server side.  probably invalid job_id
                 self.logger.error("Got Negative ACK trying to report job start.  Something's horribly wrong with dispatch. (job uuid: %s)" % job.uuid)
                 # TODO: cancel the job when this happens... or retry?
-                raise rpc_services.SanityError("Got Negative ACK trying to report job start.  Something's horribly wrong with dispatch. (job uuid: %s)" % job.uuid)
+                raise protocols.rpc_services.SanityError("Got Negative ACK trying to report job start.  Something's horribly wrong with dispatch. (job uuid: %s)" % job.uuid)
             elif response.ack == protobuf.AckResponse.ACK:
                 # We're good!
                 break
             
     def _report_job_end(self, job, state, end_time, output):
         # note that "job" here is a Protobuf object
+        assert end_time
         request = protobuf.ReaperJobEndRequest()
         request.job_id = job.uuid
         request.state = state
@@ -201,7 +205,7 @@ class Reaper(object):
                 # this is bad.  something happened on the server side.  probably invalid job_id
                 self.logger.error("Got Negative ACK trying to report job end.  Something's horribly wrong with dispatch. (job uuid: %s)" % job.uuid)
                 # TODO: cancel the job when this happens... or retry?
-                raise rpc_services.SanityError("Got Negative ACK trying to report job end.  Something's horribly wrong with dispatch. (job uuid: %s)" % job.uuid)
+                raise protocols.rpc_services.SanityError("Got Negative ACK trying to report job end.  Something's horribly wrong with dispatch. (job uuid: %s)" % job.uuid)
             elif response.ack == protobuf.AckResponse.ACK:
                 # We're good!
                 break
@@ -218,7 +222,7 @@ class Reaper(object):
                 if job.command in self.commands:  # only commands allowed by the configuration will be executed
                     #self.send_job_status(job.uuid,  'processing')
                     #msg.channel.basic_ack(msg.delivery_tag)
-                    args = [ self.commands[job.command] ] + list(job.args)
+                    args = [ self.commands[job.command] ] + list(job.args or [])
                     self.logger.info("Executing %s" % ' '.join(args))
                     start_time = datetime.utcnow()
                     p = Popen(args, stdout=PIPE, stderr=STDOUT)
@@ -240,9 +244,10 @@ class Reaper(object):
                     #self.send_job_status(job.uuid, state, output=output)
                     self._report_job_end(job, state, end_time, output)
                 else:
+                    end_time = datetime.utcnow()
                     self.logger.error("Command: '%s' not found in amq_config's list of valid commands." % job.command)
                     #self.send_job_status(job.uuid, 'failed', output="Command: '%s' not found in the list of valid commands for reaper %s" % (job.command, self.uuid))
-                    self._report_job_end(job, 'failed', end_time, "Command: '%s' not found in the list of valid commands for reaper %s" % (job.command, self.uuid))
+                    self._report_job_end(job, 'failed', end_time, "Command: '%s' not found in the list of valid commands for reaper %s" % (job.command, self.reaper_id))
             else:
                 time.sleep(self.JOB_POLL_INTERVAL)
             self.logger.debug("Reached end of job loop.")
@@ -273,6 +278,7 @@ class Reaper(object):
         request = protocols.unpack(protobuf.RpcRequestWrapper, msg.body)
         self.logger.debug("command msg contents: %s" % str(request))
         response = dotdict()
+        response.sequence_number = request.sequence_number
         if request.method in command_map:
             try:
                 response.payload = command_map[request.method].__call__(self, request.payload)

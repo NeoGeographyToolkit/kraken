@@ -11,8 +11,8 @@ from commands import jobcommands
 
 logger = logging.getLogger('dispatch')
 logger.setLevel(logging.INFO)
-#logging.getLogger('protocol').setLevel(logging.DEBUG)
 logging.getLogger().setLevel(logging.DEBUG)
+#logging.getLogger('protocol').setLevel(logging.DEBUG)
 
 
 mb = MessageBus()
@@ -98,6 +98,9 @@ def unregister_reaper(msgbytes):
 
 def check_readiness(job):
     '''Return True if the job is ready to be processed, False otherwise.'''
+    if not job.dependencies_met():
+        logger.info("Job %s(%s) has unmet dependencies." % (job.uuid[:8], job.command)) 
+        return False
     if job.command in jobcommand_map:
         return jobcommand_map[job.command].check_readiness(job)
     else:
@@ -122,16 +125,17 @@ def get_next_job(msgbytes):
     logger.debug("Looking for the next job.")
     request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
     statuses_to_process = ('new','requeue')
-    QUERY_SIZE=10
+    QUERY_SIZE=10   
     
     dblock.acquire()
-    active_jobsets = itertools.cycle(JobSet.objects.filter(active=True))
+   # active_jobsets = itertools.cycle(JobSet.objects.filter(active=True).order_by('-priority'))
+    active_jobsets = JobSet.objects.filter(active=True).order_by('-priority').iterator()
     dblock.release()
     
     def job_generator():
         jobset = active_jobsets.next()
         query_offset=0
-        while True:
+        while True: # This won't generate infinitely because when we run out of jobsets, StopIteration exception will be raised
             dblock.acquire()
             jobs = list( jobset.jobs.filter(status__in=statuses_to_process)[query_offset:query_offset + QUERY_SIZE] )
             dblock.release()
@@ -139,10 +143,12 @@ def get_next_job(msgbytes):
             if len(jobs) > 0:
                 for job in jobs:
                     yield job
+                else:
+                    query_offset += QUERY_SIZE
             else:
-                jobset = active_jobsets.next()
+                jobset = active_jobsets.next() 
                 logger.debug("Switching to JobSet %s" % str(jobset))
-                time.sleep(0.1) # so we don't hammer the db with empty requests
+                #time.sleep(0.1) # so we don't hammer the db with empty requests
     
     i = 0
     for job in job_generator():
@@ -152,8 +158,9 @@ def get_next_job(msgbytes):
             logger.debug("Job %d OK." % i)
             break
         else:
-            logger.debug("Job %d rejected by JobCommand for %s" (i, job.command))
+            logger.debug("Job %d rejected by JobCommand for %s" % (i, job.command))
     else:
+        logger.info("No jobs available.")
         return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
     logger.debug("Found usable job in %d iterations" % i)
             
@@ -162,7 +169,7 @@ def get_next_job(msgbytes):
         'job_available' : True,
         'uuid' : job.uuid,
         'command' : job.command,
-        'args' : json.loads(job.arguments),
+        'args' : json.loads(job.arguments or '[]'),
         }
     logger.info("Sending job %s to reaper %s" % (job.uuid[:8], request.reaper_uuid[:8]))
     job.status = "dispatched"
@@ -200,6 +207,7 @@ def job_started(msgbytes):
     try:
         dblock.acquire()
         job = Job.objects.get(uuid=request.job_id)
+        logger.debug("Got job %s from DB." % job.uuid[:8])
     except Job.DoesNotExist:
         job_does_not_exist(request.job_id)
         return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.NOACK})
@@ -211,6 +219,7 @@ def job_started(msgbytes):
 
     # get reaper & set current job...
     job.save()
+    logger.debug("Job %s saved" % job.uuid[:8])
     try:
         reaper = Reaper.objects.get(uuid=request.reaper_id)
     except Reaper.DoesNotExist:
@@ -220,10 +229,13 @@ def job_started(msgbytes):
         reaper = Reaper.objects.get(uuid=request.reaper_id)
     reaper.current_job = job    
     reaper.save()
+    logger.debug("Reaper %s saved" % reaper.uuid[:8])
     dblock.release()
     
     # ...
-    return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
+    resp = {'ack': protobuf.AckResponse.ACK}
+    logger.debug("Response to send: " + str(resp))
+    return protocols.pack(protobuf.AckResponse, resp)
 
 def job_ended(msgbytes):
     '''Update job record with properties defined at job end time ()'''
@@ -323,6 +335,7 @@ def command_handler(msg):
     request = protocols.unpack(protobuf.RpcRequestWrapper, msg.body)
     logger.debug("command_handler got a command: %s" % str(request.method))
     response = dotdict()
+    response.sequence_number = request.sequence_number
     if request.method in command_map:
         try:
             response.payload = globals()[command_map[request.method]](request.payload)
