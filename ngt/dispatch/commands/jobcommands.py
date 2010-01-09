@@ -4,8 +4,11 @@ from amqplib.client_0_8 import Message
 from ngt.messaging.messagebus import MessageBus
 from ngt import protocols
 from ngt.protocols import protobuf, dotdict
+from ngt.jobs.models import Job, JobSet
 import logging
 logger = logging.getLogger('dispatch')
+
+from django.db import transaction
 
 class JobCommand(object):
     """ Base Class and prototype """
@@ -78,10 +81,48 @@ class StartSnapshot(JobCommand):
         return args
         
     @classmethod
+    def _generate_partitions(klass, level):
+        '''
+        Give all the 1024x1024 partitions of a 2**level tilespace.
+        Yields 4-tuples
+        '''
+        width = 2**level
+        if width < 1024:
+            yield ((0,width), (0,width))
+        else:
+            for i in range(width / 1024):
+                for j in range(width / 1024):
+                    yield (i*1024, (i+1)*1024-1, j*1024, (j+1)*1024-1)
+            
+    
+    @classmethod
+    @transaction.commit_on_success
     def postprocess_job(klass, job, state):
         # parse pyramid depth (max level) from job output
+        maxlevel = self._get_maxlevel(job.output)
         # get corresponding end_snapshot job
-        # spawn regular snapshot jobs.  add as depenencies to end_snapshot job
+        endjob = Job.objects.get(command='end_snapshot', transaction_id=job.transaction_id)
+        snapjobset = JobSet.objects.filter('snapshots').latest('pk')
+        # spawn regular snapshot jobs.  add as dependencies to end_snapshot job
+        transids = [d.transaction_id for d in job.dependencies.all()]
+        job_transaction_range = (min(transids), max(transids))
+        for level in range(1, maxlevel + 1):
+            for partition in klass._generate_partitions(level):
+                snapjob = Job(
+                    command = 'snapshot',
+                    transaction_id = job.transaction_id,
+                    jobset = snapjobset,
+                )
+                snapjob.arguments = json.dumps(Snapshot.build_arguments(
+                    job,
+                    region = region,
+                    level = level,
+                    transaction_range = job_transaction_range,
+                    platefile = PLATEFILE,
+                ))
+                snapjob.save()
+                job.dependencies.add(snapjob)
+                
         return job
         
     

@@ -11,7 +11,7 @@ from ngt.jobs.models import JobSet, Job
 from ngt.assets.models import Asset
 from ngt.utils.tracker import Tracker
 from ngt.django_extras.db.sequence import Sequence
-from ngt.dispatch.commands.jobcommands import MipMapCommand
+from ngt.dispatch.commands.jobcommands import MipMapCommand, StartSnapshot
 
 ROOTPATH='/big/assets/moc/'
 PLATEFILE = 'pf://index/moc_v1.plate'
@@ -29,14 +29,70 @@ def generate_mipmap_jobs(jobset):
         job.jobset = jobset
         job.save()
         job.assets.add(asset)
-        yield job
+        #yield job
         
-if __name__ == '__main__':
+def create_mipmap_jobs():
     jobset = JobSet()
     jobset.name = "Production MipMap"
     jobset.command = "mipmap"
     jobset.save()
-    for job in generate_mipmap_jobs(jobset):
-        pass
+    generate_mipmap_jobs(jobset)
         
+
+def build_snapshot_start_end(transaction_range, jobs_for_dependency):
+    transaction_id = transaction_id_sequence.nextval()
+    print "Creating snapshot jobs for transaction range %d --> %d" % transaction_range
+    # create start and end jobs
+    startjob = Job(
+        transaction_id = transaction_id,
+        command = 'start_snapshot',
+        jobset = snapshot_jobset
+    )
+    startjob.arguments = json.dumps(
+        StartSnapshot.build_arguments(
+            startjob, 
+            transaction_range = transaction_range,
+            platefile = PLATEFILE
+        )
+    )
     
+    endjob = Job(
+        transaction_id = transaction_id,
+        command = 'end_snapshot',
+        jobset = snapshot_jobset
+    )
+    endjob.arguments = json.dumps(EndSnapshot.build_arguments(endjob))
+    startjob.save()
+    endjob.save()
+    # add dependencies
+    print "Adding dependencies."
+    endjob.dependencies.add(startjob)
+    for j in Tracker(iter=jobs_for_dependency, progress=True):
+        startjob.dependencies.add(j)
+    
+    
+
+@transaction.commit_on_success   
+def create_snapshot_jobs():
+    snapshot_jobset = JobSet()
+    jobset.name = "mosaic snapshots"
+    jobset.command = "snapshot"
+
+    mmjobset = JobSet.objects.filter(name="Production MipMap").latest('pk')
+    i = 0
+    transaction_range_start = None
+    jobs_for_dependency = []
+    for mmjob in mmjobset.jobs.all():
+        i += 1
+        jobs_for_dependency.append(mmjob)
+        if not transaction_range_start:
+            transaction_range_start = mmjob.transaction_id        
+        if i % 256 == 0:
+            transaction_range = (transaction_range_start, mmjob.transaction_id)
+            build_snapshot_start_end(transaction_range, jobs_for_dependency)
+            #clear transaction range and jobs for dependency list
+            transaction_range_start = None
+            jobs_for_dependency = []
+     else: # after the last iteration, start a snapshot with whatever's left.
+        transaction_range = (transaction_range_start, mmjob.transaction_id)
+        build_snapshot_start_end(transaction_range, jobs_for_dependency)
