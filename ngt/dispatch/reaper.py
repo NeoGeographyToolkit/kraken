@@ -37,6 +37,7 @@ class Reaper(object):
         'moc-stage': os.path.join(COMMAND_PATH, 'moc_stage.py'), # convert and map-project MOC images
         'scale2int8': os.path.join(COMMAND_PATH, 'scale2int8.py'), 
         'mosaic': '/big/software/visionworkbench/bin/image2plate',
+        'mipmap': '/big/software/visionworkbench/bin/image2plate',
     }
     JOB_POLL_INTERVAL = 1 #seconds
 
