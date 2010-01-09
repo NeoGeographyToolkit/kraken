@@ -1,5 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.6
 import sys, logging, threading, os, atexit, time
+from datetime import datetime
 import itertools, traceback, json
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))    
 #from ngt.protocols import * # <-- dotdict, pack, unpack
@@ -10,7 +11,7 @@ from amqplib.client_0_8 import Message
 from commands import jobcommands
 
 logger = logging.getLogger('dispatch')
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 logging.getLogger().setLevel(logging.DEBUG)
 #logging.getLogger('protocol').setLevel(logging.DEBUG)
 
@@ -122,6 +123,7 @@ def postprocess_job(job, state):
 
 
 def get_next_job(msgbytes):
+    t0 = datetime.now()
     logger.debug("Looking for the next job.")
     request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
     statuses_to_process = ('new','requeue')
@@ -162,7 +164,8 @@ def get_next_job(msgbytes):
     else:
         logger.info("No jobs available.")
         return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
-    logger.debug("Found usable job in %d iterations" % i)
+    t1 = datetime.now()
+    logger.debug("Found usable job in %d iterations (%s)" % ( i, str(t1-t0) ) )
             
     job = preprocess_job(job)
     response = {
@@ -336,6 +339,7 @@ def command_handler(msg):
     logger.debug("command_handler got a command: %s" % str(request.method))
     response = dotdict()
     response.sequence_number = request.sequence_number
+    
     if request.method in command_map:
         try:
             response.payload = globals()[command_map[request.method]](request.payload)

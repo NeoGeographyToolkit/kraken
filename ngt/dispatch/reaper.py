@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.6
 import sys, os, uuid, time, traceback
 import threading
 from subprocess import Popen, PIPE, STDOUT
