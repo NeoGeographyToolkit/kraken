@@ -139,7 +139,7 @@ def get_next_job(msgbytes):
         query_offset=0
         while True: # This won't generate infinitely because when we run out of jobsets, StopIteration exception will be raised
             dblock.acquire()
-            jobs = list( jobset.jobs.filter(status__in=statuses_to_process)[query_offset:query_offset + QUERY_SIZE] )
+            jobs = list( jobset.jobs.filter(status__in=statuses_to_process).order_by('id')[query_offset:query_offset + QUERY_SIZE] )
             dblock.release()
             logger.debug("Got %d %s jobs from the DB." % (len(jobs), str(jobset) ))
             if len(jobs) > 0:

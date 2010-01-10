@@ -14,7 +14,7 @@ from ngt.django_extras.db.sequence import Sequence
 from ngt.dispatch.commands.jobcommands import MipMapCommand, StartSnapshot
 
 ROOTPATH='/big/assets/moc/'
-PLATEFILE = 'pf://index/moc_v1.plate'
+PLATEFILE = 'pf://wwt10one/index/moc_v1.plate'
 transaction_id_sequence = Sequence('seq_transaction_id')
 
 
