@@ -19,7 +19,7 @@ transaction_id_sequence = Sequence('seq_transaction_id')
 
 
 def generate_mipmap_jobs(jobset):
-    assets = Asset.objects.filter(class_label='scaled image int8')
+    assets = Asset.objects.filter(class_label='scaled image int8')[:1000]
     for asset in Tracker(iter=assets, target=assets.count(), progress=True):
         job = Job()
         job.transaction_id = transaction_id_sequence.nextval()
@@ -33,7 +33,7 @@ def generate_mipmap_jobs(jobset):
         
 def create_mipmap_jobs():
     jobset = JobSet()
-    jobset.name = "Production MipMap"
+    jobset.name = "Debug MipMap"
     jobset.command = "mipmap"
     jobset.save()
     generate_mipmap_jobs(jobset)
