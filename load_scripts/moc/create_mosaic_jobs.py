@@ -35,6 +35,7 @@ def _build_mipmap_jobs(jobset, asset_queryset):
 @transaction.commit_on_success
 def create_mipmap_jobs(n_jobs=None):
     # where n_jobs is the number of jobs to generate.  Default (None) builds jobs for all assets in the queryset.
+    transaction_id_sequence.setval(0) # reset the transaction_id sequence
     assets = Asset.objects.filter(class_label='scaled image int8')[:n_jobs]
     jobset = JobSet()
     jobset.name = "Debug MipMap"
@@ -44,7 +45,7 @@ def create_mipmap_jobs(n_jobs=None):
         
 
 def _build_snapshot_start_end(transaction_range, jobs_for_dependency):
-    transaction_id = transaction_id_sequence.nextval()
+    # transaction_id = transaction_id_sequence.nextval() # TODO: this is now wrong.  Should be user-specified, and the range can be inferred
     print "Creating snapshot jobs for transaction range %d --> %d" % transaction_range
     # create start and end jobs
     startjob = Job(
