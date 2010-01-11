@@ -31,6 +31,7 @@ def generate_mipmap_jobs(jobset):
         job.assets.add(asset)
         #yield job
         
+@transaction.commit_on_success
 def create_mipmap_jobs():
     jobset = JobSet()
     jobset.name = "Debug MipMap"
@@ -93,6 +94,6 @@ def create_snapshot_jobs():
             #clear transaction range and jobs for dependency list
             transaction_range_start = None
             jobs_for_dependency = []
-     else: # after the last iteration, start a snapshot with whatever's left.
+    else: # after the last iteration, start a snapshot with whatever's left.
         transaction_range = (transaction_range_start, mmjob.transaction_id)
         build_snapshot_start_end(transaction_range, jobs_for_dependency)
