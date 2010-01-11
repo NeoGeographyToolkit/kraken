@@ -10,6 +10,16 @@ logger = logging.getLogger('dispatch')
 
 from django.db import transaction
 
+def minmax(iter):
+    '''Find the minimum and maximum values in one pass'''
+    min = max = iter.next()
+    for i in iter:
+        if i < min:
+            min = i
+        if i > max:
+            max = i
+    return (min, max)
+
 class JobCommand(object):
     """ Base Class and prototype """
     
@@ -104,8 +114,9 @@ class StartSnapshot(JobCommand):
         endjob = Job.objects.get(command='end_snapshot', transaction_id=job.transaction_id)
         snapjobset = JobSet.objects.filter('snapshots').latest('pk')
         # spawn regular snapshot jobs.  add as dependencies to end_snapshot job
-        transids = [d.transaction_id for d in job.dependencies.all()]
-        job_transaction_range = (min(transids), max(transids))
+        #transids = [d.transaction_id for d in job.dependencies.all()]
+        #job_transaction_range = (min(transids), max(transids))
+        job_transaction_range = minmax(d.transaction_id for d in job.dependencies.all())
         for level in range(1, maxlevel + 1):
             for partition in klass._generate_partitions(level):
                 snapjob = Job(
