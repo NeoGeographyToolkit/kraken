@@ -30,6 +30,12 @@ class SqliteSequenceSource(SequenceSource):
         cur.close()
         return value
         
+    def setval(self, value):
+        cur = self.connection.cursor()
+        cur.execute('UPDATE %s SET id = %d;' % (self.name, value))
+        cur.close()
+        return True
+        
     def _sequence_exists(self):
         # return true if the sequence or table exists
         cursor = self.connection.cursor()
@@ -67,6 +73,12 @@ class PostgresSequenceSource(SequenceSource):
         cur.close()
         return value
         
+    def setval(self, value):
+        cur = self.connection.cursor()
+        cur.execute("SELECT setval('%s', %d)" % (self.name, value) )
+        cur.close()
+        return True
+        
     def _sequence_exists(self):
         # return true if the sequence or table exists
         cur = self.connection.cursor()
@@ -89,6 +101,7 @@ class PostgresSequenceSource(SequenceSource):
 class Sequence(object):
     
     def __init__(self, name):
+        self._value = None
         backend = db.backend # backend type is defined by django settings
         connection = db.connection
         print "Connection: ", str(connection)
@@ -100,7 +113,15 @@ class Sequence(object):
             raise Exception("Invalid DB backend: %s" % backend.__name__)
             
     def nextval(self):
-        return self.seq_source.nextval()
+        self._value = self.seq_source.nextval()
+        return self._value
         
     def currval(self):
-        return self.seq_source.currval()
+        if not self._value and self._value != 0:
+            self.value = self.seq_source.currval()
+        return self._value
+        
+    def setval(self, value):
+        self._value = None
+        self.seq_source.setval(value)
+        return True
