@@ -18,30 +18,34 @@ PLATEFILE = 'pf://wwt10one/index/moc_v1.plate'
 transaction_id_sequence = Sequence('seq_transaction_id')
 
 
-def generate_mipmap_jobs(jobset):
-    assets = Asset.objects.filter(class_label='scaled image int8')[:1000]
-    for asset in Tracker(iter=assets, target=assets.count(), progress=True):
+def _build_mipmap_jobs(jobset, asset_queryset):
+    for asset in Tracker(iter=asset_queryset, target=assets.count(), progress=True):
         job = Job()
-        job.transaction_id = transaction_id_sequence.nextval()
+        while True:  # Get the next even transaction ID
+            job.transaction_id = transaction_id_sequence.nextval()
+            if job.transaction_id % 2 == 0:
+                break
         job.command = 'mipmap'
         job.arguments = json.dumps(MipMapCommand.build_arguments(job, platefile=PLATEFILE, file_path=asset.file_path))
         job.footprint = asset.footprint
         job.jobset = jobset
         job.save()
         job.assets.add(asset)
-        #yield job
         
 @transaction.commit_on_success
-def create_mipmap_jobs():
+def create_mipmap_jobs(n_jobs=None):
+    # where n_jobs is the number of jobs to generate.  Default (None) builds jobs for all assets in the queryset.
+    transaction_id_sequence.setval(0) # reset the transaction_id sequence
+    assets = Asset.objects.filter(class_label='scaled image int8')[:n_jobs]
     jobset = JobSet()
     jobset.name = "Debug MipMap"
     jobset.command = "mipmap"
     jobset.save()
-    generate_mipmap_jobs(jobset)
+    _build_mipmap_jobs(jobset, assets)
         
 
-def build_snapshot_start_end(transaction_range, jobs_for_dependency):
-    transaction_id = transaction_id_sequence.nextval()
+def _build_snapshot_start_end(transaction_range, jobs_for_dependency):
+    # transaction_id = transaction_id_sequence.nextval() # TODO: this is now wrong.  Should be user-specified, and the range can be inferred
     print "Creating snapshot jobs for transaction range %d --> %d" % transaction_range
     # create start and end jobs
     startjob = Job(
@@ -90,10 +94,10 @@ def create_snapshot_jobs():
             transaction_range_start = mmjob.transaction_id        
         if i % 256 == 0:
             transaction_range = (transaction_range_start, mmjob.transaction_id)
-            build_snapshot_start_end(transaction_range, jobs_for_dependency)
+            _build_snapshot_start_end(transaction_range, jobs_for_dependency)
             #clear transaction range and jobs for dependency list
             transaction_range_start = None
             jobs_for_dependency = []
     else: # after the last iteration, start a snapshot with whatever's left.
         transaction_range = (transaction_range_start, mmjob.transaction_id)
-        build_snapshot_start_end(transaction_range, jobs_for_dependency)
+        _build_snapshot_start_end(transaction_range, jobs_for_dependency)
