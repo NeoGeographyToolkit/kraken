@@ -272,6 +272,7 @@ def job_ended(msgbytes):
         
         
     dblock.release()
+    postprocess_job(job, request.state)
     return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
 
 def update_status(msgbytes):
