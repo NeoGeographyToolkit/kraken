@@ -10,6 +10,8 @@ logger = logging.getLogger('dispatch')
 
 from django.db import transaction
 
+PLATEFILE = 'pf://wwt10one/index/moc_v1.plate'
+
 def minmax(iter):
     '''Find the minimum and maximum values in one pass'''
     min = max = iter.next()
@@ -59,6 +61,7 @@ class MipMapCommand(JobCommand):
 class Snapshot(JobCommand):
     name = 'snapshot'
     
+    @classmethod
     def build_arguments(klass, job, **kwargs):
         ### kwargs expected:
         # region (4-tuple)
@@ -98,7 +101,7 @@ class StartSnapshot(JobCommand):
         '''
         width = 2**level
         if width < 1024:
-            yield ((0,width), (0,width))
+            yield (0,width, 0,width)
         else:
             for i in range(width / 1024):
                 for j in range(width / 1024):
@@ -117,10 +120,11 @@ class StartSnapshot(JobCommand):
     @transaction.commit_on_success
     def postprocess_job(klass, job, state):
         # parse pyramid depth (max level) from job output
-        maxlevel = self._get_maxlevel(job.output)
+        maxlevel = klass._get_maxlevel(job.output)
         # get corresponding end_snapshot job
-        endjob = Job.objects.get(command='end_snapshot', transaction_id=job.transaction_id)
-        snapjobset = JobSet.objects.filter('snapshots').latest('pk')
+        endjob = job.jobset.jobs.get(command='end_snapshot', transaction_id=job.transaction_id)
+        #snapjobset = JobSet.objects.filter('snapshots').latest('pk')
+        snapjobset = job.jobset
         # spawn regular snapshot jobs.  add as dependencies to end_snapshot job
         #transids = [d.transaction_id for d in job.dependencies.all()]
         #job_transaction_range = (min(transids), max(transids))
@@ -128,6 +132,7 @@ class StartSnapshot(JobCommand):
         job_transaction_range = minmax(d.transaction_id for d in job.dependencies.all())
         for level in range(1, maxlevel + 1):
             for partition in klass._generate_partitions(level):
+                logger.debug("Generating snapshot job for region %s" % str(partition))
                 snapjob = Job(
                     command = 'snapshot',
                     transaction_id = job.transaction_id,
@@ -135,7 +140,7 @@ class StartSnapshot(JobCommand):
                 )
                 snapjob.arguments = json.dumps(Snapshot.build_arguments(
                     job,
-                    region = region,
+                    region = partition,
                     level = level,
                     transaction_range = job_transaction_range,
                     platefile = PLATEFILE,
