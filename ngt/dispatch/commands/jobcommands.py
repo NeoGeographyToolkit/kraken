@@ -124,6 +124,7 @@ class StartSnapshot(JobCommand):
         # spawn regular snapshot jobs.  add as dependencies to end_snapshot job
         #transids = [d.transaction_id for d in job.dependencies.all()]
         #job_transaction_range = (min(transids), max(transids))
+        logger.info("start_snapshot executed.  Generating snapshot jobs")
         job_transaction_range = minmax(d.transaction_id for d in job.dependencies.all())
         for level in range(1, maxlevel + 1):
             for partition in klass._generate_partitions(level):
