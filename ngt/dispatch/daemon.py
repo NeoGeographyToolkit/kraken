@@ -8,7 +8,6 @@ import ngt.protocols as protocols
 from ngt.protocols import protobuf, dotdict
 from ngt.messaging.messagebus import MessageBus
 from amqplib.client_0_8 import Message
-from commands import jobcommands
 
 logger = logging.getLogger('dispatch')
 logger.setLevel(logging.DEBUG)
@@ -25,6 +24,7 @@ setup_environ(settings)
 from models import Reaper
 from ngt.jobs.models import Job, JobSet
 from django.db.models import Q
+from commands import jobcommands
 
 
 command_map = {
@@ -136,6 +136,7 @@ def get_next_job(msgbytes):
     
     def job_generator():
         jobset = active_jobsets.next()
+        logger.debug("Looking at jobs in set: %s" % str(jobset))
         query_offset=0
         while True: # This won't generate infinitely because when we run out of jobsets, StopIteration exception will be raised
             dblock.acquire()
@@ -244,7 +245,6 @@ def job_ended(msgbytes):
     '''Update job record with properties defined at job end time ()'''
     request = protocols.unpack(protobuf.ReaperJobEndRequest, msgbytes)
     logger.info("Job %s ended: %s" % (request.job_id[:8], request.state))
-    logger.debug("ReaperJobEndRequest: %s" % str(request))
     dblock.acquire()
     try:
         job = Job.objects.get(uuid=request.job_id)
