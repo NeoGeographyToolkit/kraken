@@ -125,7 +125,7 @@ class StartSnapshot(JobCommand):
                     
     @classmethod
     def _get_maxlevel(klass, output):
-        pat = re.compile('ID = (\d+)')
+        pat = re.compile('Plate has (\d+) levels')
         match = pat.search(output)
         assert match
         return int(match.groups()[0])
@@ -146,9 +146,10 @@ class StartSnapshot(JobCommand):
         #job_transaction_range = (min(transids), max(transids))
         logger.info("start_snapshot executed.  Generating snapshot jobs")
         job_transaction_range = minmax(d.transaction_id for d in job.dependencies.all())
+        jcount = 0
         for level in range(maxlevel + 1):
             for region in klass._generate_partitions(level):
-                logger.debug("Generating snapshot job for region %s" % str(partition))
+                logger.debug("Generating snapshot job for region %s" % str(region))
                 snapjob = Job(
                     command = 'snapshot',
                     transaction_id = job.transaction_id,
