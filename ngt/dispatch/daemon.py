@@ -1,5 +1,5 @@
 #!/usr/bin/env python2.6
-import sys, logging, threading, os, atexit, time
+import sys, logging, threading, os, atexit, time, optparse
 from datetime import datetime
 import itertools, traceback, json
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))    
@@ -407,8 +407,9 @@ def init():
     logger.debug("Setting up Command listener")
     mb.exchange_declare('Control_Exchange', type='direct')
     mb.queue_declare(CONTROL_QUEUE,auto_delete=True)
-    logger.info ("Purging control queue")
-    mb.queue_purge(CONTROL_QUEUE)
+    if not options.restart:
+        logger.info ("Purging control queue")
+        mb.queue_purge(CONTROL_QUEUE)
     mb.queue_bind(queue=CONTROL_QUEUE, exchange='Control_Exchange', routing_key='dispatch')
     command_ctag = mb.basic_consume(callback=command_handler, queue=CONTROL_QUEUE)
 
@@ -424,6 +425,11 @@ def init():
 
 
 if __name__ == '__main__':
+    global options
+    parser = optparse.OptionParser()
+    parser.add_option('-r', '--restart', dest="restart", action='store_true', help="Don't purge the control queue.")
+    (options, args) = parser.parse_args()
+    
     init()
     try:
         while True:
