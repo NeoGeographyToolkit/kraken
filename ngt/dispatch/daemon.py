@@ -53,6 +53,9 @@ def create_jobcommand_map():
     return jobcommand_map
 jobcommand_map = create_jobcommand_map()
 logger.debug("jobcommand_map initialized: %s" % str(jobcommand_map))
+logger.debug("Valid jobcommands:")
+for k in jobcommand_map.keys():
+    logger.debug(k)
 assert 'mosaic' in jobcommand_map # TODO: delete this assert
 
 ###
@@ -119,6 +122,7 @@ def postprocess_job(job, state):
     if job.command in jobcommand_map:
         return jobcommand_map[job.command].postprocess_job(job, state)
     else:
+        logger.debug("Skipping postprocessing because the job's command is not in jobcommand_map.")
         return job
 
 
