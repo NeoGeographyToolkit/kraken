@@ -83,7 +83,7 @@ def create_snapshot_jobs():
     jobset.name = "mosaic snapshots"
     jobset.command = "snapshot"
 
-    mmjobset = JobSet.objects.filter(name="Production MipMap").latest('pk')
+    mmjobset = JobSet.objects.filter(name__contains="MipMap").latest('pk')
     i = 0
     transaction_range_start = None
     jobs_for_dependency = []
