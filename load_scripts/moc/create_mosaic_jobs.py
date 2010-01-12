@@ -11,7 +11,7 @@ from ngt.jobs.models import JobSet, Job
 from ngt.assets.models import Asset
 from ngt.utils.tracker import Tracker
 from ngt.django_extras.db.sequence import Sequence
-from ngt.dispatch.commands.jobcommands import MipMapCommand, StartSnapshot
+from ngt.dispatch.commands.jobcommands import MipMapCommand, StartSnapshot, EndSnapshot
 
 ROOTPATH='/big/assets/moc/'
 PLATEFILE = 'pf://wwt10one/index/moc_v1.plate'
@@ -44,8 +44,9 @@ def create_mipmap_jobs(n_jobs=None):
     _build_mipmap_jobs(jobset, assets)
         
 
-def _build_snapshot_start_end(transaction_range, jobs_for_dependency):
+def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset):
     # transaction_id = transaction_id_sequence.nextval() # TODO: this is now wrong.  Should be user-specified, and the range can be inferred
+    transaction_id = transaction_range[1]
     print "Creating snapshot jobs for transaction range %d --> %d" % transaction_range
     # create start and end jobs
     startjob = Job(
@@ -67,6 +68,7 @@ def _build_snapshot_start_end(transaction_range, jobs_for_dependency):
         jobset = snapshot_jobset
     )
     endjob.arguments = json.dumps(EndSnapshot.build_arguments(endjob))
+    #import pdb; pdb.set_trace()
     startjob.save()
     endjob.save()
     # add dependencies
@@ -80,8 +82,9 @@ def _build_snapshot_start_end(transaction_range, jobs_for_dependency):
 @transaction.commit_on_success   
 def create_snapshot_jobs():
     snapshot_jobset = JobSet()
-    jobset.name = "mosaic snapshots"
-    jobset.command = "snapshot"
+    snapshot_jobset.name = "mosaic snapshots"
+    snapshot_jobset.command = "snapshot"
+    snapshot_jobset.save()
 
     mmjobset = JobSet.objects.filter(name__contains="MipMap").latest('pk')
     i = 0
@@ -94,10 +97,10 @@ def create_snapshot_jobs():
             transaction_range_start = mmjob.transaction_id        
         if i % 256 == 0:
             transaction_range = (transaction_range_start, mmjob.transaction_id)
-            _build_snapshot_start_end(transaction_range, jobs_for_dependency)
+            _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset)
             #clear transaction range and jobs for dependency list
             transaction_range_start = None
             jobs_for_dependency = []
     else: # after the last iteration, start a snapshot with whatever's left.
         transaction_range = (transaction_range_start, mmjob.transaction_id)
-        _build_snapshot_start_end(transaction_range, jobs_for_dependency)
+        _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset)
