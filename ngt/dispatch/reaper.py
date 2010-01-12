@@ -38,6 +38,9 @@ class Reaper(object):
         'scale2int8': os.path.join(COMMAND_PATH, 'scale2int8.py'), 
         'mosaic': '/big/software/visionworkbench/bin/image2plate',
         'mipmap': '/big/software/visionworkbench/bin/image2plate',
+        'snapshot': '/big/software/visionworkbench/bin/snapshot',
+        'start_snapshot': '/big/software/visionworkbench/bin/snapshot',
+        'end_snapshot': '/big/software/visionworkbench/bin/snapshot',
     }
     JOB_POLL_INTERVAL = 1 #seconds
 
