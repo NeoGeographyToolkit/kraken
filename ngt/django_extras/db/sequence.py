@@ -75,7 +75,7 @@ class PostgresSequenceSource(SequenceSource):
         
     def setval(self, value):
         cur = self.connection.cursor()
-        cur.execute("SELECT setval('%s', %d)" % (self.name, value) )
+        cur.execute("SELECT setval('%s', %d, false)" % (self.name, value) )
         cur.close()
         return True
         
