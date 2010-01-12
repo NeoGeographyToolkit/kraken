@@ -106,7 +106,7 @@ class StartSnapshot(JobCommand):
                     
     @classmethod
     def _get_maxlevel(klass, output):
-        pat = re.compile('ID = (\d)')
+        pat = re.compile('ID = (\d+)')
         match = pat.search(output)
         assert match
         return int(match.groups()[0])
