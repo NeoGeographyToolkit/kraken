@@ -103,6 +103,14 @@ class StartSnapshot(JobCommand):
             for i in range(width / 1024):
                 for j in range(width / 1024):
                     yield (i*1024, (i+1)*1024-1, j*1024, (j+1)*1024-1)
+                    
+    @classmethod
+    def _get_maxlevel(klass, output):
+        pat = re.compile('ID = (\d)')
+        match = pat.search(output)
+        assert match
+        return int(match.groups()[0])
+
             
     
     @classmethod
