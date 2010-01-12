@@ -70,7 +70,7 @@ class Snapshot(JobCommand):
         # platefile (string)
         ###
     
-        regionstr = '%d,%d;%d,%d' % kwargs['region'] # expects a 4-tuple
+        regionstr = '%d,%d:%d,%d' % kwargs['region'] # expects a 4-tuple
         return [
             '-t', str(job.transaction_id),
             '--region', '%s@%d' % (regionstr, kwargs['level']),
@@ -116,10 +116,10 @@ class StartSnapshot(JobCommand):
         '''
         tiles = 16 # actually there are tiles**2 tiles
                   
-            side = 2**n / tiles
-            for i in range(tiles):
-                for j in range(tiles):
-                    yield (i*side, (i+1)*side-1, j*side, (j+1)*side-1)
+        side = 2**level / tiles
+        for i in range(tiles):
+            for j in range(tiles):
+                yield (i*side, (i+1)*side-1, j*side, (j+1)*side-1)
                     
     @classmethod
     def _get_maxlevel(klass, output):
@@ -145,7 +145,7 @@ class StartSnapshot(JobCommand):
         logger.info("start_snapshot executed.  Generating snapshot jobs")
         job_transaction_range = minmax(d.transaction_id for d in job.dependencies.all())
         for level in range(1, maxlevel + 1):
-            for partition in klass._generate_partitions(level):
+            for region in klass._generate_partitions(level):
                 logger.debug("Generating snapshot job for region %s" % str(partition))
                 snapjob = Job(
                     command = 'snapshot',
@@ -154,7 +154,7 @@ class StartSnapshot(JobCommand):
                 )
                 snapjob.arguments = json.dumps(Snapshot.build_arguments(
                     job,
-                    region = partition,
+                    region = region,
                     level = level,
                     transaction_range = job_transaction_range,
                     platefile = PLATEFILE,
