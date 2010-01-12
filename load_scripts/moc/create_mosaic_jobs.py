@@ -19,7 +19,7 @@ transaction_id_sequence = Sequence('seq_transaction_id')
 
 
 def _build_mipmap_jobs(jobset, asset_queryset):
-    for asset in Tracker(iter=asset_queryset, target=assets.count(), progress=True):
+    for asset in Tracker(iter=asset_queryset, target=asset_queryset.count(), progress=True):
         job = Job()
         while True:  # Get the next even transaction ID
             job.transaction_id = transaction_id_sequence.nextval()
@@ -35,7 +35,7 @@ def _build_mipmap_jobs(jobset, asset_queryset):
 @transaction.commit_on_success
 def create_mipmap_jobs(n_jobs=None):
     # where n_jobs is the number of jobs to generate.  Default (None) builds jobs for all assets in the queryset.
-    transaction_id_sequence.setval(0) # reset the transaction_id sequence
+    transaction_id_sequence.setval(1) # reset the transaction_id sequence
     assets = Asset.objects.filter(class_label='scaled image int8')[:n_jobs]
     jobset = JobSet()
     jobset.name = "Debug MipMap"
@@ -98,6 +98,6 @@ def create_snapshot_jobs():
             #clear transaction range and jobs for dependency list
             transaction_range_start = None
             jobs_for_dependency = []
-     else: # after the last iteration, start a snapshot with whatever's left.
+    else: # after the last iteration, start a snapshot with whatever's left.
         transaction_range = (transaction_range_start, mmjob.transaction_id)
         _build_snapshot_start_end(transaction_range, jobs_for_dependency)
