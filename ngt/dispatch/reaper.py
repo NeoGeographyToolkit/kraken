@@ -108,9 +108,9 @@ class Reaper(object):
         self.logger.debug("Sent status %s to %s" % (msg_body, self.STATUS_EXCHANGE_NAME))
     
     def get_a_job(self):
-        ''' Ask Dispatch for a job and return it.
+        """ Ask Dispatch for a job and return it.
             If there's no job, return false.
-        '''
+        """
         request = protobuf.ReaperJobRequest()
         self.logger.debug("Requesting job.")
         response = self.dispatch.getJob(self.amqp_rpc_controller, request, None)
