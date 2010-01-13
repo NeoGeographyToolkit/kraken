@@ -125,3 +125,6 @@ class Sequence(object):
         self._value = None
         self.seq_source.setval(value)
         return True
+        
+    def reset(self):
+        return self.setval(1)

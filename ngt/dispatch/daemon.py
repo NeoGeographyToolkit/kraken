@@ -259,6 +259,7 @@ def job_ended(msgbytes):
     job.status = request.state or 'ended'
     job.time_ended = request.end_time.replace('T',' ') # django DateTimeField should be able to parse it this way. (pyiso8601 would be the alternative).
     job.output = request.output
+    job = postprocess_job(job, request.state)
     job.save()
     # TODO: get reaper and increment job count
     try:
@@ -272,7 +273,6 @@ def job_ended(msgbytes):
         
         
     dblock.release()
-    postprocess_job(job, request.state)
     return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
 
 def update_status(msgbytes):
