@@ -346,6 +346,7 @@ def command_handler(msg):
     response.sequence_number = request.sequence_number
     
     if request.method in command_map:
+        t0 = datetime.now()
         try:
             response.payload = globals()[command_map[request.method]](request.payload)
             response.error = False
@@ -356,6 +357,8 @@ def command_handler(msg):
             response.payload = ''
             response.error = True
             response.error_string = str(e)
+        t1 = datetime.now()
+        logger.debug("COMMAND %s finished in %s." % (request.method, str(t1-t0)))
     else:
         logger.error("Invalid Command: %s" % request.method)
         response.payload = None
