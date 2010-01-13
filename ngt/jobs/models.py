@@ -151,6 +151,8 @@ class JobSet(models.Model):
         self.status = "dispatched"
         for job in self.jobs.filter(status='new'):
             job.enqueue()
+    def reset(self):
+        self.jobs.update(status='new')
             
 from ngt.assets.models import Asset, DATA_ROOT # putting this here helps avoid circular imports
 
