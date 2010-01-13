@@ -230,7 +230,8 @@ class Reaper(object):
                 if job.command in self.commands:  # only commands allowed by the configuration will be executed
                     #self.send_job_status(job.uuid,  'processing')
                     #msg.channel.basic_ack(msg.delivery_tag)
-                    args = [ self.commands[job.command] ] + list(job.args or [])
+                    args = self.commands[job.command].split(' ')  + list(job.args or [])
+                    self.logger.debug("ARGS: %s" % str(args))
                     self.logger.info("Executing %s" % ' '.join(args))
                     start_time = datetime.utcnow()
                     p = Popen(args, stdout=PIPE, stderr=STDOUT)
