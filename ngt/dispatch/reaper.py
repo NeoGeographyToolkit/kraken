@@ -37,14 +37,14 @@ class Reaper(object):
         'moc-stage': os.path.join(COMMAND_PATH, 'moc_stage.py'), # convert and map-project MOC images
         'scale2int8': os.path.join(COMMAND_PATH, 'scale2int8.py'), 
         'mosaic': '/big/software/visionworkbench/bin/image2plate',
-        #'mipmap': '/big/software/visionworkbench/bin/image2plate',
-        #'snapshot': '/big/software/visionworkbench/bin/snapshot',
-        #'start_snapshot': '/big/software/visionworkbench/bin/snapshot',
-        #'end_snapshot': '/big/software/visionworkbench/bin/snapshot',
-        'mipmap': '/big/scratch/logargs.py image2plate',
-        'snapshot': '/big/scratch/logargs.py snapshot',
-        'start_snapshot': '/big/scratch/logargs.py start_snapshot',
-        'end_snapshot': '/big/scratch/logargs.py end_snapshot',
+        'mipmap': '/big/software/visionworkbench/bin/image2plate',
+        'snapshot': '/big/software/visionworkbench/bin/snapshot',
+        'start_snapshot': '/big/software/visionworkbench/bin/snapshot',
+        'end_snapshot': '/big/software/visionworkbench/bin/snapshot',
+#        'mipmap': '/big/scratch/logargs.py image2plate',
+#        'snapshot': '/big/scratch/logargs.py snapshot',
+#        'start_snapshot': '/big/scratch/logargs.py start_snapshot',
+#        'end_snapshot': '/big/scratch/logargs.py end_snapshot',
     }
     JOB_POLL_INTERVAL = 1 #seconds
 
@@ -87,7 +87,7 @@ class Reaper(object):
         self.chan.queue_bind(self.REPLY_QUEUE_NAME, self.CONTROL_EXCHANGE_NAME, routing_key=self.REPLY_QUEUE_NAME)
         self.dispatch_rpc_channel = protocols.rpc_services.RpcChannel(self.CONTROL_EXCHANGE_NAME, self.REPLY_QUEUE_NAME, 'dispatch', max_retries=3)
         self.dispatch = protobuf.DispatchCommandService_Stub(self.dispatch_rpc_channel)
-        self.amqp_rpc_controller = protocols.rpc_services.AmqpRpcController(timeout_ms=1000000)
+        self.amqp_rpc_controller = protocols.rpc_services.AmqpRpcController(timeout_ms=10000)
         
 
         # Init threads to handle message consumption
