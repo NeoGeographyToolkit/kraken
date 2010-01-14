@@ -87,7 +87,7 @@ class Reaper(object):
         self.chan.queue_bind(self.REPLY_QUEUE_NAME, self.CONTROL_EXCHANGE_NAME, routing_key=self.REPLY_QUEUE_NAME)
         self.dispatch_rpc_channel = protocols.rpc_services.RpcChannel(self.CONTROL_EXCHANGE_NAME, self.REPLY_QUEUE_NAME, 'dispatch', max_retries=3)
         self.dispatch = protobuf.DispatchCommandService_Stub(self.dispatch_rpc_channel)
-        self.amqp_rpc_controller = protocols.rpc_services.AmqpRpcController(timeout_ms=10000)
+        self.amqp_rpc_controller = protocols.rpc_services.AmqpRpcController(timeout_ms=1000000)
         
 
         # Init threads to handle message consumption
