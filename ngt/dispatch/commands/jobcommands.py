@@ -163,7 +163,7 @@ class StartSnapshot(JobCommand):
                     platefile = PLATEFILE,
                 ))
                 snapjob.save()
-                job.dependencies.add(snapjob)
+                endjob.dependencies.add(snapjob)
                 
         return job
         
