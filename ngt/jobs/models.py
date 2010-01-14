@@ -153,6 +153,32 @@ class JobSet(models.Model):
             job.enqueue()
     def reset(self):
         self.jobs.update(status='new')
+
+    ####
+    # Convenience Methods for jobset wrangling.
+    ####
+    @classmethod
+    def get(klass, jobset):
+        if type(jobset) == klass:
+            return jobset
+        elif type(jobset) == int:
+            return klass.objects.get(pk=jobset)
+        else:
+            raise ArgumentError
+
+    @classmethod
+    def activate(klass, jobset):
+        js = klass.get(jobset)
+        js.active = True
+        js.save()
+        print "%s activated." % str(js)
+
+    @classmethod
+    def deactivate(klass, jobset):
+        js = klass.get(jobset)
+        js.active = False
+        js.save()
+        print "%s deactivated." % str(js)
             
 def active_jobsets():
     return [(js, js.jobs.count(), js.jobs.filter(status='new').count(), js.active) for js in JobSet.objects.filter(active=True)]
