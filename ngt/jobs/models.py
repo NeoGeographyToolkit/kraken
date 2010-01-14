@@ -59,7 +59,7 @@ class Job(models.Model):
         return uuid.uuid1().hex
     
     def __unicode__(self):
-        return self.uuid
+        return self.command + ' ' + self.uuid
 
     @property
     def command_string(self):
@@ -154,6 +154,10 @@ class JobSet(models.Model):
     def reset(self):
         self.jobs.update(status='new')
             
+def active_jobsets():
+    return [(js, js.jobs.count(), js.jobs.filter(status='new').count(), js.active) for js in JobSet.objects.filter(active=True)]
+
+
 from ngt.assets.models import Asset, DATA_ROOT # putting this here helps avoid circular imports
 
 """

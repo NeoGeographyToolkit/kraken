@@ -10,8 +10,8 @@ from ngt.messaging.messagebus import MessageBus
 from amqplib.client_0_8 import Message
 
 logger = logging.getLogger('dispatch')
-logger.setLevel(logging.DEBUG)
-logging.getLogger().setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
+#logging.getLogger().setLevel(logging.DEBUG)
 #logging.getLogger('protocol').setLevel(logging.DEBUG)
 
 
@@ -103,7 +103,7 @@ def unregister_reaper(msgbytes):
 def check_readiness(job):
     '''Return True if the job is ready to be processed, False otherwise.'''
     if not job.dependencies_met():
-        logger.info("Job %s(%s) has unmet dependencies." % (job.uuid[:8], job.command)) 
+        logger.debug("Job %s(%s) has unmet dependencies." % (job.uuid[:8], job.command)) 
         return False
     if job.command in jobcommand_map:
         return jobcommand_map[job.command].check_readiness(job)
@@ -144,9 +144,10 @@ def get_next_job(msgbytes):
         query_offset=0
         while True: # This won't generate infinitely because when we run out of jobsets, StopIteration exception will be raised
             dblock.acquire()
-            jobs = list( jobset.jobs.filter(status__in=statuses_to_process).order_by('id'))[query_offset:query_offset + QUERY_SIZE] 
+            qt0 = datetime.now()
+            jobs = list( jobset.jobs.filter(status__in=statuses_to_process).order_by('transaction_id'))[query_offset:query_offset + QUERY_SIZE] 
             dblock.release()
-            logger.debug("Got %d %s jobs from the DB." % (len(jobs), str(jobset) ))
+            logger.debug("Got %d %s jobs from the DB in %s." % (len(jobs), str(jobset), str(datetime.now() - qt0)  ))
             if len(jobs) > 0:
                 for job in jobs:
                     yield job
@@ -155,6 +156,7 @@ def get_next_job(msgbytes):
             else:
                 jobset = active_jobsets.next() 
                 logger.debug("Switching to JobSet %s" % str(jobset))
+                query_offset=0
                 #time.sleep(0.1) # so we don't hammer the db with empty requests
     
     i = 0
@@ -171,6 +173,11 @@ def get_next_job(msgbytes):
         return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
     t1 = datetime.now()
     logger.debug("Found usable job in %d iterations (%s)" % ( i, str(t1-t0) ) )
+    if options.debug:
+        # print the slowest queries
+        from django.db import connection
+        from pprint import pprint
+        pprint([q for q in connection.queries if float(q['time']) > 0.01])
             
     job = preprocess_job(job)
     response = {
@@ -179,7 +186,7 @@ def get_next_job(msgbytes):
         'command' : job.command,
         'args' : json.loads(job.arguments or '[]'),
         }
-    logger.info("Sending job %s to reaper %s" % (job.uuid[:8], request.reaper_uuid[:8]))
+    logger.info("Sending job %s to reaper %s (%s)" % (job.uuid[:8], request.reaper_uuid[:8], str(datetime.now() - t1)))
     job.status = "dispatched"
     job.processor = request.reaper_uuid
     dblock.acquire()
@@ -358,7 +365,7 @@ def command_handler(msg):
             response.error = True
             response.error_string = str(e)
         t1 = datetime.now()
-        logger.debug("COMMAND %s finished in %s." % (request.method, str(t1-t0)))
+        logger.info("COMMAND %s finished in %s." % (request.method, str(t1-t0)))
     else:
         logger.error("Invalid Command: %s" % request.method)
         response.payload = None
@@ -431,8 +438,11 @@ if __name__ == '__main__':
     global options
     parser = optparse.OptionParser()
     parser.add_option('-r', '--restart', dest="restart", action='store_true', help="Don't purge the control queue.")
+    parser.add_option('-d', '--debug', dest='debug', action='store_true', help='Turn on debug logging.')
     (options, args) = parser.parse_args()
     
+    if options.debug:
+        logger.setLevel(logging.DEBUG)
     init()
     try:
         while True:
