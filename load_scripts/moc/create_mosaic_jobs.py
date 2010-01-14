@@ -44,9 +44,9 @@ def create_mipmap_jobs(n_jobs=None):
     _build_mipmap_jobs(jobset, assets)
         
 
-def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset):
+def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, last_endjob):
     # transaction_id = transaction_id_sequence.nextval() # TODO: this is now wrong.  Should be user-specified, and the range can be inferred
-    transaction_id = transaction_range[1]
+    transaction_id = transaction_range[1] + 1
     print "Creating snapshot jobs for transaction range %d --> %d" % transaction_range
     # create start and end jobs
     startjob = Job(
@@ -76,31 +76,40 @@ def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_j
     endjob.dependencies.add(startjob)
     for j in Tracker(iter=jobs_for_dependency, progress=True):
         startjob.dependencies.add(j)
+    if last_endjob: # initially not set...
+        startjob.dependencies.add(last_endjob)
+    return startjob, endjob
     
     
 
 @transaction.commit_on_success   
-def create_snapshot_jobs():
+def create_snapshot_jobs(mmjobset=None):
     snapshot_jobset = JobSet()
     snapshot_jobset.name = "mosaic snapshots"
     snapshot_jobset.command = "snapshot"
     snapshot_jobset.save()
 
-    mmjobset = JobSet.objects.filter(name__contains="MipMap").latest('pk')
+    if not mmjobset:
+        mmjobset = JobSet.objects.filter(name__contains="MipMap").latest('pk')
     i = 0
     transaction_range_start = None
     jobs_for_dependency = []
-    for mmjob in mmjobset.jobs.all():
+    endjob = None
+    for mmjob in mmjobset.jobs.all().order_by('transaction_id'):
         i += 1
         jobs_for_dependency.append(mmjob)
         if not transaction_range_start:
             transaction_range_start = mmjob.transaction_id        
         if i % 256 == 0:
             transaction_range = (transaction_range_start, mmjob.transaction_id)
-            _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset)
+            startjob, endjob = _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, endjob)
             #clear transaction range and jobs for dependency list
             transaction_range_start = None
             jobs_for_dependency = []
     else: # after the last iteration, start a snapshot with whatever's left.
         transaction_range = (transaction_range_start, mmjob.transaction_id)
-        _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset)
+        _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, endjob)
+    print "Setting priority to 1 and activating."
+    snapshot_jobset.priority = 1
+    snapshot_jobset.active = True
+    snapshot_jobset.save()
