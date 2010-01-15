@@ -173,7 +173,7 @@ def get_next_job(msgbytes):
         return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
     t1 = datetime.now()
     logger.debug("Found usable job in %d iterations (%s)" % ( i, str(t1-t0) ) )
-    if options.debug:
+    if options.show_queries:
         # print the slowest queries
         from django.db import connection
         from pprint import pprint
@@ -439,6 +439,7 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     parser.add_option('-r', '--restart', dest="restart", action='store_true', help="Don't purge the control queue.")
     parser.add_option('-d', '--debug', dest='debug', action='store_true', help='Turn on debug logging.')
+    parser.add_option('--queries', dest='show_queries', action='store_true', help='Print out the slow queries (django.db.connection.queries)')
     (options, args) = parser.parse_args()
     
     if options.debug:

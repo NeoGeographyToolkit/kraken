@@ -78,7 +78,13 @@ class Job(models.Model):
             Return True if all dependencies are met, False otherwise.
             A dependency is met if the depending job has ended.
         '''
-        return all([ dep.ended() for dep in self.dependencies.all() ])
+        onedep_qset = self.dependencies.order_by('-transaction_id')[0:1]
+        if not onedep_qset:
+            return True # no dependencies
+        elif not self.dependencies.order_by('-transaction_id')[0].ended():
+            return False
+        else:
+            return all([ dep.ended() for dep in self.dependencies.all() ])
     
     def enqueue(self):
         cmd = {
