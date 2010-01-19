@@ -62,49 +62,6 @@ _COMMAND = descriptor.Descriptor(
   options=None)
 
 
-_JOBSTATUS = descriptor.Descriptor(
-  name='JobStatus',
-  full_name='JobStatus',
-  filename='protocols.proto',
-  containing_type=None,
-  fields=[
-    descriptor.FieldDescriptor(
-      name='job_id', full_name='JobStatus.job_id', index=0,
-      number=1, type=9, cpp_type=9, label=1,
-      default_value=unicode("", "utf-8"),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    descriptor.FieldDescriptor(
-      name='state', full_name='JobStatus.state', index=1,
-      number=2, type=9, cpp_type=9, label=1,
-      default_value=unicode("", "utf-8"),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    descriptor.FieldDescriptor(
-      name='reaper_id', full_name='JobStatus.reaper_id', index=2,
-      number=3, type=9, cpp_type=9, label=1,
-      default_value=unicode("", "utf-8"),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    descriptor.FieldDescriptor(
-      name='output', full_name='JobStatus.output', index=3,
-      number=4, type=9, cpp_type=9, label=1,
-      default_value=unicode("", "utf-8"),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-  ],
-  extensions=[
-  ],
-  nested_types=[],  # TODO(robinson): Implement.
-  enum_types=[
-  ],
-  options=None)
-
-
 _RPCREQUESTWRAPPER = descriptor.Descriptor(
   name='RpcRequestWrapper',
   full_name='RpcRequestWrapper',
@@ -112,30 +69,30 @@ _RPCREQUESTWRAPPER = descriptor.Descriptor(
   containing_type=None,
   fields=[
     descriptor.FieldDescriptor(
-      name='requestor', full_name='RpcRequestWrapper.requestor', index=0,
-      number=1, type=9, cpp_type=9, label=2,
-      default_value=unicode("", "utf-8"),
+      name='sequence_number', full_name='RpcRequestWrapper.sequence_number', index=0,
+      number=1, type=13, cpp_type=3, label=2,
+      default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     descriptor.FieldDescriptor(
-      name='method', full_name='RpcRequestWrapper.method', index=1,
+      name='requestor', full_name='RpcRequestWrapper.requestor', index=1,
       number=2, type=9, cpp_type=9, label=2,
       default_value=unicode("", "utf-8"),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     descriptor.FieldDescriptor(
-      name='payload', full_name='RpcRequestWrapper.payload', index=2,
-      number=3, type=12, cpp_type=9, label=2,
-      default_value="",
+      name='method', full_name='RpcRequestWrapper.method', index=2,
+      number=3, type=9, cpp_type=9, label=2,
+      default_value=unicode("", "utf-8"),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     descriptor.FieldDescriptor(
-      name='sequence_number', full_name='RpcRequestWrapper.sequence_number', index=3,
-      number=4, type=13, cpp_type=3, label=2,
-      default_value=0,
+      name='payload', full_name='RpcRequestWrapper.payload', index=3,
+      number=4, type=12, cpp_type=9, label=2,
+      default_value="",
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -177,7 +134,7 @@ _RPCRESPONSEWRAPPER = descriptor.Descriptor(
       options=None),
     descriptor.FieldDescriptor(
       name='sequence_number', full_name='RpcResponseWrapper.sequence_number', index=3,
-      number=4, type=13, cpp_type=3, label=1,
+      number=4, type=13, cpp_type=3, label=2,
       default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -210,49 +167,6 @@ _ACKRESPONSE = descriptor.Descriptor(
   nested_types=[],  # TODO(robinson): Implement.
   enum_types=[
     _ACKRESPONSE_ACKSTATE,
-  ],
-  options=None)
-
-
-_BROXTONREQUESTWRAPPER = descriptor.Descriptor(
-  name='BroxtonRequestWrapper',
-  full_name='BroxtonRequestWrapper',
-  filename='protocols.proto',
-  containing_type=None,
-  fields=[
-    descriptor.FieldDescriptor(
-      name='sequence_number', full_name='BroxtonRequestWrapper.sequence_number', index=0,
-      number=1, type=13, cpp_type=3, label=2,
-      default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    descriptor.FieldDescriptor(
-      name='requestor', full_name='BroxtonRequestWrapper.requestor', index=1,
-      number=2, type=9, cpp_type=9, label=2,
-      default_value=unicode("", "utf-8"),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    descriptor.FieldDescriptor(
-      name='method', full_name='BroxtonRequestWrapper.method', index=2,
-      number=3, type=9, cpp_type=9, label=2,
-      default_value=unicode("", "utf-8"),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-    descriptor.FieldDescriptor(
-      name='payload', full_name='BroxtonRequestWrapper.payload', index=3,
-      number=4, type=12, cpp_type=9, label=2,
-      default_value="",
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      options=None),
-  ],
-  extensions=[
-  ],
-  nested_types=[],  # TODO(robinson): Implement.
-  enum_types=[
   ],
   options=None)
 
@@ -618,10 +532,6 @@ class Command(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType
   DESCRIPTOR = _COMMAND
 
-class JobStatus(message.Message):
-  __metaclass__ = reflection.GeneratedProtocolMessageType
-  DESCRIPTOR = _JOBSTATUS
-
 class RpcRequestWrapper(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType
   DESCRIPTOR = _RPCREQUESTWRAPPER
@@ -633,10 +543,6 @@ class RpcResponseWrapper(message.Message):
 class AckResponse(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType
   DESCRIPTOR = _ACKRESPONSE
-
-class BroxtonRequestWrapper(message.Message):
-  __metaclass__ = reflection.GeneratedProtocolMessageType
-  DESCRIPTOR = _BROXTONREQUESTWRAPPER
 
 class IndexTransactionFailed(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType
