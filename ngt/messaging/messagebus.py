@@ -7,7 +7,9 @@ logger.setLevel(logging.INFO)
 
 DEFAULT_EXCHANGE = 'amq.direct'
 
+logger.debug("Opening AMQP connection...")
 connection = amqp.Connection(**connection_params)
+logger.debug("AMQP connection open.")
 
 class LazyProperty(object):
     ''' http://blog.pythonisito.com/2008/08/lazy-descriptors.html '''
