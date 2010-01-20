@@ -222,7 +222,7 @@ class RpcChannel(object):
             done(response)
         return response
 
-class AmqpServiceWrapper(object):
+class AmqpService(object):
     '''
     A wrapper class that takes care of the business of initialization:
         - Creates an RpcChannel with the given parameters
@@ -234,7 +234,7 @@ class AmqpServiceWrapper(object):
         pass
         
     def __init__(self, 
-        pb_service_class=None,
+        #pb_service_class=None,
         amqp_channel=None,
         exchange='Control_Exchange',
         request_routing_key=None,
@@ -242,23 +242,33 @@ class AmqpServiceWrapper(object):
         timeout_ms=5000,
         max_retries=3):
         
-        self.amqp_channel = ampq_channel or MessageBus().channel
+        self.amqp_channel = amqp_channel or MessageBus().channel
         self.exchange = exchange
         
         # Required parameters:
-        for param in ('pb_service_class', 'reply_queue', 'request_routing_key'):
+        for param in ('reply_queue', 'request_routing_key'):
             if locals()[param]:
-                setattr(self, param, locals(param))
+                setattr(self, param, locals()[param])
             else:
-                raise ParameterMissing("%s is a required parameter." % param)
+                raise AmqpService.ParameterMissing("%s is a required parameter." % param)
                 
-        self.rpc_channel = RpcChannel(self.CONTROL_EXCHANGE_NAME, self.REPLY_QUEUE_NAME, 'dispatch', max_retries=3, timeout_ms=timeout_ms)
-        self.rpc_service = service_stub_class(self.rpc_channel)
-        #self.amqp_rpc_controller = AmqpRpcController()
+        self.rpc_channel = RpcChannel(self.exchange, self.reply_queue, 'dispatch', max_retries=3, timeout_ms=timeout_ms)
+        #self.rpc_service = service_stub_class(self.rpc_channel)
+        self.amqp_rpc_controller = AmqpRpcController()
+        
+    def _rpc_failure(self):
+        '''Should be called when RPC calls fail (i.e. return value == None)'''
+        if self.amqp_rpc_controller.TimedOut():
+                self.logger.error("RPC request timed out.")
+        elif self.amqp_rpc_controller.Failed():
+                self.logger.error("Error in RPC: " + str(self.amqp_rpc_controller.ErrorText()))
+        else:
+            assert False # If this happens, we're missing a failure state.
+        self.amqp_rpc_controller.Reset()
    
     # Delegate other attribute access to protobuf rpc_service instance
-    def __getattr__(self, name):
-        return object.__getattribute__(self.rpc_service, name)
+    #def __getattr__(self, name):
+    #    return object.__getattribute__(self.rpc_service, name)
         
 class AmqpRpcEndpoint(object):
 
@@ -337,17 +347,19 @@ class AmqpRpcEndpoint(object):
         
     def bind_service(self, pb_service, routing_key):
         ''' Bind an rpc service to a specified routing key '''
-        pass
+        self.service = pb_service
+        self.routing_key = routing_key
+        self.amqp_channel.queue_bind(self.queue, self.exchange, routing_key=self.routing_key)
         
     def unbind_service(self):
-        pass
+        raise NotImplementedError
     
     def incoming_message_queue_size(self):
         ''' NOTE: qsize() is approximate. '''
         return self.incoming_messages.qsize()
         
     def Reset(self):
-        pass
+        raise NotImplementedError
         
 # Attribute setters are not so useful in python.
 #    def set_default_timeout(self, timeout = -1):

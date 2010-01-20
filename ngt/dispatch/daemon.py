@@ -2,17 +2,20 @@
 import sys, logging, threading, os, atexit, time, optparse
 from datetime import datetime
 import itertools, traceback, json
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))    
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+
 #from ngt.protocols import * # <-- dotdict, pack, unpack
 import ngt.protocols as protocols
-from ngt.protocols import protobuf, dotdict
+from ngt.protocols import protobuf, dotdict, rpc_services
+
+from ngt.messaging import messagebus
 from ngt.messaging.messagebus import MessageBus
 from amqplib.client_0_8 import Message
-
 logger = logging.getLogger('dispatch')
 logger.setLevel(logging.INFO)
 #logging.getLogger().setLevel(logging.DEBUG)
 #logging.getLogger('protocol').setLevel(logging.DEBUG)
+
 
 
 mb = MessageBus()
@@ -56,7 +59,8 @@ logger.debug("jobcommand_map initialized: %s" % str(jobcommand_map))
 logger.debug("Valid jobcommands:")
 for k in jobcommand_map.keys():
     logger.debug(k)
-assert 'mosaic' in jobcommand_map # TODO: delete this assert
+
+
 
 ###
 # COMMANDS
@@ -279,64 +283,18 @@ def job_ended(msgbytes):
         logger.warning("A job ended that was assigned to an unregistered reaper %s.  Probably not good." % request.reaper_id)
         
         
+    if request.state == 'complete' and job.creates_new_asset:
+        try:
+            job.spawn_output_asset()
+        except:
+            logger.error("ASSET CREATION FAILED FOR JOB %s" % job.uuid)
+            sys.excepthook(*sys.exc_info())
+            job.status = "asset_creation_fail"
+            job.save()
+            
     dblock.release()
+    
     return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
-
-def update_status(msgbytes):
-    '''
-    Update the status of a job based on data from a serialized protocol buffer binary string.
-    '''
-    job_completers = ('complete','failed')
-    request = protocols.unpack(protobuf.JobStatus, msgbytes)
-    logger.info("Setting status of job %s to '%s'." % (request.job_id, request.state))
-    try:
-        job = Job.objects.get(uuid=request.job_id)
-        job.status = request.state
-        #if job.processor and job.processor != request.reaper_id:
-            #logger.warning("Status update for job %s came from a different reaper than we expected.  This jobs processor attribute will be set to the latest reaper that reported." % job.uuid)
-        job.processor = request.reaper_id # set once, then call verify_reaper_id
-        if 'output' in request:
-            job.output = request.output
-        dblock.acquire()
-        job.save()
-        dblock.release()
-        if 'reaper_id' in request and request['reaper_id']:
-            try:
-                r = Reaper.objects.get(uuid=request.reaper_id)
-                if request.state in job_completers:
-                    r.jobcount += 1
-                    dblock.acquire()
-                    r.save()
-                    dblock.release()
-            except Reaper.DoesNotExist:
-                # <shrug> Log a warning, register the reaper, and increment its jobcount
-                logger.warning("Dispatch received a status message from unregistered reaper %s.  Probably not good." % request['reaper_id'])
-                register_reaper(protocols.pack(protobuf.ReaperRegistrationRequest, {'reaper_uuid':request.reaper_id, 'reaper_type':'generic'}))
-                r = Reaper.objects.get(uuid=request.reaper_id)
-                if request.state in job_completers:
-                    r.jobcount += 1
-                    dblock.acquire()
-                    r.save()
-                    dblock.release()
-        if request.state in job_completers:
-            # TODO: call post_process_job here... move asset creation don the call stack...
-            if request.state == 'complete' and job.creates_new_asset:
-                try:
-                    dblock.acquire()
-                    job.spawn_output_asset()
-                    dblock.release()
-                except:
-                    logger.error("ASSET CREATION FAILED FOR JOB %s" % job.uuid)
-                    sys.excepthook(*sys.exc_info())
-                    job.status = "asset_creation_fail"
-                    dblock.acquire()
-                    job.save()
-                    dblock.release()
-        postprocess_job(job, request.state)
-        return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
-    except Job.DoesNotExist:
-        logger.error("Couldn't find a job with uuid %s on status update." % request.uuid)
-        return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.NOACK})
     
 ###
 # Handlers
@@ -376,12 +334,6 @@ def command_handler(msg):
     response_bytes = protocols.pack(protobuf.RpcResponseWrapper, response)
     mb.basic_publish(Message(response_bytes), routing_key=request.requestor)
         
-def status_handler(msg):
-    logger.debug("GOT STATUS: %s" % msg.body)
-    if update_status(msg.body):
-        mb.basic_ack(msg.delivery_info['delivery_tag'])
-    else:
-        logger.error("STATUS MESSAGE FAILED: %s" % msg.body)
     
 def consume_loop(mb, shutdown_event):
     logger.debug("Starting dispatch consume loop.")
@@ -397,9 +349,6 @@ def _shutdown(*args):
     sys.exit(1)
     
 def shutdown():
-    # payload = protocols.pack(protocols.Command, {'command':'shutdown'})
-    # print "sending ", payload
-    # mb.channel.basic_publish(Message(payload), exchange='Control_Exchange', routing_key='dispatch')
     _shutdown()
 
 
@@ -423,18 +372,12 @@ def init():
     mb.queue_bind(queue=CONTROL_QUEUE, exchange='Control_Exchange', routing_key='dispatch')
     command_ctag = mb.basic_consume(callback=command_handler, queue=CONTROL_QUEUE)
 
-    # setup status queue
-    logger.debug("Setting up status listener.")
-    mb.exchange_declare('Status_Exchange', type='fanout')
-    mb.queue_declare('status.dispatch', auto_delete=False)
-    mb.queue_bind(queue='status.dispatch', exchange='Status_Exchange', routing_key='dispatch')
-    status_ctag = mb.basic_consume(callback=status_handler, queue='status.dispatch')
-
     logger.debug("Launching consume thread.")
     mb.start_consuming()
 
 
 if __name__ == '__main__':
+    logger.debug("__name__ == '__main__'")
     global options
     parser = optparse.OptionParser()
     parser.add_option('-r', '--restart', dest="restart", action='store_true', help="Don't purge the control queue.")
@@ -444,6 +387,7 @@ if __name__ == '__main__':
     
     if options.debug:
         logger.setLevel(logging.DEBUG)
+    logger.debug("Starting init()")
     init()
     try:
         while True:
@@ -455,3 +399,4 @@ if __name__ == '__main__':
         logger.info("Got a keyboard interrupt.  Shutting down dispatch.")
         shutdown()
         sys.exit(0)
+
