@@ -5,30 +5,11 @@ else:
     from django.db import models
 import os, time, hashlib, datetime
 import uuid
-from ngt.messaging.messagebus import MessageBus
 import json
-from ngt import protocols
-from ngt.protocols import protobuf
 #from ngt.assets.models import Asset, DATA_ROOT
 
 import logging
 logger = logging.getLogger('job_models')
-
-messagebus = MessageBus()
-
-messagebus.channel.exchange_declare(exchange="Job_Exchange", type="direct", durable=True, auto_delete=False,)
-messagebus.channel.queue_declare(queue='reaper.generic', auto_delete=False)
-messagebus.channel.queue_bind(queue='reaper.generic', exchange='Job_Exchange', routing_key='reaper.generic')
-"""
-# RPC Service to dispatch
-REPLY_QUEUE_NAME = 'jobmodels'
-JOB_EXCHANGE_NAME = 'Job_Exchange'
-chan.queue_declare(queue=self.REPLY_QUEUE_NAME, durable=False, auto_delete=True)
-chan.queue_bind(self.REPLY_QUEUE_NAME, self.JOB_EXCHANGE_NAME, routing_key=self.REPLY_QUEUE_NAME)
-dispatch_rpc_channel = protocols.rpc_services.RpcChannel(self.JOB_EXCHANGE_NAME, self.REPLY_QUEUE_NAME, 'dispatch')
-dispatch = protobuf.DispatchCommandService_Stub(dispatch_rpc_channel)
-amqp_rpc_controller = protocols.rpc_services.AmqpRpcController()
-"""
 
 class Job(models.Model):
     uuid = models.CharField(max_length=32, null=True)
@@ -86,19 +67,6 @@ class Job(models.Model):
         else:
             return all([ dep.ended() for dep in self.dependencies.all() ])
     
-    def enqueue(self):
-        cmd = {
-            'uuid': self.uuid,
-            'command': self.command,
-            'args': json.loads(self.arguments)
-        }
-        message_body = protocols.pack(protobuf.Command, cmd)
-        self.status = 'queued'
-        logger.debug("job.enqueue: about to save record")
-        self.save()
-        logger.debug("job.enqueue: record saved. Publishing to wire.")   
-        messagebus.publish(message_body, exchange='Job_Exchange', routing_key='reaper.generic') #routing key is the name of the intended reaper type
-        print "Enqueued %s" % self.uuid
         
     def spawn_output_asset(self):
         """ Creates a new asset record for the job's output file. 
@@ -187,18 +155,8 @@ class JobSet(models.Model):
         print "%s deactivated." % str(js)
             
 def active_jobsets():
-    return [(js, js.jobs.count(), js.jobs.filter(status='new').count(), js.active) for js in JobSet.objects.filter(active=True)]
+    return [(js, js.jobs.count(), js.jobs.filter(status='new').count()) for js in JobSet.objects.filter(active=True)]
 
 
 from ngt.assets.models import Asset, DATA_ROOT # putting this here helps avoid circular imports
 
-"""
-I'd like jobs to be populated from the JobSet's properties by a post-save signal...
-But this won't work because the related objects in jobbatch.assests don't get created until after the post_save signal has fired.
-
-def populate_jobs(instance, created, **kwargs):
-    print "populate_jobs fired: %s" % str(created)
-    if created:
-        instance.simple_populate() #just one asset per job, for now.
-models.signals.post_save.connect(populate_jobs, sender=JobSet)
-"""
