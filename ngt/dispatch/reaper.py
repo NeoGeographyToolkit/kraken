@@ -51,9 +51,7 @@ class Reaper(object):
 
 
     REAPER_TYPE = 'generic'
-    JOB_EXCHANGE_NAME = 'Job_Exchange'
     CONTROL_EXCHANGE_NAME = 'Control_Exchange'
-    STATUS_EXCHANGE_NAME = 'Status_Exchange'
 
 
     def __init__(self):
@@ -68,32 +66,18 @@ class Reaper(object):
         self.logger.setLevel(logging.DEBUG)
         
 
-        # Consume from the job queue...
-        #self.chan.exchange_declare(self.JOB_EXCHANGE_NAME, type="direct", durable=True, auto_delete=False)
-        #self.chan.queue_declare(queue=self.JOB_QUEUE_NAME, durable=True, exclusive=False, auto_delete=False)
-        #self.chan.queue_bind(queue=self.JOB_QUEUE_NAME, exchange=self.JOB_EXCHANGE_NAME, routing_key=self.JOB_QUEUE_NAME)
-
-        # Publish to the status exchange.
-        self.chan.exchange_declare(exchange=self.STATUS_EXCHANGE_NAME, type="fanout", durable=True, auto_delete=False)
-
         # Accept control commands via the control exchange:
         self.chan.exchange_declare(self.CONTROL_EXCHANGE_NAME, type='direct')
         self.chan.queue_declare(queue=self.CONTROL_QUEUE_NAME, durable=False, auto_delete=True)
         self.chan.queue_bind(queue=self.CONTROL_QUEUE_NAME, exchange=self.CONTROL_EXCHANGE_NAME, routing_key=self.CONTROL_QUEUE_NAME)
-        #self.chan.queue_bind(queue=self.CONTROL_QUEUE_NAME, exchange=self.CONTROL_EXCHANGE_NAME, routing_key="control.reaper")
         
         # RPC Service to dispatch
-        #self.chan.queue_declare(queue=self.REPLY_QUEUE_NAME, durable=False, auto_delete=True)
-        #self.chan.queue_bind(self.REPLY_QUEUE_NAME, self.CONTROL_EXCHANGE_NAME, routing_key=self.REPLY_QUEUE_NAME)
-        #self.dispatch_rpc_channel = protocols.rpc_services.RpcChannel(self.CONTROL_EXCHANGE_NAME, self.REPLY_QUEUE_NAME, 'dispatch', max_retries=RPC_RETRIES, timeout_ms=1000000)
-        #self.dispatch = protobuf.DispatchCommandService_Stub(self.dispatch_rpc_channel)
-        #self.amqp_rpc_controller = protocols.rpc_services.AmqpRpcController()
+
         self.dispatch = DispatchService(reply_queue=self.REPLY_QUEUE_NAME, )
 
         # Init threads to handle message consumption
         self.shutdown_event = threading.Event()
         self.control_listener = ConsumptionThread(mode='GET', shutdown_event=self.shutdown_event, name="control_listener")
-        #self.job_listener = ConsumptionThread(mode='GET', shutdown_event=self.shutdown_event, name="job_listener")
 
                 
      
@@ -126,7 +110,6 @@ class Reaper(object):
                     else:
                         state = 'failed'
                     self.logger.info("Job %s: %s" % (job.uuid[:8], state) )
-                    #self.send_job_status(job.uuid, state, output=output)
                     self.dispatch.report_job_end(job, state, end_time, output)
                 else:
                     end_time = datetime.utcnow()
