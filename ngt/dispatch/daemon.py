@@ -129,19 +129,36 @@ def postprocess_job(job, state):
         logger.debug("Skipping postprocessing because the job's command is not in jobcommand_map.")
         return job
 
+def generate_jobs():
+    statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
+    QUERY_LIMIT=50
+    job_cache = []
+    while True:
+        if job_cache:
+            yield job_cache.pop(0)
+        else:
+            for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
+                jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id')[:QUERY_LIMIT]
+                for job in jobs:
+                    job_cache.append(job)
+            if not job_cache:
+                raise StopIteration
+                
+    
+
+job_generator = generate_jobs()
 
 def get_next_job(msgbytes):
     t0 = datetime.now()
     logger.debug("Looking for the next job.")
     request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
-    statuses_to_process = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
-    QUERY_SIZE=10   
+    #statuses_to_process = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
+    #QUERY_SIZE=10   
     
     #dblock.acquire()
-   # active_jobsets = itertools.cycle(JobSet.objects.filter(active=True).order_by('-priority'))
-    active_jobsets = JobSet.objects.filter(active=True).order_by('-priority').iterator()
+    #active_jobsets = JobSet.objects.filter(active=True).order_by('-priority').iterator()
     #dblock.release()
-    
+    '''
     def job_generator():
         jobset = active_jobsets.next()
         logger.debug("Looking at jobs in set: %s" % str(jobset))
@@ -162,9 +179,10 @@ def get_next_job(msgbytes):
                 logger.debug("Switching to JobSet %s" % str(jobset))
                 query_offset=0
                 #time.sleep(0.1) # so we don't hammer the db with empty requests
+    '''
     
     i = 0
-    for job in job_generator():
+    for job in job_generator:
         i += 1
         logger.debug("Checking job %d" % i)
         if check_readiness(job):
