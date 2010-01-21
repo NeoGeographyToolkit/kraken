@@ -140,6 +140,7 @@ class RpcChannel(object):
       self.messagebus.exchange_declare(exchange, 'direct')
       #self.messagebus.queue_delete(queue=response_queue) # clear it in case there are backed up messages (EDIT: it *should* autodelete)
       self.messagebus.queue_declare(queue=response_queue, auto_delete=True)
+      self.messagebus.queue_purge(response_queue)
       self.messagebus.queue_bind(response_queue, exchange, routing_key=response_queue)
       logger.debug("Response queue '%s' is bound to key '%s' on exchange '%s'" % (response_queue, response_queue, exchange))
       
@@ -199,7 +200,7 @@ class RpcChannel(object):
                     done(None)
                 return None
         else:
-            logger.debug("Got some sort of response")
+            logger.info("Got a response in %s" % str(datetime.now() - t0))
             try_again = False
         
             response_wrapper = protocols.unpack(protocols.RpcResponseWrapper, response.body)
