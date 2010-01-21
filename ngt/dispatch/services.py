@@ -1,3 +1,4 @@
+from ngt import protocols
 from ngt.protocols import rpc_services, protobuf
 import logging
 
