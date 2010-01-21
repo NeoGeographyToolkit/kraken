@@ -133,6 +133,7 @@ def generate_jobs():
     statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
     QUERY_LIMIT=50
     job_cache = []
+    prev_jobs = set()
     while True:
         if job_cache:
             yield job_cache.pop(0)
@@ -141,9 +142,11 @@ def generate_jobs():
                 jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id')[:QUERY_LIMIT]
                 for job in jobs:
                     job_cache.append(job)
-            if not job_cache:
+            set_job_cache = set(job_cache)
+            if not job_cache or set_job_cache == prev_jobs:  # The latter condition means all the jobs we've retrieved are unrunnable for some reason.
                 raise StopIteration
-                
+            
+            prev_jobs = set_job_cache
     
 
 job_generator = generate_jobs()
