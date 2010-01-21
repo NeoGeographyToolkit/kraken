@@ -170,23 +170,16 @@ class Reaper(object):
         self.logger.debug("Sent response to a control command (%s)" % request.method)
 
     def register_with_dispatch(self):
-        request = protobuf.ReaperRegistrationRequest()
-        request.reaper_uuid = self.reaper_id
-        request.reaper_type = self.REAPER_TYPE
+        
         if self.dispatch.register_reaper(self.reaper_id, self.REAPER_TYPE):
-            self.is_registered = True
-            self.logger.info("Registration Acknowledged")
+            self.logger.info("Registration successful")
         else:
-            self.is_registered = False
-            self.logger.error("!!REGISTRATION FAILED!!")
+            self.logger.error("Registration FAILED.")
             self.shutdown()
 
     def unregister_with_dispatch(self):
         self.logger.debug("unregister_with_dispatch was called.")
-        if self.dispatch.unregister_reaper(self.reaper_id):
-            self.logger.info("Unregistration Acknowledged")
-        else:
-            self.logger.error( "!! UNREGISTRATION FAILED !!")
+        self.dispatch.unregister_reaper(self.reaper_id)
         
     def shutdown(self, delay=None):
         self.logger.info("Shutdown initiated.")
@@ -213,7 +206,7 @@ class Reaper(object):
     def launch(self):
         try:
             self.logger.info("Registering and launching message handlers...")
-            #signal.signal(signal.SIGINT, self._sig_shutdown)
+            #signal.signal(signal.SIGINT, self._sig_shutdown)   
             
             self.logger.debug("\tcontrol will consume from %s" % self.CONTROL_QUEUE_NAME)
             self.control_listener.set_callback(queue=self.CONTROL_QUEUE_NAME, no_ack=False, callback=self.control_command_handler)
