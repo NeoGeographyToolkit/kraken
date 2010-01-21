@@ -25,6 +25,7 @@ class Job(models.Model):
     time_started = models.DateTimeField(null=True, default=None)
     time_ended = models.DateTimeField(null=True, default=None)
     pid = models.IntegerField(null=True)
+    ended = models.BooleanField(default=False)
     
     dependencies = models.ManyToManyField('Job', symmetrical=False)
     
@@ -45,27 +46,17 @@ class Job(models.Model):
     @property
     def command_string(self):
         return self.command + ' ' + ' '.join(json.loads(self.arguments))
-        
-    def ended(self):
-        ''' Return True if the job has run and met and end condition, False otherwise. '''
-        end_statuses = ('complete', 'failed', 'ended')
-        if self.status in end_statuses:
-            return True
-        else:
-            return False
+       
             
     def dependencies_met(self):
         ''' 
             Return True if all dependencies are met, False otherwise.
             A dependency is met if the depending job has ended.
         '''
-        onedep_qset = self.dependencies.order_by('-transaction_id')[0:1]
-        if not onedep_qset:
-            return True # no dependencies
-        elif not self.dependencies.order_by('-transaction_id')[0].ended():
+        if self.dependencies.filter(ended=False):
             return False
         else:
-            return all([ dep.ended() for dep in self.dependencies.all() ])
+            return True
     
         
     def spawn_output_asset(self):
@@ -91,7 +82,13 @@ class Job(models.Model):
 def set_uuid(instance, **kwargs):
     if not instance.uuid:
         instance.uuid = instance._generate_uuid()
+def set_ended(instance, **kwargs):
+    if instance.status in ('complete','failed','ended'):
+        instance.ended = True
+    else:
+        instance.ended = False
 models.signals.pre_save.connect(set_uuid, sender=Job)
+models.signals.pre_save.connect(set_ended, sender=Job)
 
 class JobSet(models.Model):
     name = models.CharField(max_length=256)
