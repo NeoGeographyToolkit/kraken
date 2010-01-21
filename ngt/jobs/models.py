@@ -12,12 +12,45 @@ import logging
 logger = logging.getLogger('job_models')
 
 class Job(models.Model):
+
+    ###
+    # Status Enumeration
+    class StatusEnum(object):
+        NEW = 0
+        REQUEUE = 1
+        DISPATCHED = 2
+        PROCESSING = 3
+        COMPLETE = 4
+        FAILED = 5
+        
+    class EnumDescriptor(object):
+        '''
+        A sneaky way to use an enum values without 
+        hunting down and changing all the existing code that gets and sets string values.
+        '''
+        def __init__(self, enum_field_name, enum_class):
+            self.enum_field_name = enum_field_name
+            self.enum_class = enum_class
+        def __get__(self, instance, owner):
+            value = getattr(instance, self.enum_field_name)
+            for k,v in self.enum_class.__dict__.items():
+                if v == value: return k.lower()
+            else:
+                raise ValueError("Value %d not found in %s." % (value, self.enum_class.__name__))
+        
+        def __set__(self, instance, value):
+            setattr(instance, self.enum_field_name, getattr(self.enum_class, value.upper()))
+    #
+    ###
+    
     uuid = models.CharField(max_length=32, null=True)
     jobset = models.ForeignKey('JobSet', related_name="jobs")
     transaction_id = models.IntegerField(null=True)
     command = models.CharField(max_length=64)
     arguments = models.TextField(default='') # an array seriaized as json
-    status = models.CharField(max_length=32, default='new')
+    #status = models.CharField(max_length=32, default='new')
+    status_enum = models.IntegerField(db_column='status_int', default=0)
+    status = EnumDescriptor('status_enum', StatusEnum)
     processor = models.CharField(max_length=32, null=True, default=None)
     assets = models.ManyToManyField('assets.Asset', related_name='jobs')
     output = models.TextField(null=True)
@@ -120,10 +153,10 @@ class JobSet(models.Model):
     def execute(self):
         #self.simple_populate()
         self.status = "dispatched"
-        for job in self.jobs.filter(status='new'):
+        for job in self.jobs.filter(status_enum=Job.StatusEnum.NEW):
             job.enqueue()
     def reset(self):
-        self.jobs.update(status='new')
+        self.jobs.update(status_enum=Job.StatusEnum.NEW)
 
     ####
     # Convenience Methods for jobset wrangling.
@@ -152,7 +185,7 @@ class JobSet(models.Model):
         print "%s deactivated." % str(js)
             
 def active_jobsets():
-    return [(js, js.jobs.count(), js.jobs.filter(status='new').count()) for js in JobSet.objects.filter(active=True)]
+    return [(js, js.jobs.count(), js.jobs.filter(status_enum=Job.StatusEnum.NEW).count()) for js in JobSet.objects.filter(active=True)]
 
 
 from ngt.assets.models import Asset, DATA_ROOT # putting this here helps avoid circular imports
