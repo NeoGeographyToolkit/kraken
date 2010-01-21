@@ -134,7 +134,7 @@ def get_next_job(msgbytes):
     t0 = datetime.now()
     logger.debug("Looking for the next job.")
     request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
-    statuses_to_process = ('new','requeue')
+    statuses_to_process = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
     QUERY_SIZE=10   
     
     #dblock.acquire()
@@ -149,7 +149,7 @@ def get_next_job(msgbytes):
         while True: # This won't generate infinitely because when we run out of jobsets, StopIteration exception will be raised
             #dblock.acquire()
             qt0 = datetime.now()
-            jobs = list( jobset.jobs.filter(status__in=statuses_to_process).order_by('transaction_id'))[query_offset:query_offset + QUERY_SIZE] 
+            jobs = list( jobset.jobs.filter(status_enum__in=statuses_to_process).order_by('transaction_id'))[query_offset:query_offset + QUERY_SIZE] 
             #dblock.release()
             logger.debug("Got %d %s jobs from the DB in %s." % (len(jobs), str(jobset), str(datetime.now() - qt0)  ))
             if len(jobs) > 0:

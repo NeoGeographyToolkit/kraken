@@ -87,7 +87,9 @@ class Reaper(object):
             if self.shutdown_event.is_set():
                 break
             if self.is_registered:
+                self.logger.debug("Requesting job.")
                 job = self.dispatch.get_a_job(self.reaper_id)
+                self.logger.debug("Job request returned.")
             if job:
                 if job.command in self.commands:  # only commands allowed by the configuration will be executed
                     args = self.commands[job.command].split(' ')  + list(job.args or [])
@@ -173,6 +175,7 @@ class Reaper(object):
         
         if self.dispatch.register_reaper(self.reaper_id, self.REAPER_TYPE):
             self.logger.info("Registration successful")
+            self.is_registered = True
         else:
             self.logger.error("Registration FAILED.")
             self.shutdown()

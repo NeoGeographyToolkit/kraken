@@ -22,7 +22,7 @@ DESTPATH='/big/assets/moc/'
 def main():
     errlog = open('err.log', 'w')
     JOBSET = 3
-    jobs = Job.objects.filter(jobset__id=JOBSET, status='complete')
+    jobs = Job.objects.filter(jobset__id=JOBSET, status_enum=Job.StatusEnum.COMPLETE)
     failures = 0
     for job in Tracker(iter=jobs):
         asset_o = job.assets.all()[0]
