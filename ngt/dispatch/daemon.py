@@ -137,20 +137,20 @@ def get_next_job(msgbytes):
     statuses_to_process = ('new','requeue')
     QUERY_SIZE=10   
     
-    dblock.acquire()
+    #dblock.acquire()
    # active_jobsets = itertools.cycle(JobSet.objects.filter(active=True).order_by('-priority'))
     active_jobsets = JobSet.objects.filter(active=True).order_by('-priority').iterator()
-    dblock.release()
+    #dblock.release()
     
     def job_generator():
         jobset = active_jobsets.next()
         logger.debug("Looking at jobs in set: %s" % str(jobset))
         query_offset=0
         while True: # This won't generate infinitely because when we run out of jobsets, StopIteration exception will be raised
-            dblock.acquire()
+            #dblock.acquire()
             qt0 = datetime.now()
             jobs = list( jobset.jobs.filter(status__in=statuses_to_process).order_by('transaction_id'))[query_offset:query_offset + QUERY_SIZE] 
-            dblock.release()
+            #dblock.release()
             logger.debug("Got %d %s jobs from the DB in %s." % (len(jobs), str(jobset), str(datetime.now() - qt0)  ))
             if len(jobs) > 0:
                 for job in jobs:
@@ -177,11 +177,6 @@ def get_next_job(msgbytes):
         return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
     t1 = datetime.now()
     logger.debug("Found usable job in %d iterations (%s)" % ( i, str(t1-t0) ) )
-    if options.show_queries:
-        # print the slowest queries
-        from django.db import connection
-        from pprint import pprint
-        pprint([q for q in connection.queries if float(q['time']) > 0.01])
             
     job = preprocess_job(job)
     response = {
@@ -193,10 +188,15 @@ def get_next_job(msgbytes):
     logger.info("Sending job %s to reaper %s (%s)" % (job.uuid[:8], request.reaper_uuid[:8], str(datetime.now() - t1)))
     job.status = "dispatched"
     job.processor = request.reaper_uuid
-    dblock.acquire()
+    #dblock.acquire()
     job.save()
     job = None
-    dblock.release()
+    #dblock.release()
+    if options.show_queries:
+        # print the slowest queries
+        from django.db import connection
+        from pprint import pprint
+        pprint([q for q in connection.queries if float(q['time']) > 0.001])
     return protocols.pack(protobuf.ReaperJobResponse, response)
     
 ####
