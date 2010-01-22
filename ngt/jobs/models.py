@@ -5,38 +5,52 @@ else:
     from django.db import models
 import os, time, hashlib, datetime
 import uuid
-from ngt.messaging.messagebus import MessageBus
 import json
-from ngt import protocols
-from ngt.protocols import protobuf
 #from ngt.assets.models import Asset, DATA_ROOT
 
 import logging
 logger = logging.getLogger('job_models')
 
-messagebus = MessageBus()
-
-messagebus.channel.exchange_declare(exchange="Job_Exchange", type="direct", durable=True, auto_delete=False,)
-messagebus.channel.queue_declare(queue='reaper.generic', auto_delete=False)
-messagebus.channel.queue_bind(queue='reaper.generic', exchange='Job_Exchange', routing_key='reaper.generic')
-"""
-# RPC Service to dispatch
-REPLY_QUEUE_NAME = 'jobmodels'
-JOB_EXCHANGE_NAME = 'Job_Exchange'
-chan.queue_declare(queue=self.REPLY_QUEUE_NAME, durable=False, auto_delete=True)
-chan.queue_bind(self.REPLY_QUEUE_NAME, self.JOB_EXCHANGE_NAME, routing_key=self.REPLY_QUEUE_NAME)
-dispatch_rpc_channel = protocols.rpc_services.RpcChannel(self.JOB_EXCHANGE_NAME, self.REPLY_QUEUE_NAME, 'dispatch')
-dispatch = protobuf.DispatchCommandService_Stub(dispatch_rpc_channel)
-amqp_rpc_controller = protocols.rpc_services.AmqpRpcController()
-"""
-
 class Job(models.Model):
+
+    ###
+    # Status Enumeration
+    class StatusEnum(object):
+        NEW = 0
+        REQUEUE = 1
+        DISPATCHED = 2
+        PROCESSING = 3
+        COMPLETE = 4
+        FAILED = 5
+        
+    class EnumDescriptor(object):
+        '''
+        A sneaky way to use an enum values without 
+        hunting down and changing all the existing code that gets and sets string values.
+        '''
+        def __init__(self, enum_field_name, enum_class):
+            self.enum_field_name = enum_field_name
+            self.enum_class = enum_class
+        def __get__(self, instance, owner):
+            value = getattr(instance, self.enum_field_name)
+            for k,v in self.enum_class.__dict__.items():
+                if v == value: return k.lower()
+            else:
+                raise ValueError("Value %d not found in %s." % (value, self.enum_class.__name__))
+        
+        def __set__(self, instance, value):
+            setattr(instance, self.enum_field_name, getattr(self.enum_class, value.upper()))
+    #
+    ###
+    
     uuid = models.CharField(max_length=32, null=True)
     jobset = models.ForeignKey('JobSet', related_name="jobs")
     transaction_id = models.IntegerField(null=True)
     command = models.CharField(max_length=64)
     arguments = models.TextField(default='') # an array seriaized as json
-    status = models.CharField(max_length=32, default='new')
+    #status = models.CharField(max_length=32, default='new')
+    status_enum = models.IntegerField(db_column='status_int', default=0)
+    status = EnumDescriptor('status_enum', StatusEnum)
     processor = models.CharField(max_length=32, null=True, default=None)
     assets = models.ManyToManyField('assets.Asset', related_name='jobs')
     output = models.TextField(null=True)
@@ -44,6 +58,7 @@ class Job(models.Model):
     time_started = models.DateTimeField(null=True, default=None)
     time_ended = models.DateTimeField(null=True, default=None)
     pid = models.IntegerField(null=True)
+    ended = models.BooleanField(default=False)
     
     dependencies = models.ManyToManyField('Job', symmetrical=False)
     
@@ -64,41 +79,18 @@ class Job(models.Model):
     @property
     def command_string(self):
         return self.command + ' ' + ' '.join(json.loads(self.arguments))
-        
-    def ended(self):
-        ''' Return True if the job has run and met and end condition, False otherwise. '''
-        end_statuses = ('complete', 'failed', 'ended')
-        if self.status in end_statuses:
-            return True
-        else:
-            return False
+       
             
     def dependencies_met(self):
         ''' 
             Return True if all dependencies are met, False otherwise.
             A dependency is met if the depending job has ended.
         '''
-        onedep_qset = self.dependencies.order_by('-transaction_id')[0:1]
-        if not onedep_qset:
-            return True # no dependencies
-        elif not self.dependencies.order_by('-transaction_id')[0].ended():
+        if self.dependencies.filter(ended=False):
             return False
         else:
-            return all([ dep.ended() for dep in self.dependencies.all() ])
+            return True
     
-    def enqueue(self):
-        cmd = {
-            'uuid': self.uuid,
-            'command': self.command,
-            'args': json.loads(self.arguments)
-        }
-        message_body = protocols.pack(protobuf.Command, cmd)
-        self.status = 'queued'
-        logger.debug("job.enqueue: about to save record")
-        self.save()
-        logger.debug("job.enqueue: record saved. Publishing to wire.")   
-        messagebus.publish(message_body, exchange='Job_Exchange', routing_key='reaper.generic') #routing key is the name of the intended reaper type
-        print "Enqueued %s" % self.uuid
         
     def spawn_output_asset(self):
         """ Creates a new asset record for the job's output file. 
@@ -123,7 +115,13 @@ class Job(models.Model):
 def set_uuid(instance, **kwargs):
     if not instance.uuid:
         instance.uuid = instance._generate_uuid()
+def set_ended(instance, **kwargs):
+    if instance.status in ('complete','failed','ended'):
+        instance.ended = True
+    else:
+        instance.ended = False
 models.signals.pre_save.connect(set_uuid, sender=Job)
+models.signals.pre_save.connect(set_ended, sender=Job)
 
 class JobSet(models.Model):
     name = models.CharField(max_length=256)
@@ -155,10 +153,10 @@ class JobSet(models.Model):
     def execute(self):
         #self.simple_populate()
         self.status = "dispatched"
-        for job in self.jobs.filter(status='new'):
+        for job in self.jobs.filter(status_enum=Job.StatusEnum.NEW):
             job.enqueue()
     def reset(self):
-        self.jobs.update(status='new')
+        self.jobs.update(status_enum=Job.StatusEnum.NEW)
 
     ####
     # Convenience Methods for jobset wrangling.
@@ -187,18 +185,8 @@ class JobSet(models.Model):
         print "%s deactivated." % str(js)
             
 def active_jobsets():
-    return [(js, js.jobs.count(), js.jobs.filter(status='new').count(), js.active) for js in JobSet.objects.filter(active=True)]
+    return [(js, js.jobs.count(), js.jobs.filter(status_enum=Job.StatusEnum.NEW).count()) for js in JobSet.objects.filter(active=True)]
 
 
 from ngt.assets.models import Asset, DATA_ROOT # putting this here helps avoid circular imports
 
-"""
-I'd like jobs to be populated from the JobSet's properties by a post-save signal...
-But this won't work because the related objects in jobbatch.assests don't get created until after the post_save signal has fired.
-
-def populate_jobs(instance, created, **kwargs):
-    print "populate_jobs fired: %s" % str(created)
-    if created:
-        instance.simple_populate() #just one asset per job, for now.
-models.signals.post_save.connect(populate_jobs, sender=JobSet)
-"""

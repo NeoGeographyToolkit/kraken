@@ -2,17 +2,20 @@
 import sys, logging, threading, os, atexit, time, optparse
 from datetime import datetime
 import itertools, traceback, json
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))    
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+
 #from ngt.protocols import * # <-- dotdict, pack, unpack
 import ngt.protocols as protocols
-from ngt.protocols import protobuf, dotdict
+from ngt.protocols import protobuf, dotdict, rpc_services
+
+from ngt.messaging import messagebus
 from ngt.messaging.messagebus import MessageBus
 from amqplib.client_0_8 import Message
-
 logger = logging.getLogger('dispatch')
 logger.setLevel(logging.INFO)
 #logging.getLogger().setLevel(logging.DEBUG)
 #logging.getLogger('protocol').setLevel(logging.DEBUG)
+
 
 
 mb = MessageBus()
@@ -56,7 +59,8 @@ logger.debug("jobcommand_map initialized: %s" % str(jobcommand_map))
 logger.debug("Valid jobcommands:")
 for k in jobcommand_map.keys():
     logger.debug(k)
-assert 'mosaic' in jobcommand_map # TODO: delete this assert
+
+
 
 ###
 # COMMANDS
@@ -125,28 +129,48 @@ def postprocess_job(job, state):
         logger.debug("Skipping postprocessing because the job's command is not in jobcommand_map.")
         return job
 
+def generate_jobs():
+    statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
+    QUERY_LIMIT=50
+    job_cache = []
+    prev_jobs = set()
+    while True:
+        if job_cache:
+            yield job_cache.pop(0)
+        else:
+            for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
+                jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id')[:QUERY_LIMIT]
+                for job in jobs:
+                    job_cache.append(job)
+            set_job_cache = set(job_cache)
+            if not job_cache or set_job_cache == prev_jobs:  # The latter condition means all the jobs we've retrieved are unrunnable for some reason.
+                raise StopIteration
+            
+            prev_jobs = set_job_cache
+    
+
+job_generator = generate_jobs()
 
 def get_next_job(msgbytes):
     t0 = datetime.now()
     logger.debug("Looking for the next job.")
     request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
-    statuses_to_process = ('new','requeue')
-    QUERY_SIZE=10   
+    #statuses_to_process = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
+    #QUERY_SIZE=10   
     
-    dblock.acquire()
-   # active_jobsets = itertools.cycle(JobSet.objects.filter(active=True).order_by('-priority'))
-    active_jobsets = JobSet.objects.filter(active=True).order_by('-priority').iterator()
-    dblock.release()
-    
+    #dblock.acquire()
+    #active_jobsets = JobSet.objects.filter(active=True).order_by('-priority').iterator()
+    #dblock.release()
+    '''
     def job_generator():
         jobset = active_jobsets.next()
         logger.debug("Looking at jobs in set: %s" % str(jobset))
         query_offset=0
         while True: # This won't generate infinitely because when we run out of jobsets, StopIteration exception will be raised
-            dblock.acquire()
+            #dblock.acquire()
             qt0 = datetime.now()
-            jobs = list( jobset.jobs.filter(status__in=statuses_to_process).order_by('transaction_id'))[query_offset:query_offset + QUERY_SIZE] 
-            dblock.release()
+            jobs = list( jobset.jobs.filter(status_enum__in=statuses_to_process).order_by('transaction_id'))[query_offset:query_offset + QUERY_SIZE] 
+            #dblock.release()
             logger.debug("Got %d %s jobs from the DB in %s." % (len(jobs), str(jobset), str(datetime.now() - qt0)  ))
             if len(jobs) > 0:
                 for job in jobs:
@@ -158,9 +182,10 @@ def get_next_job(msgbytes):
                 logger.debug("Switching to JobSet %s" % str(jobset))
                 query_offset=0
                 #time.sleep(0.1) # so we don't hammer the db with empty requests
+    '''
     
     i = 0
-    for job in job_generator():
+    for job in job_generator:
         i += 1
         logger.debug("Checking job %d" % i)
         if check_readiness(job):
@@ -173,11 +198,6 @@ def get_next_job(msgbytes):
         return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
     t1 = datetime.now()
     logger.debug("Found usable job in %d iterations (%s)" % ( i, str(t1-t0) ) )
-    if options.show_queries:
-        # print the slowest queries
-        from django.db import connection
-        from pprint import pprint
-        pprint([q for q in connection.queries if float(q['time']) > 0.01])
             
     job = preprocess_job(job)
     response = {
@@ -189,10 +209,15 @@ def get_next_job(msgbytes):
     logger.info("Sending job %s to reaper %s (%s)" % (job.uuid[:8], request.reaper_uuid[:8], str(datetime.now() - t1)))
     job.status = "dispatched"
     job.processor = request.reaper_uuid
-    dblock.acquire()
+    #dblock.acquire()
     job.save()
     job = None
-    dblock.release()
+    #dblock.release()
+    if options.show_queries:
+        # print the slowest queries
+        from django.db import connection
+        from pprint import pprint
+        pprint([q for q in connection.queries if float(q['time']) > 0.001])
     return protocols.pack(protobuf.ReaperJobResponse, response)
     
 ####
@@ -279,64 +304,18 @@ def job_ended(msgbytes):
         logger.warning("A job ended that was assigned to an unregistered reaper %s.  Probably not good." % request.reaper_id)
         
         
+    if request.state == 'complete' and job.creates_new_asset:
+        try:
+            job.spawn_output_asset()
+        except:
+            logger.error("ASSET CREATION FAILED FOR JOB %s" % job.uuid)
+            sys.excepthook(*sys.exc_info())
+            job.status = "asset_creation_fail"
+            job.save()
+            
     dblock.release()
+    
     return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
-
-def update_status(msgbytes):
-    '''
-    Update the status of a job based on data from a serialized protocol buffer binary string.
-    '''
-    job_completers = ('complete','failed')
-    request = protocols.unpack(protobuf.JobStatus, msgbytes)
-    logger.info("Setting status of job %s to '%s'." % (request.job_id, request.state))
-    try:
-        job = Job.objects.get(uuid=request.job_id)
-        job.status = request.state
-        #if job.processor and job.processor != request.reaper_id:
-            #logger.warning("Status update for job %s came from a different reaper than we expected.  This jobs processor attribute will be set to the latest reaper that reported." % job.uuid)
-        job.processor = request.reaper_id # set once, then call verify_reaper_id
-        if 'output' in request:
-            job.output = request.output
-        dblock.acquire()
-        job.save()
-        dblock.release()
-        if 'reaper_id' in request and request['reaper_id']:
-            try:
-                r = Reaper.objects.get(uuid=request.reaper_id)
-                if request.state in job_completers:
-                    r.jobcount += 1
-                    dblock.acquire()
-                    r.save()
-                    dblock.release()
-            except Reaper.DoesNotExist:
-                # <shrug> Log a warning, register the reaper, and increment its jobcount
-                logger.warning("Dispatch received a status message from unregistered reaper %s.  Probably not good." % request['reaper_id'])
-                register_reaper(protocols.pack(protobuf.ReaperRegistrationRequest, {'reaper_uuid':request.reaper_id, 'reaper_type':'generic'}))
-                r = Reaper.objects.get(uuid=request.reaper_id)
-                if request.state in job_completers:
-                    r.jobcount += 1
-                    dblock.acquire()
-                    r.save()
-                    dblock.release()
-        if request.state in job_completers:
-            # TODO: call post_process_job here... move asset creation don the call stack...
-            if request.state == 'complete' and job.creates_new_asset:
-                try:
-                    dblock.acquire()
-                    job.spawn_output_asset()
-                    dblock.release()
-                except:
-                    logger.error("ASSET CREATION FAILED FOR JOB %s" % job.uuid)
-                    sys.excepthook(*sys.exc_info())
-                    job.status = "asset_creation_fail"
-                    dblock.acquire()
-                    job.save()
-                    dblock.release()
-        postprocess_job(job, request.state)
-        return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
-    except Job.DoesNotExist:
-        logger.error("Couldn't find a job with uuid %s on status update." % request.uuid)
-        return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.NOACK})
     
 ###
 # Handlers
@@ -376,12 +355,6 @@ def command_handler(msg):
     response_bytes = protocols.pack(protobuf.RpcResponseWrapper, response)
     mb.basic_publish(Message(response_bytes), routing_key=request.requestor)
         
-def status_handler(msg):
-    logger.debug("GOT STATUS: %s" % msg.body)
-    if update_status(msg.body):
-        mb.basic_ack(msg.delivery_info['delivery_tag'])
-    else:
-        logger.error("STATUS MESSAGE FAILED: %s" % msg.body)
     
 def consume_loop(mb, shutdown_event):
     logger.debug("Starting dispatch consume loop.")
@@ -397,9 +370,6 @@ def _shutdown(*args):
     sys.exit(1)
     
 def shutdown():
-    # payload = protocols.pack(protocols.Command, {'command':'shutdown'})
-    # print "sending ", payload
-    # mb.channel.basic_publish(Message(payload), exchange='Control_Exchange', routing_key='dispatch')
     _shutdown()
 
 
@@ -428,18 +398,12 @@ def init():
     mb.queue_bind(queue=CONTROL_QUEUE, exchange='Control_Exchange', routing_key='dispatch')
     command_ctag = mb.basic_consume(callback=command_handler, queue=CONTROL_QUEUE)
 
-    # setup status queue
-    logger.debug("Setting up status listener.")
-    mb.exchange_declare('Status_Exchange', type='fanout')
-    mb.queue_declare('status.dispatch', auto_delete=False)
-    mb.queue_bind(queue='status.dispatch', exchange='Status_Exchange', routing_key='dispatch')
-    status_ctag = mb.basic_consume(callback=status_handler, queue='status.dispatch')
-
     logger.debug("Launching consume thread.")
     mb.start_consuming()
 
 
 if __name__ == '__main__':
+    logger.debug("__name__ == '__main__'")
     global options
     parser = optparse.OptionParser()
     parser.add_option('-r', '--restart', dest="restart", action='store_true', help="Don't purge the control queue.")
@@ -450,6 +414,7 @@ if __name__ == '__main__':
     
     if options.debug:
         logger.setLevel(logging.DEBUG)
+    logger.debug("Starting init()")
     init()
     try:
         while True:
@@ -461,3 +426,4 @@ if __name__ == '__main__':
         logger.info("Got a keyboard interrupt.  Shutting down dispatch.")
         shutdown()
         sys.exit(0)
+

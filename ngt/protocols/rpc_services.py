@@ -4,16 +4,16 @@ import google.protobuf
 from google.protobuf.service import RpcController as _RpcController, Service
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 from ngt import protocols
-from ngt.messaging.messagebus import MessageBus, amqp
+from ngt.messaging.messagebus import MessageBus, amqp, connection as mb_connection, ConsumptionThread
 import logging
 logging.basicConfig()
 logger = logging.getLogger('amqprpc')
 logger.setLevel(logging.INFO)
 logger.debug("Testing logger.")
 
-class SanityError(Exception):
-    ''' Raise this when things that should never happen happen. '''
-    pass
+#class SanityError(Exception):
+#    ''' Raise this when things that should never happen happen. '''
+#    pass
 
 class AmqpRpcController(_RpcController):
 
@@ -22,11 +22,10 @@ class AmqpRpcController(_RpcController):
   This RpcController implementation can mediate method calls via amqp.
   """
   
-  def __init__(self, timeout_ms=5000):
+  def __init__(self):
       self.m_failed = False
       self.m_failed_reason = ''
       self.m_timeout_flag = False
-      self.m_timeout_millis = timeout_ms # 5 Seconds
 
   # Client-side methods below
 
@@ -127,12 +126,13 @@ class RpcChannel(object):
     MyService service = MyService_Stub(channel)
     service.MyMethod(controller, request, callback)
   """
-  def __init__(self, exchange, response_queue, request_routing_key, max_retries=0):
+  def __init__(self, exchange, response_queue, request_routing_key, max_retries=0, timeout_ms=5000):
       self.exchange = exchange
       self.response_queue = response_queue
       self.request_routing_key = request_routing_key
       self.messagebus = MessageBus()
       self.max_retries = max_retries # maximum number of times to retry on RPC timeout
+      self.timeout_ms = timeout_ms
       
       self.sync_sequence_number = 0
       
@@ -140,6 +140,7 @@ class RpcChannel(object):
       self.messagebus.exchange_declare(exchange, 'direct')
       #self.messagebus.queue_delete(queue=response_queue) # clear it in case there are backed up messages (EDIT: it *should* autodelete)
       self.messagebus.queue_declare(queue=response_queue, auto_delete=True)
+      self.messagebus.queue_purge(response_queue)
       self.messagebus.queue_bind(response_queue, exchange, routing_key=response_queue)
       logger.debug("Response queue '%s' is bound to key '%s' on exchange '%s'" % (response_queue, response_queue, exchange))
       
@@ -180,7 +181,7 @@ class RpcChannel(object):
         t0 = datetime.now()
         while not response:
             delta_t = datetime.now() - t0
-            if delta_t.seconds * 1000 + delta_t.microseconds / 1000 > rpc_controller.m_timeout_millis:
+            if delta_t.seconds * 1000 + delta_t.microseconds / 1000 > self.timeout_ms:
                 timeout_flag = True
                 break
             response = self.messagebus.basic_get(self.response_queue, no_ack=True) # returns a message or None
@@ -199,7 +200,7 @@ class RpcChannel(object):
                     done(None)
                 return None
         else:
-            logger.debug("Got some sort of response")
+            logger.info("Got a response in %s" % str(datetime.now() - t0))
             try_again = False
         
             response_wrapper = protocols.unpack(protocols.RpcResponseWrapper, response.body)
@@ -221,3 +222,179 @@ class RpcChannel(object):
         if done:
             done(response)
         return response
+
+class AmqpService(object):
+    '''
+    A wrapper class that takes care of the business of initialization:
+        - Creates an RpcChannel with the given parameters
+        - Instantiates a protobuf service of the given class
+        - Delegates further attribute access to the Service instance.
+        
+    '''
+    class ParameterMissing(Exception):
+        pass
+        
+    def __init__(self, 
+        #pb_service_class=None,
+        amqp_channel=None,
+        exchange='Control_Exchange',
+        request_routing_key=None,
+        reply_queue=None,
+        timeout_ms=5000,
+        max_retries=3):
+        
+        self.amqp_channel = amqp_channel or MessageBus().channel
+        self.exchange = exchange
+        
+        # Required parameters:
+        for param in ('reply_queue', 'request_routing_key'):
+            if locals()[param]:
+                setattr(self, param, locals()[param])
+            else:
+                raise AmqpService.ParameterMissing("%s is a required parameter." % param)
+                
+        self.rpc_channel = RpcChannel(self.exchange, self.reply_queue, 'dispatch', max_retries=3, timeout_ms=timeout_ms)
+        #self.rpc_service = service_stub_class(self.rpc_channel)
+        self.amqp_rpc_controller = AmqpRpcController()
+        
+    def _rpc_failure(self):
+        '''Should be called when RPC calls fail (i.e. return value == None)'''
+        if self.amqp_rpc_controller.TimedOut():
+                self.logger.error("RPC request timed out.")
+        elif self.amqp_rpc_controller.Failed():
+                self.logger.error("Error in RPC: " + str(self.amqp_rpc_controller.ErrorText()))
+        else:
+            assert False # If this happens, we're missing a failure state.
+        self.amqp_rpc_controller.Reset()
+   
+    # Delegate other attribute access to protobuf rpc_service instance
+    #def __getattr__(self, name):
+    #    return object.__getattribute__(self.rpc_service, name)
+        
+class AmqpRpcEndpoint(object):
+
+    class ParameterMissing(Exception):
+        pass
+        
+    def __init__(self, 
+            connection=None,
+            exchange=None, 
+            queue=None,
+            default_timeout = 3000, # milliseconds
+            ):
+
+        for param in ('exchange', 'queue'):
+            if not getparam(self, param, None):
+                raise ParameterMissing("%s is a required parameter" % param)
+
+        if connection:
+            self.connection = connection
+        else:
+            self.connection = mb_connection # defined in the messaging.messagebus module
+            
+        self.amqp_channel =  self.connection.channel()
+        
+        self.amqp_channel.exchange_declare(exchange, 'direct')
+        self.amqp_channel.queue_declare(queue, auto_delete=True)
+        
+        self.incoming_messages = Queue()
+        self.consumption_thread = ConsumptionThread(connection=self.connection)
+        self.consumption_thread.set_callback(queue=self.queue, callback=self.incoming_message_callback, no_ack=True)
+        self.consumption_thread.start()
+    
+    def serialize_message(self, pb_message):
+        ''' Serializes a protobuf message into an array of bytes, ready for transport '''
+        bytes = pb_message.SerializeToString()
+        return bytes
+        
+    def parse_message(self, messageclass, bytes):
+        ''' Parse an array of bytes into a protobuf message. '''
+        message = messageclass()
+        message.ParseFromString(bytes)
+        return message
+        
+    def send_message(self, message, routing_key):
+        ''' Serialize and send a protobuf message along a specified AMQP route '''
+        self.messagebus.publish(self.serialize_message(message), exchange=self.exchange, routing_key=routing_key)
+        
+    def get_message(self,messageclass, timeout=-2):
+        '''
+            Read and deserialize a protobuf message from the wire.
+            For timeout, -2 means "use default", -1 means "none", and anything
+            else means "timeout" milliseconds
+        '''
+        bytes = self.get_bytes(timeout=timeout)
+        self.parse_message(messageclass, bytes)
+        return message
+        
+    def send_bytes(self, bytes, routing_key):
+        ''' Send an array of bytes along a specified AMQP route '''
+        self.amqp_channel.basic_publish(bytes, exchange=self.exchange, routing_key=routing_key)
+        
+    def incoming_message_callback(self, msg):
+        self.incoming_messages.put(msg)
+    
+    def get_bytes(self, timeout = -2):
+        '''
+        Get an array of bytes from the incoming queue.
+        For timeout, -2 means "use default", -1 means "none", and anything
+        else means "timeout" milliseconds
+        '''
+        if timeout == -1:
+            return self.incoming_messages.get()
+        if timeout == -2:
+            timeout = self.default_timeout
+        return self.incoming_messages.get(True, timeout / 1000)
+        
+    def bind_service(self, pb_service, routing_key):
+        ''' Bind an rpc service to a specified routing key '''
+        self.service = pb_service
+        self.routing_key = routing_key
+        self.amqp_channel.queue_bind(self.queue, self.exchange, routing_key=self.routing_key)
+        
+    def unbind_service(self):
+        raise NotImplementedError
+    
+    def incoming_message_queue_size(self):
+        ''' NOTE: qsize() is approximate. '''
+        return self.incoming_messages.qsize()
+        
+    def Reset(self):
+        raise NotImplementedError
+        
+# Attribute setters are not so useful in python.
+#    def set_default_timeout(self, timeout = -1):
+#        ''' Change the default global timeout. -1 means "no timeout" '''
+#        self.default_timeout = timeout
+        
+    def Failed(self):
+        raise NotImplementedError
+        
+class AmqpRpcClient(AmqpRpcEndpoint):
+    def CallMethod( method_descriptor,
+                    rpc_controller,
+                    request,
+                    response,
+                    done):
+        pass
+                    
+    
+class AmqpRpcServer(AmqpRpcEndpoint):
+    def __init__(
+        amqp_channel = None
+        
+    ):
+        self.terminate = False
+        self.queries_processed = 0
+        self.bytes_processed = 0
+        
+    def run(self):
+        pass
+    
+    def shutdown(self):
+        self.terminate = True
+        
+    def reset_stats(self):
+        self.stats.reset()
+        
+    pass

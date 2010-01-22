@@ -4,23 +4,16 @@ message Command {
     repeated string args = 3; 
 }
 
-message JobStatus{
-    optional string job_id = 1;
-    optional string state = 2;
-    optional string reaper_id = 3;
-    optional string output = 4;
-}
-
 
 // ---------------------------------
 // Service definition
 // ---------------------------------
 
 message RpcRequestWrapper {
-  required string requestor = 1;
-  required string method = 2;
-  required bytes payload = 3;
-  required uint32 sequence_number = 4;
+    required uint32 sequence_number = 1;
+    required string requestor = 2;
+    required string method = 3;
+    required bytes payload = 4;
 }
 
 message RpcResponseWrapper {
@@ -37,13 +30,6 @@ message AckResponse {
     }
     optional AckState ack = 1 [default = ACK];
 }
-
-message BroxtonRequestWrapper {
-    required uint32 sequence_number = 1;
-    required string requestor = 2;
-    required string method = 3;
-    required bytes payload = 4;
-    }
 
 // #####
 // # Index Server Communication
