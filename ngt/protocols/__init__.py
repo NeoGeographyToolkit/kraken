@@ -19,7 +19,7 @@ class dotdict(dict):
 ###
 
 def pack(msgclass, data):
-    """ Convert a the data in dict 'data' to a protocol buffer Message of type 'msgclass'
+    """ Convert the data in dict 'data' to a protocol buffer Message of type 'msgclass'
         Returns the serialized message.
     """
     msg = msgclass()
