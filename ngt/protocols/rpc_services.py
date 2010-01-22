@@ -167,6 +167,7 @@ class RpcChannel(object):
     #print ' '.join([hex(ord(c))[2:] for c in request_wrapper])
     
     try_again = True
+    retries = 0
     while try_again:
         logger.debug("About to publish to exchange '%s' with key '%s'" % (self.exchange, self.request_routing_key))
         self.messagebus.basic_publish(amqp.Message(wrapped_request_bytes),
@@ -176,7 +177,7 @@ class RpcChannel(object):
         # Wait for a response
         logger.debug("Waiting for a response on queue '%s'" % self.response_queue)
         response = None
-        retries = 0    
+        #retries = 0
         timeout_flag = False
         t0 = datetime.now()
         while not response:
@@ -205,11 +206,15 @@ class RpcChannel(object):
         
             response_wrapper = protocols.unpack(protocols.RpcResponseWrapper, response.body)
             if response_wrapper.sequence_number and response_wrapper.sequence_number != self.sync_sequence_number:
-                errtext = "Response out of sequence.  Purging the response queue and retrying"
+                errtext = "Response out of sequence.  Purging the response queue."
                 logger.error(errtext)
                 self.messagebus.queue_purge(queue=self.response_queue) # clear the response queue and try again
-                try_again = True
-                continue # out to try_again loop.  resets timer
+                if retries < self.max_retries:
+                    retries += 1
+                    try_again = True
+                    continue # out to try_again loop.  resets timer
+                else:
+                    return None
             if response_wrapper.error:
                 logger.error("RPC response error: %s" % response_wrapper.error_string)
                 rpc_controller.SetFailed(response_wrapper.error)
@@ -240,7 +245,7 @@ class AmqpService(object):
         exchange='Control_Exchange',
         request_routing_key=None,
         reply_queue=None,
-        timeout_ms=5000,
+        timeout_ms=3000,
         max_retries=3):
         
         self.amqp_channel = amqp_channel or MessageBus().channel

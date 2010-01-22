@@ -31,27 +31,11 @@ RPC_RETRIES = 3 # number of times to retry on RPC timeouts
 
 class Reaper(object):
 
-    commands = {
-        'test': '../messaging/fake_command.py',
-        'test_fjord': '../messaging/fake_command.py',
-        'test_bjorn': '../messaging/fake_command.py',
-        'moc-stage': os.path.join(COMMAND_PATH, 'moc_stage.py'), # convert and map-project MOC images
-        'scale2int8': os.path.join(COMMAND_PATH, 'scale2int8.py'), 
-        'mosaic': '/big/software/visionworkbench/bin/image2plate',
-        'mipmap': '/big/software/visionworkbench/bin/image2plate',
-        'snapshot': '/big/software/visionworkbench/bin/snapshot',
-        'start_snapshot': '/big/software/visionworkbench/bin/snapshot',
-        'end_snapshot': '/big/software/visionworkbench/bin/snapshot',
-#        'mipmap': '/big/scratch/logargs.py image2plate',
-#        'snapshot': '/big/scratch/logargs.py snapshot',
-#        'start_snapshot': '/big/scratch/logargs.py start_snapshot',
-#        'end_snapshot': '/big/scratch/logargs.py end_snapshot',
-    }
     JOB_POLL_INTERVAL = 1 #seconds
-
 
     REAPER_TYPE = 'generic'
     CONTROL_EXCHANGE_NAME = 'Control_Exchange'
+    commands = {}
 
 
     def __init__(self):
@@ -196,14 +180,10 @@ class Reaper(object):
                 self.logger.info("Unregistering with dispatch.")
                 self.unregister_with_dispatch()
             self.logger.debug("Waiting for job loop to end.")
+            #self.job_loop.exit()
             self.job_loop.join()
-            del self.amqp_rpc_controller
             del self.dispatch
-            del self.dispatch_rpc_channel
-            self.chan.queue_delete(queue=self.CONTROL_QUEUE_NAME, if_unused=False, if_empty=False)
-            self.chan.queue_delete(queue=self.REPLY_QUEUE_NAME)
-            self.chan.connection.close()
-            self.chan.close()
+
 #    def _sig_shutdown(self, signum, frame):
 #        self.logger.info("Got signal. Shutting down.")
 #        self.shutdown()
@@ -238,11 +218,34 @@ class Reaper(object):
             self.shutdown()
         #self.shutdown()
             
+def init_reaper_commands():
+    Reaper.commands = {
+        'test': '../messaging/fake_command.py',
+        'test_fjord': '../messaging/fake_command.py',
+        'test_bjorn': '../messaging/fake_command.py',
+        'moc-stage': os.path.join(COMMAND_PATH, 'moc_stage.py'), # convert and map-project MOC images
+        'scale2int8': os.path.join(COMMAND_PATH, 'scale2int8.py'), 
+        'mosaic': '/big/software/visionworkbench/bin/image2plate',
+        'mipmap': '/big/software/visionworkbench/bin/image2plate',
+        'snapshot': '/big/software/visionworkbench/bin/snapshot',
+        'start_snapshot': '/big/software/visionworkbench/bin/snapshot',
+        'end_snapshot': '/big/software/visionworkbench/bin/snapshot',
+    }
+    if options.noop:
+        print "Running in no-op mode."
+        Reaper.commands.update({
+        'mipmap': '/big/scratch/logargs.py image2plate',
+        'snapshot': '/big/scratch/logargs.py snapshot',
+        'start_snapshot': '/big/scratch/logargs.py start_snapshot',
+        'end_snapshot': '/big/scratch/logargs.py end_snapshot',
+        })
+
 if __name__ == '__main__':
     import optparse
     global options
     parser = optparse.OptionParser()
     parser.add_option('--debug', dest='debug', action='store_true', help="Print debug statements")
+    parser.add_option('--noop', dest='noop', action='store_true', default='false', help='Only pretent to run mipmap and snapshot jobs.')
     (options, args) = parser.parse_args()
     del optparse
     if options.debug:
@@ -250,6 +253,7 @@ if __name__ == '__main__':
     else:
         loglevel = logging.INFO
     logging.basicConfig(stream=sys.stdout, level=loglevel)
+    init_reaper_commands()
     r = Reaper()
     r.launch()
 
