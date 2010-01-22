@@ -75,6 +75,8 @@ def register_reaper(msgbytes):
     try:
         r = Reaper.objects.get(uuid=request.reaper_uuid) # will get deleted or expired reapers, too
         logger.info("Reaper %s exists.  Resurrecting." % request.reaper_uuid[:8])
+        if 'hostname' in request:
+            r.hostname = request.hostname
         r.deleted = False
         r.expired = False
         dblock.acquire()
@@ -82,6 +84,8 @@ def register_reaper(msgbytes):
         dblock.release()
     except Reaper.DoesNotExist:
         r = Reaper(uuid=request.reaper_uuid, type=request.reaper_type)
+        if 'hostname' in request:
+            r.hostname = request.hostname
         dblock.acquire()
         r.save()
         dblock.release()

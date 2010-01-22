@@ -172,8 +172,11 @@ class Reaper(object):
         self.logger.debug("Sent response to a control command (%s)" % request.method)
 
     def register_with_dispatch(self):
+        import socket
+        hostname = socket.gethostname()
+        del socket
         
-        if self.dispatch.register_reaper(self.reaper_id, self.REAPER_TYPE):
+        if self.dispatch.register_reaper(self.reaper_id, self.REAPER_TYPE, hostname=hostname):
             self.logger.info("Registration successful")
             self.is_registered = True
         else:
