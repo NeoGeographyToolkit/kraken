@@ -383,6 +383,11 @@ def init():
     global command_ctag, status_ctag, thread_consume_loop, shutdown_event
     shutdown_event = threading.Event()
     logging.getLogger('messagebus').setLevel(logging.DEBUG)
+
+    if options.requeue_lost_jobs:
+        logger.info("Resetting lost jobs.")
+        for js in JobSet.objects.filter(active=True):
+            js.jobs.filter(status__in=('dispatched','processing')).update(status='requeue')
     
     atexit.register(shutdown)
     
@@ -408,6 +413,7 @@ if __name__ == '__main__':
     parser.add_option('-r', '--restart', dest="restart", action='store_true', help="Don't purge the control queue.")
     parser.add_option('-d', '--debug', dest='debug', action='store_true', help='Turn on debug logging.')
     parser.add_option('--queries', dest='show_queries', action='store_true', help='Print out the slow queries (django.db.connection.queries)')
+    parser.add_option('--lost-jobs', dest='requeue_lost_jobs', action='store_true', help="Requeue jobs marooned with a 'dispatched' or 'processing' status'.")
     (options, args) = parser.parse_args()
     
     if options.debug:
