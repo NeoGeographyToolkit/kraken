@@ -36,7 +36,8 @@ class Reaper(models.Model):
     last_job_finished = models.DateTimeField(null=True, default=None)
     current_job = models.ForeignKey(Job, null=True)
     status = models.CharField(max_length=128, default='up')
-    ip = models.IPAddressField(null=True)
+    #ip = models.IPAddressField(null=True)
+    hostname = models.CharField(max_length=64, null=True)
     jobcount = models.IntegerField(default=0)
     
     # Soft Deletion and expiration

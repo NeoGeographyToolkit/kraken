@@ -94,10 +94,12 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
             # We're good!
             pass
             
-    def register_reaper(self, reaper_id, reaper_type):
+    def register_reaper(self, reaper_id, reaper_type, hostname=None):
         request = protobuf.ReaperRegistrationRequest()
         request.reaper_uuid = reaper_id
         request.reaper_type = reaper_type
+        if hostname:
+            request.hostname = hostname
         response = self.registerReaper(self.amqp_rpc_controller, request, None)
         try:
             assert response.ack == 0 # ACK

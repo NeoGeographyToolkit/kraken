@@ -47,6 +47,7 @@ message IndexTransactionFailed {
 message ReaperRegistrationRequest{
     required string reaper_uuid = 1;
     optional string reaper_type = 2 [default = "generic"];
+    optional string hostname = 3;
 }
 
 message ReaperUnregistrationRequest{
