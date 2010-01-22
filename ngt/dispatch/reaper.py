@@ -18,7 +18,7 @@ from threading import Event
 #import signal
 
 import logging
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+#logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 #logging.getLogger('messagebus').setLevel(logging.DEBUG)
 
 if os.path.dirname(__file__).strip():
@@ -83,9 +83,7 @@ class Reaper(object):
      
     def job_request_loop(self):
         job = None
-        while True:
-            if self.shutdown_event.is_set():
-                break
+        while not self.shutdown_event.is_set():
             if self.is_registered:
                 self.logger.debug("Requesting job.")
                 job = self.dispatch.get_a_job(self.reaper_id)
@@ -197,6 +195,7 @@ class Reaper(object):
             if self.is_registered:
                 self.logger.info("Unregistering with dispatch.")
                 self.unregister_with_dispatch()
+            self.logger.debug("Waiting for job loop to end.")
             self.job_loop.join()
             del self.amqp_rpc_controller
             del self.dispatch
@@ -240,6 +239,17 @@ class Reaper(object):
         #self.shutdown()
             
 if __name__ == '__main__':
+    import optparse
+    global options
+    parser = optparse.OptionParser()
+    parser.add_option('--debug', dest='debug', action='store_true', help="Print debug statements")
+    (options, args) = parser.parse_args()
+    del optparse
+    if options.debug:
+        loglevel = logging.DEBUG
+    else:
+        loglevel = logging.INFO
+    logging.basicConfig(stream=sys.stdout, level=loglevel)
     r = Reaper()
     r.launch()
 
