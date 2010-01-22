@@ -156,7 +156,7 @@ class JobSet(models.Model):
         for job in self.jobs.filter(status_enum=Job.StatusEnum.NEW):
             job.enqueue()
     def reset(self):
-        self.jobs.update(status_enum=Job.StatusEnum.NEW)
+        self.jobs.update(status_enum=Job.StatusEnum.NEW, ended=False)
 
     ####
     # Convenience Methods for jobset wrangling.
