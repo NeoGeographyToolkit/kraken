@@ -199,7 +199,8 @@ def get_next_job(msgbytes):
         else:
             logger.debug("Job %d rejected by JobCommand for %s" % (i, job.command))
     else:
-        logger.info("No jobs available.")
+        logger.info("No jobs available. job_generator will be reset.")
+        job_generator = generate_jobs() # reset the job generator
         return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
     t1 = datetime.now()
     logger.debug("Found usable job in %d iterations (%s)" % ( i, str(t1-t0) ) )
