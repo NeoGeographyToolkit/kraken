@@ -207,7 +207,7 @@ class RpcChannel(object):
         
             response_wrapper = protocols.unpack(protocols.RpcResponseWrapper, response.body)
             if response_wrapper.sequence_number and response_wrapper.sequence_number != self.sync_sequence_number:
-                errtext = "Response out of sequence.  Purging the response queue."
+                errtext = "Response out of sequence. (Expected %d, got %d)  Purging the response queue." % (self.sync_sequence_number, response_wrapper.sequence_number)
                 logger.error(errtext)
                 self.messagebus.queue_purge(queue=self.response_queue) # clear the response queue and try again
                 if retries < self.max_retries:
@@ -270,6 +270,8 @@ class AmqpService(object):
                 self.logger.error("RPC request timed out.")
         elif self.amqp_rpc_controller.Failed():
                 self.logger.error("Error in RPC: " + str(self.amqp_rpc_controller.ErrorText()))
+                if 'Sync problems' in str(self.amqp_rpc_controller.ErrorText()):
+                    raise Exception("Sync error caused RPC Failure!")
         else:
             assert False # If this happens, we're missing a failure state.
         self.amqp_rpc_controller.Reset()
