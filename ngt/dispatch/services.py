@@ -58,8 +58,9 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
         response = self.jobStarted(self.amqp_rpc_controller, request, None)
         if not response:
             self._rpc_failure()
+            return None
             # TODO: cancel the job?  fail the job? sleep and retry?
-        self.logger.debug("ACK response: %d" % response.ack)
+        #self.logger.debug("ACK response: %d" % response.ack)
         if response.ack == protobuf.AckResponse.NOACK: 
             # this is bad.  something happened on the server side.  probably invalid job_id
             errorstr = "Got Negative ACK trying to report job start. (job uuid: %s)" % job.uuid
@@ -83,6 +84,7 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
         response = self.jobEnded(self.amqp_rpc_controller, request, None)
         if not response:
             self._rpc_failure()
+            return None
             # TODO: cancel the job?  fail the job? sleep and retry?
         if response.ack == protobuf.AckResponse.NOACK: 
             # this is bad.  something happened on the server side.  probably invalid job_id
