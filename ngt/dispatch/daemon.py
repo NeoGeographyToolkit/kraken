@@ -143,7 +143,7 @@ def generate_jobs():
             yield job_cache.pop(0)
         else:
             for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
-                jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id')[:QUERY_LIMIT]
+                jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:QUERY_LIMIT]
                 for job in jobs:
                     job_cache.append(job)
             set_job_cache = set(job_cache)
@@ -157,37 +157,10 @@ def generate_jobs():
 job_generator = generate_jobs()
 
 def get_next_job(msgbytes):
+    global job_generator
     t0 = datetime.now()
     logger.debug("Looking for the next job.")
     request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
-    #statuses_to_process = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
-    #QUERY_SIZE=10   
-    
-    #dblock.acquire()
-    #active_jobsets = JobSet.objects.filter(active=True).order_by('-priority').iterator()
-    #dblock.release()
-    '''
-    def job_generator():
-        jobset = active_jobsets.next()
-        logger.debug("Looking at jobs in set: %s" % str(jobset))
-        query_offset=0
-        while True: # This won't generate infinitely because when we run out of jobsets, StopIteration exception will be raised
-            #dblock.acquire()
-            qt0 = datetime.now()
-            jobs = list( jobset.jobs.filter(status_enum__in=statuses_to_process).order_by('transaction_id'))[query_offset:query_offset + QUERY_SIZE] 
-            #dblock.release()
-            logger.debug("Got %d %s jobs from the DB in %s." % (len(jobs), str(jobset), str(datetime.now() - qt0)  ))
-            if len(jobs) > 0:
-                for job in jobs:
-                    yield job
-                else:
-                    query_offset += QUERY_SIZE
-            else:
-                jobset = active_jobsets.next() 
-                logger.debug("Switching to JobSet %s" % str(jobset))
-                query_offset=0
-                #time.sleep(0.1) # so we don't hammer the db with empty requests
-    '''
     
     i = 0
     for job in job_generator:
