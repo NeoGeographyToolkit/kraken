@@ -148,7 +148,8 @@ def generate_jobs():
                     job_cache.append(job)
             set_job_cache = set(job_cache)
             if not job_cache or set_job_cache == prev_jobs:  # The latter condition means all the jobs we've retrieved are unrunnable for some reason.
-                raise StopIteration
+                if not any(check_readiness(j) for j in job_cache):
+                    raise StopIteration
             
             prev_jobs = set_job_cache
     
