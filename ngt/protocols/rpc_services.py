@@ -197,6 +197,7 @@ class RpcChannel(object):
             else:
                 try_again = False
                 rpc_controller.SetTimedOut()
+                rpc_controller.SetFailed("Too many retries.")
                 if done:
                     done(None)
                 return None
@@ -214,6 +215,7 @@ class RpcChannel(object):
                     try_again = True
                     continue # out to try_again loop.  resets timer
                 else:
+                    rpc_controller.SetFailed("Sync problems. Too many retries.")
                     return None
             if response_wrapper.error:
                 logger.error("RPC response error: %s" % response_wrapper.error_string)
