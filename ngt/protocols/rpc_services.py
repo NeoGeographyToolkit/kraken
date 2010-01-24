@@ -126,7 +126,7 @@ class RpcChannel(object):
     MyService service = MyService_Stub(channel)
     service.MyMethod(controller, request, callback)
   """
-  def __init__(self, exchange, response_queue, request_routing_key, max_retries=0, timeout_ms=5000):
+  def __init__(self, exchange, response_queue, request_routing_key, max_retries=3, timeout_ms=5000):
       self.exchange = exchange
       self.response_queue = response_queue
       self.request_routing_key = request_routing_key
@@ -166,9 +166,14 @@ class RpcChannel(object):
     #print ' '.join([hex(ord(c))[2:] for c in request.SerializeToString()])    
     #print ' '.join([hex(ord(c))[2:] for c in request_wrapper])
     
-    try_again = True
     retries = 0
-    while try_again:
+    while True: # begin retry loop
+        if retries > self.max_retries:
+            rpc_controller.SetFailed("Too many retries.")
+            if done:
+                done(None)
+            return None
+    
         logger.debug("About to publish to exchange '%s' with key '%s'" % (self.exchange, self.request_routing_key))
         self.messagebus.basic_publish(amqp.Message(wrapped_request_bytes),
                         exchange=self.exchange,
@@ -177,58 +182,66 @@ class RpcChannel(object):
         # Wait for a response
         logger.debug("Waiting for a response on queue '%s'" % self.response_queue)
         response = None
-        #retries = 0
         timeout_flag = False
-        t0 = datetime.now()
-        while not response:
-            delta_t = datetime.now() - t0
-            if delta_t.seconds * 1000 + delta_t.microseconds / 1000 > self.timeout_ms:
-                timeout_flag = True
-                break
-            response = self.messagebus.basic_get(self.response_queue, no_ack=True) # returns a message or None
-            time.sleep(0.01)
-        
-        if timeout_flag:
-            logger.debug("RPC method '%s' timed out," % method_descriptor.name)
-            if retries < self.max_retries:
+        sync_ok = False
+        t0 = time.time()
+        # begin sync loop
+        while not sync_ok:
+            # begin response loop
+            while not response: 
+                delta_t = time.time() - t0
+                if delta_t * 1000.0 > self.timeout_ms:
+                    timeout_flag = True
+                    break
+                response = self.messagebus.basic_get(self.response_queue, no_ack=True) # returns a message or None
+                if not response: time.sleep(0.01) # polling interval
+            # end response loop
+            
+            if timeout_flag:
+                logger.warning("RPC method '%s' timed out," % method_descriptor.name)
                 retries += 1
-                logger.debug("Retrying (%d)." % retries)
-                continue # out to try_again loop.  resets timer
-            else:
-                try_again = False
-                rpc_controller.SetTimedOut()
-                rpc_controller.SetFailed("Too many retries.")
-                if done:
-                    done(None)
-                return None
-        else:
-            logger.info("Got a response in %s" % str(datetime.now() - t0))
+                logger.warning("Retrying (%d)." % retries)
+                break # from the sync loop out to retry loop.  resets timer
+
+            logger.info("Got a response in %s secs" % str(time.time() - t0))
             try_again = False
         
             response_wrapper = protocols.unpack(protocols.RpcResponseWrapper, response.body)
-            if response_wrapper.sequence_number and response_wrapper.sequence_number != self.sync_sequence_number:
-                errtext = "Response out of sequence. (Expected %d, got %d)  Purging the response queue." % (self.sync_sequence_number, response_wrapper.sequence_number)
-                logger.error(errtext)
-                self.messagebus.queue_purge(queue=self.response_queue) # clear the response queue and try again
-                if retries < self.max_retries:
+            if response_wrapper.sequence_number == self.sync_sequence_number:
+                logger.debug("Sync OK!")
+                sync_ok = True
+                break # from the sync loop
+            else:
+                sync_delta = self.sync_sequence_number - response_wrapper.sequence_number
+                logger.warning("Message sync error.  Sync delta: %d" % sync_delta)
+                if sync_delta > 0:
+                    logger.warning("Trying to catch up.")
+                    continue # to "while not sync_ok"
+                elif sync_delta < 0:
+                    logger.error("The message queue is ahead of us!  Purging.")
+                    purged = self.messagebus.queue_purge(queue=self.response_queue) # clear the response queue and try again
+                    logger.error("Purged %d messages from %s" % (purged, self.response_queue))
+                    time.sleep(0.1)
                     retries += 1
-                    try_again = True
-                    continue # out to try_again loop.  resets timer
-                else:
-                    rpc_controller.SetFailed("Sync problems. Too many retries.")
-                    return None
-            if response_wrapper.error:
-                logger.error("RPC response error: %s" % response_wrapper.error_string)
-                rpc_controller.SetFailed(response_wrapper.error)
-                if done:
-                    done(None)
-                    return None
-                
-        response = protocols.unpack(response_class, response_wrapper.payload)
-        logger.debug("Response is: %s" % str(response))
+                    break
+        #end sync loop
+        if timeout_flag:
+            continue # jump to the top of the retry loop
+        if sync_ok:
+            break # from the retry loop
+                       
+    if response_wrapper.error:
+        logger.error("RPC response error: %s" % response_wrapper.error_string)
+        rpc_controller.SetFailed(response_wrapper.error)
         if done:
-            done(response)
-        return response
+            done(None)
+            return None
+                
+    response = protocols.unpack(response_class, response_wrapper.payload)
+    logger.debug("Response is: %s" % str(response))
+    if done:
+        done(response)
+    return response
 
 class AmqpService(object):
     '''
