@@ -229,7 +229,8 @@ def job_started(msgbytes):
         logger.debug("Got job %s from DB." % job.uuid[:8])
     except Job.DoesNotExist:
         job_does_not_exist(request.job_id)
-        return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.NOACK})
+        #return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.NOACK})
+        raise
     verify_reaper_id(request.job_id, request.reaper_id, job.processor)
     
     job.time_started = request.start_time.replace('T',' ') # django DateTimeField should be able to parse it this way. (pyiso8601 would be the alternative).
@@ -265,7 +266,8 @@ def job_ended(msgbytes):
         job = Job.objects.get(uuid=request.job_id)
     except Job.DoesNotExist:
         job_does_not_exist(request.job_id)
-        return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.NOACK})
+        raise
+        #return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.NOACK})
         
     job.status = request.state or 'ended'
     job.time_ended = request.end_time.replace('T',' ') # django DateTimeField should be able to parse it this way. (pyiso8601 would be the alternative).

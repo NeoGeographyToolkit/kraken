@@ -245,14 +245,16 @@ if __name__ == '__main__':
     global options
     parser = optparse.OptionParser()
     parser.add_option('--debug', dest='debug', action='store_true', help="Print debug statements")
-    parser.add_option('--noop', dest='noop', action='store_true', default='false', help='Only pretent to run mipmap and snapshot jobs.')
+    parser.add_option('--noop', dest='noop', action='store_true', default=False, help='Only pretent to run mipmap and snapshot jobs.')
     (options, args) = parser.parse_args()
     del optparse
     if options.debug:
         loglevel = logging.DEBUG
     else:
         loglevel = logging.INFO
+    print "Log level: " + str(loglevel)
     logging.basicConfig(stream=sys.stdout, level=loglevel)
+    logging.getLogger('amqprpc').setLevel(loglevel)
     init_reaper_commands()
     r = Reaper()
     r.launch()
