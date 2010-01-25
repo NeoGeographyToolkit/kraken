@@ -100,6 +100,7 @@ class Reaper(object):
                     self.logger.error("Command: '%s' not found in amq_config's list of valid commands." % job.command)
                     self.dispatch.report_job_end(job, 'failed', end_time, "Command: '%s' not found in the list of valid commands for reaper %s" % (job.command, self.reaper_id))
             else:
+                self.logger.info("No jobs available.")
                 time.sleep(self.JOB_POLL_INTERVAL)
             self.logger.debug("Reached end of job loop.")
     
