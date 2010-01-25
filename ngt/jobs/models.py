@@ -3,6 +3,7 @@ if not settings.DISABLE_GEO:
     from django.contrib.gis.db import models
 else:
     from django.db import models
+from django.db import transaction
 import os, time, hashlib, datetime
 import uuid
 import json
@@ -22,6 +23,7 @@ class Job(models.Model):
         PROCESSING = 3
         COMPLETE = 4
         FAILED = 5
+        end_states = (COMPLETE, FAILED)
         
     class EnumDescriptor(object):
         '''
@@ -58,7 +60,7 @@ class Job(models.Model):
     time_started = models.DateTimeField(null=True, default=None)
     time_ended = models.DateTimeField(null=True, default=None)
     pid = models.IntegerField(null=True)
-    ended = models.BooleanField(default=False)
+    #ended = models.BooleanField(default=False)
     
     dependencies = models.ManyToManyField('Job', symmetrical=False)
     
@@ -86,11 +88,14 @@ class Job(models.Model):
             Return True if all dependencies are met, False otherwise.
             A dependency is met if the depending job has ended.
         '''
-        if self.dependencies.filter(ended=False):
+        if self.dependencies.filter(status_enum__in=Job.StatusEnum.end_states):
             return False
         else:
             return True
-    
+            
+    @property
+    def ended(self):
+        return self.status_enum in Job.StatusEnum.end_states
         
     def spawn_output_asset(self):
         """ Creates a new asset record for the job's output file. 
@@ -115,13 +120,13 @@ class Job(models.Model):
 def set_uuid(instance, **kwargs):
     if not instance.uuid:
         instance.uuid = instance._generate_uuid()
-def set_ended(instance, **kwargs):
-    if instance.status in ('complete','failed','ended'):
-        instance.ended = True
-    else:
-        instance.ended = False
+#def set_ended(instance, **kwargs):
+#    if instance.status in ('complete','failed','ended'):
+#        instance.ended = True
+#    else:
+#        instance.ended = False
 models.signals.pre_save.connect(set_uuid, sender=Job)
-models.signals.pre_save.connect(set_ended, sender=Job)
+#models.signals.pre_save.connect(set_ended, sender=Job)
 
 class JobSet(models.Model):
     name = models.CharField(max_length=256)
@@ -155,12 +160,23 @@ class JobSet(models.Model):
         self.status = "dispatched"
         for job in self.jobs.filter(status_enum=Job.StatusEnum.NEW):
             job.enqueue()
-    def reset(self):
-        self.jobs.update(status_enum=Job.StatusEnum.NEW, ended=False)
+
 
     ####
     # Convenience Methods for jobset wrangling.
     ####
+    @transaction.commit_on_success
+    def reset(self):
+        self.jobs.update(status_enum=Job.StatusEnum.NEW)
+        if 'snapshot' in self.name.lower():
+            self.jobs.filter(command='snapshot').delete()
+
+    @classmethod
+    @transaction.commit_on_success
+    def reset_active(klass):
+        for js in klass.objects.filter(active = True):
+            js.reset()
+
     @classmethod
     def get(klass, jobset):
         if type(jobset) == klass:
@@ -187,6 +203,8 @@ class JobSet(models.Model):
 def active_jobsets():
     return [(js, js.jobs.count(), js.jobs.filter(status_enum=Job.StatusEnum.NEW).count()) for js in JobSet.objects.filter(active=True)]
 
+def foo():
+    return 'bar'
 
 from ngt.assets.models import Asset, DATA_ROOT # putting this here helps avoid circular imports
 
