@@ -1,5 +1,6 @@
 from ngt import protocols
 from ngt.protocols import rpc_services, protobuf
+from ngt.protocols.rpc_services import RPCFailure
 import logging
 
 class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_Stub):
@@ -33,16 +34,16 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
         '''
         request = protobuf.ReaperJobRequest()
         request.reaper_uuid = reaper_id
-        self.logger.debug("Requesting job.")
+        self.logger.info("Requesting job.")
         response = self.getJob(self.amqp_rpc_controller, request, None)
         if not response:
             self._rpc_failure()
             return None
         elif not response.job_available:
-            self.logger.debug("No jobs available.")
+            self.logger.info("No jobs available.")
             return None
         else:
-            self.logger.debug("Got a job: %s" % response.uuid[:8])
+            self.logger.info("Got a job: %s" % response.uuid[:8])
             return response
             
     def report_job_start(self, reaper_id, job, pid, start_time):
@@ -55,12 +56,7 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
         request.start_time = start_time.isoformat()
         request.pid = pid
         
-        response = None
-        while not response:
-            response = self.jobStarted(self.amqp_rpc_controller, request, None)
-            if not response:
-                self._rpc_failure()
-                time.sleep(0.01)
+        response = self.keep_calling(self.jobStarted, request)
 
         self.logger.debug("ACK response: %d" % response.ack)
         if response.ack == protobuf.AckResponse.NOACK: 
@@ -82,12 +78,7 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
         request.end_time = end_time.isoformat()
         request.output = output
         
-        response = None
-        while not response:
-            response = self.jobEnded(self.amqp_rpc_controller, request, None)
-            if not response:
-                self._rpc_failure()
-                time.sleep(0.01)
+        response = self.keep_calling(self.jobEnded, request)
 
         if response.ack == protobuf.AckResponse.NOACK: 
             # this is bad.  something happened on the server side.  probably invalid job_id
