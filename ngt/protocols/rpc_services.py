@@ -196,11 +196,11 @@ class RpcChannel(object):
                 if delta_t * 1000.0 > self.timeout_ms:
                     timeout_flag = True
                     break
-                response = self.messagebus.basic_get(self.response_queue, no_ack=False) # returns a message or None
+                response = self.messagebus.basic_get(self.response_queue, no_ack=True) # returns a message or None
                 if not response: time.sleep(0.01) # polling interval
             # end response loop
             
-            self.messagebus.basic_ack(response.delivery_tag)
+            #self.messagebus.basic_ack(response.delivery_tag)
             if timeout_flag:
                 logger.warning("RPC method '%s' timed out," % method_descriptor.name)
                 retries += 1
