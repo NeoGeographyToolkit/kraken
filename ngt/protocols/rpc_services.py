@@ -15,6 +15,9 @@ logger.debug("Testing logger.")
 #    ''' Raise this when things that should never happen happen. '''
 #    pass
 
+class RPCFailure(Exception):
+    pass
+
 class AmqpRpcController(_RpcController):
 
   """An RpcController mediates a single method call.
@@ -170,9 +173,9 @@ class RpcChannel(object):
     while True: # begin retry loop
         if retries > self.max_retries:
             rpc_controller.SetFailed("Too many retries.")
-            if done:
-                done(None)
-            return None
+            #if done:
+            #    done(None)
+            raise RPCFailure("Too many retries")
     
         logger.debug("About to publish to exchange '%s' with key '%s'" % (self.exchange, self.request_routing_key))
         self.messagebus.basic_publish(amqp.Message(wrapped_request_bytes),
@@ -233,9 +236,9 @@ class RpcChannel(object):
     if response_wrapper.error:
         logger.error("RPC response error: %s" % response_wrapper.error_string)
         rpc_controller.SetFailed(response_wrapper.error)
-        if done:
-            done(None)
-            return None
+        #if done:
+        #    done(None)
+        raise RPCFailure("RPC response error: %s" % response_wrapper.error_string)
                 
     response = protocols.unpack(response_class, response_wrapper.payload)
     logger.debug("Response is: %s" % str(response))
@@ -288,6 +291,17 @@ class AmqpService(object):
         else:
             assert False # If this happens, we're missing a failure state.
         self.amqp_rpc_controller.Reset()
+        
+    def keep_calling(self, rpc_method, request, done=None):
+        ''' Get a request or die trying. '''
+        response = None
+        while not response:
+            try:
+                response = rpc_method(self.amqp_rpc_controller, request, done)
+            except RPCFailure:
+                self._rpc_failure()
+                time.sleep(0.01)
+        return response
    
     # Delegate other attribute access to protobuf rpc_service instance
     #def __getattr__(self, name):
