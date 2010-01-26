@@ -219,6 +219,7 @@ class RpcChannel(object):
                 logger.warning("Message sync error.  Sync delta: %d" % sync_delta)
                 if sync_delta > 0:
                     logger.warning("Trying to catch up.")
+                    t0 = time.time() # reset the timeout clock
                     continue # to "while not sync_ok"
                 elif sync_delta < 0:
                     logger.error("The message queue is ahead of us!  Purging.")
