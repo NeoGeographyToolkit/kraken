@@ -184,13 +184,13 @@ class RpcChannel(object):
         
         # Wait for a response
         logger.debug("Waiting for a response on queue '%s'" % self.response_queue)
-        response = None
         timeout_flag = False
         sync_ok = False
         t0 = time.time()
         # begin sync loop
         while not sync_ok:
             # begin response loop
+            response = None
             while not response: 
                 delta_t = time.time() - t0
                 if delta_t * 1000.0 > self.timeout_ms:
