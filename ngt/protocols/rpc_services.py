@@ -200,6 +200,7 @@ class RpcChannel(object):
                 if not response: time.sleep(0.01) # polling interval
             # end response loop
             
+            self.messagebus.basic_ack(response.delivery_tag)
             if timeout_flag:
                 logger.warning("RPC method '%s' timed out," % method_descriptor.name)
                 retries += 1
@@ -207,7 +208,6 @@ class RpcChannel(object):
                 break # from the sync loop out to retry loop.  resets timer
 
             logger.info("Got a response in %s secs" % str(time.time() - t0))
-            try_again = False
         
             response_wrapper = protocols.unpack(protocols.RpcResponseWrapper, response.body)
             if response_wrapper.sequence_number == self.sync_sequence_number:
