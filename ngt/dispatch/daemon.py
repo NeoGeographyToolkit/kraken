@@ -7,6 +7,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 #from ngt.protocols import * # <-- dotdict, pack, unpack
 import ngt.protocols as protocols
 from ngt.protocols import protobuf, dotdict, rpc_services
+from ngt.utils.containers import LockingOrderedSet
 
 from ngt.messaging import messagebus
 from ngt.messaging.messagebus import MessageBus
@@ -133,15 +134,26 @@ def postprocess_job(job, state):
         logger.debug("Skipping postprocessing because the job's command is not in jobcommand_map.")
         return job
 
-def generate_jobs():
+def query_more_jobs(job_cache):
     statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
     QUERY_LIMIT=50
-    job_cache = []
-    prev_jobs = set()
+    for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
+        jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:QUERY_LIMIT]
+        for job in jobs:
+            job_cache.add(job)
+
+def generate_jobs(job_cache):
+    #statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
+    #QUERY_LIMIT=50
+    #prev_jobs = set()
     while True:
-        if job_cache:
-            yield job_cache.pop(0)
+        if len(job_cache) > 0:
+            yield job_cache.pop()
         else:
+            query_more_jobs(job_cache)
+            threading.Thread(target=query_more_jobs, args=(job_cache,)).start()
+            raise StopIteration
+            """
             for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
                 jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:QUERY_LIMIT]
                 for job in jobs:
@@ -152,12 +164,14 @@ def generate_jobs():
                     raise StopIteration
             
             prev_jobs = set_job_cache
+            """
     
-
-job_generator = generate_jobs()
+job_cache = LockingOrderedSet()
+job_generator = generate_jobs(job_cache)
 
 def get_next_job(msgbytes):
     global job_generator
+    global job_cache
     t0 = datetime.now()
     logger.debug("Looking for the next job.")
     request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
@@ -173,7 +187,8 @@ def get_next_job(msgbytes):
             logger.debug("Job %d rejected by JobCommand for %s" % (i, job.command))
     else:
         logger.info("No jobs available. job_generator will be reset.")
-        job_generator = generate_jobs() # reset the job generator
+        job_generator = generate_jobs(job_cache) # reset the job generator
+        logger.info("No jobs available")
         return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
     t1 = datetime.now()
     logger.debug("Found usable job in %d iterations (%s)" % ( i, str(t1-t0) ) )
