@@ -255,6 +255,12 @@ def job_started(msgbytes):
     # get reaper & set current job...
     job.save()
     logger.debug("Job %s saved" % job.uuid[:8])
+    """
+    ####
+    # Reaper current job tracking is disabled because it is of dubious usefulness 
+    # and makes it harder to reset certain JobSets that require Job deletion.
+    ####
+    
     try:
         reaper = Reaper.objects.get(uuid=request.reaper_id)
     except Reaper.DoesNotExist:
@@ -265,6 +271,7 @@ def job_started(msgbytes):
     reaper.current_job = job    
     reaper.save()
     logger.debug("Reaper %s saved" % reaper.uuid[:8])
+    """
     dblock.release()
     
     # ...
