@@ -134,24 +134,33 @@ def postprocess_job(job, state):
         logger.debug("Skipping postprocessing because the job's command is not in jobcommand_map.")
         return job
 
-def query_more_jobs(job_cache):
-    statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
-    QUERY_LIMIT=50
-    for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
-        jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:QUERY_LIMIT]
-        for job in jobs:
-            job_cache.add(job)
+class JobCacheRefreshThread(threading.Thread):
+    def __init__(self, job_cache, delay=0, *args, **kwargs):
+        super(JobCacheRefreshThread, self).__init__(*args, **kwargs)
+        self.job_cache = job_cache
+        self.delay = delay
+    def run(self):
+        statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
+        QUERY_LIMIT=25
+        time.sleep(self.delay)
+        for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
+            jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:QUERY_LIMIT]
+            for job in jobs:
+                self.job_cache.add(job)
 
 def generate_jobs(job_cache):
     #statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
     #QUERY_LIMIT=50
     #prev_jobs = set()
+    REFRESH_TRIGGER_SIZE = 3
     while True:
         if len(job_cache) > 0:
+            if len(job_cache) <= REFRESH_TRIGGER_SIZE:
+                JobCacheRefreshThread(job_cache, delay=0.1).start()
             yield job_cache.pop()
         else:
-            query_more_jobs(job_cache)
-            threading.Thread(target=query_more_jobs, args=(job_cache,)).start()
+            #query_more_jobs(job_cache)
+            JobCacheRefreshThread(job_cache).start()
             raise StopIteration
             """
             for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
@@ -172,10 +181,23 @@ job_generator = generate_jobs(job_cache)
 def get_next_job(msgbytes):
     global job_generator
     global job_cache
-    t0 = datetime.now()
+    t0 = time.time()
     logger.debug("Looking for the next job.")
     request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
     
+    try:
+        job = job_generator.next()
+        if not check_readiness(job):
+            logger.debug("Job %d not ready.  Rejecting." % job.id)
+            job = None
+    except StopIteration:
+        job = None
+        logger.debug("Reached end of job_generator. Resetting.")
+        job_generator = generate_jobs(job_cache) # reset the job generator
+    if not job:
+        logger.info("No jobs or job not ready.")
+        return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
+    """
     i = 0
     for job in job_generator:
         i += 1
@@ -190,8 +212,11 @@ def get_next_job(msgbytes):
         job_generator = generate_jobs(job_cache) # reset the job generator
         logger.info("No jobs available")
         return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
-    t1 = datetime.now()
+    t1 = time.time()
     logger.debug("Found usable job in %d iterations (%s)" % ( i, str(t1-t0) ) )
+    """
+    t1 = time.time()
+    logger.debug("Fetched a job in %s sec." % str(t1-t0))
             
     job = preprocess_job(job)
     response = {
@@ -200,7 +225,7 @@ def get_next_job(msgbytes):
         'command' : job.command,
         'args' : json.loads(job.arguments or '[]'),
         }
-    logger.info("Sending job %s to reaper %s (%s)" % (job.uuid[:8], request.reaper_uuid[:8], str(datetime.now() - t1)))
+    logger.info("Sending job %s to reaper %s (%s)" % (job.uuid[:8], request.reaper_uuid[:8], str(time.time() - t0)))
     job.status = "dispatched"
     job.processor = request.reaper_uuid
     #dblock.acquire()
