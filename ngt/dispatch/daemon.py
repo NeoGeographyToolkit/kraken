@@ -284,7 +284,7 @@ def job_ended(msgbytes):
         raise
         #return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.NOACK})
         
-    job.status = request.state or 'ended'
+    job.status = request.state
     job.time_ended = request.end_time.replace('T',' ') # django DateTimeField should be able to parse it this way. (pyiso8601 would be the alternative).
     job.output = request.output
     job = postprocess_job(job, request.state)
