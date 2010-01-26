@@ -217,6 +217,7 @@ class RpcChannel(object):
             else:
                 sync_delta = self.sync_sequence_number - response_wrapper.sequence_number
                 logger.warning("Message sync error.  Sync delta: %d" % sync_delta)
+                logger.debug("Expected %d but got %d" % (self.sync_sequence_number, response_wrapper.sequence_number))
                 if sync_delta > 0:
                     logger.warning("Trying to catch up.")
                     t0 = time.time() # reset the timeout clock
