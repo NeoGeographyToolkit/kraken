@@ -88,8 +88,9 @@ class Job(models.Model):
             Return True if all dependencies are met, False otherwise.
             A dependency is met if the depending job has ended.
         '''
-        if self.dependencies.filter(status_enum__in=Job.StatusEnum.end_states):
-            return False
+        for dep in self.dependencies.all():
+            if not dep.ended:
+                return False
         else:
             return True
             
