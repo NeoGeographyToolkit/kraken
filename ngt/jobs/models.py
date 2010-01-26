@@ -165,6 +165,15 @@ class JobSet(models.Model):
     ####
     # Convenience Methods for jobset wrangling.
     ####
+    def status(self):
+        tally = {}
+        for job in self.jobs.all():
+            if job.status in tally:
+                tally[job.status] += 1
+            else:
+                tally[job.status] = 1
+        return tally
+        
     @transaction.commit_on_success
     def reset(self):
         self.jobs.update(status_enum=Job.StatusEnum.NEW)
@@ -184,7 +193,7 @@ class JobSet(models.Model):
         elif type(jobset) == int:
             return klass.objects.get(pk=jobset)
         else:
-            raise ArgumentError
+            raise ArgumentError("Expected a JobSet or int.")
 
     @classmethod
     def activate(klass, jobset):
@@ -201,7 +210,11 @@ class JobSet(models.Model):
         print "%s deactivated." % str(js)
             
 def active_jobsets():
-    return [(js, js.jobs.count(), js.jobs.filter(status_enum=Job.StatusEnum.NEW).count()) for js in JobSet.objects.filter(active=True)]
+    from pprint import pprint
+    jobsets = JobSet.objects.filter(active=True)
+    pprint( dict( [(js, js.status()) for js in jobsets] ) )
+    del pprint
+    return jobsets
 
 def foo():
     return 'bar'
