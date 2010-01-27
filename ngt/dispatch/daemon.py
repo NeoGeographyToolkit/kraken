@@ -27,6 +27,7 @@ from ngt import settings
 setup_environ(settings)
 from models import Reaper
 from ngt.jobs.models import Job, JobSet
+from django import db
 from django.db.models import Q
 from commands import jobcommands
 
@@ -42,7 +43,7 @@ command_map = {
 
 
 JOB_FETCH_LIMIT = 25
-MAX_DB_CONNECTIONS = 85
+MAX_DB_CONNECTIONS = 60
 dblock = threading.Semaphore(MAX_DB_CONNECTIONS)
 
 def create_jobcommand_map():
@@ -148,6 +149,7 @@ class JobCacheRefreshThread(threading.Thread):
             jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
             for job in jobs:
                 self.job_cache.add(job)
+        db.connection.close() # force django to close connections, otherwise it won't
         dblock.release()
 
 def generate_jobs(job_cache):

@@ -31,7 +31,7 @@ RPC_RETRIES = 3 # number of times to retry on RPC timeouts
 
 class Reaper(object):
 
-    JOB_POLL_INTERVAL = 1 #seconds
+    JOB_POLL_INTERVAL = 2 #seconds
 
     REAPER_TYPE = 'generic'
     CONTROL_EXCHANGE_NAME = 'Control_Exchange'
