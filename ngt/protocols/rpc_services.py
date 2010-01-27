@@ -171,11 +171,13 @@ class RpcChannel(object):
     
     retries = 0
     while True: # begin retry loop
-        if retries > self.max_retries:
+        if self.max_retries > -1 and retries > self.max_retries:
             rpc_controller.SetFailed("Too many retries.")
             #if done:
             #    done(None)
-            raise RPCFailure("Too many retries")
+            
+            # raise RPCFailure("Too many retries")
+            return None # Still not too sure about this whole return None on failure business
     
         logger.debug("About to publish to exchange '%s' with key '%s'" % (self.exchange, self.request_routing_key))
         self.messagebus.basic_publish(amqp.Message(wrapped_request_bytes),
