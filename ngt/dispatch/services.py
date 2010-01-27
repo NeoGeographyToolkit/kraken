@@ -19,6 +19,7 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
     
     def __init__(self, **kwargs):
         kwargs['request_routing_key'] = 'dispatch'
+        kwargs['max_retries'] = -1
         super(DispatchService, self).__init__(**kwargs)
         self.logger = logging.getLogger('DispatchService')
         
@@ -36,7 +37,7 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
         request.reaper_uuid = reaper_id
         self.logger.info("Requesting job.")
         response = self.getJob(self.amqp_rpc_controller, request, None)
-        if not response:
+        if not response:    
             self._rpc_failure()
             return None
         elif not response.job_available:
