@@ -41,8 +41,9 @@ command_map = {
 }
 
 
-JOB_RELEASE_LIMIT = 100
-dblock = threading.Lock()
+JOB_FETCH_LIMIT = 25
+MAX_DB_CONNECTIONS = 85
+dblock = threading.Semaphore(MAX_DB_CONNECTIONS)
 
 def create_jobcommand_map():
     ''' Create a map of command names to JobCommand subclasses from the jobcommand module '''
@@ -141,12 +142,13 @@ class JobCacheRefreshThread(threading.Thread):
         self.delay = delay
     def run(self):
         statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
-        QUERY_LIMIT=25
         time.sleep(self.delay)
+        dblock.acquire()
         for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
-            jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:QUERY_LIMIT]
+            jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
             for job in jobs:
                 self.job_cache.add(job)
+        dblock.release()
 
 def generate_jobs(job_cache):
     #statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
@@ -176,6 +178,7 @@ def generate_jobs(job_cache):
             """
     
 job_cache = LockingOrderedSet()
+
 job_generator = generate_jobs(job_cache)
 
 def get_next_job(msgbytes):
