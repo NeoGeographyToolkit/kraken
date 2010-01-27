@@ -128,14 +128,18 @@ class RpcChannel(object):
     RpcController controller = rpcImpl.Controller()
     MyService service = MyService_Stub(channel)
     service.MyMethod(controller, request, callback)
+    
+    
   """
   def __init__(self, exchange, response_queue, request_routing_key, max_retries=3, timeout_ms=5000):
       self.exchange = exchange
       self.response_queue = response_queue
       self.request_routing_key = request_routing_key
       self.messagebus = MessageBus()
-      self.max_retries = max_retries # maximum number of times to retry on RPC timeout
-      self.timeout_ms = timeout_ms
+      self.max_retries = max_retries # maximum number of times to retry on RPC timeout.  -1 indicates infinite retries
+      self.timeout_ms = timeout_ms # Set to -1 for no timeout
+      
+      self.polling_interval = 0.01 # in seconds
       
       self.sync_sequence_number = 0
       
@@ -195,11 +199,11 @@ class RpcChannel(object):
             response = None
             while not response: 
                 delta_t = time.time() - t0
-                if delta_t * 1000.0 > self.timeout_ms:
+                if self.timeout_ms >= 0 and delta_t * 1000.0 > self.timeout_ms:
                     timeout_flag = True
                     break
                 response = self.messagebus.basic_get(self.response_queue, no_ack=True) # returns a message or None
-                if not response: time.sleep(0.01) # polling interval
+                if not response: time.sleep(self.polling_interval) # polling interval
             # end response loop
             
             #self.messagebus.basic_ack(response.delivery_tag)

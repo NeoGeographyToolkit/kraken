@@ -19,7 +19,8 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
     
     def __init__(self, **kwargs):
         kwargs['request_routing_key'] = 'dispatch'
-        kwargs['max_retries'] = -1
+        kwargs['timeout_ms'] = -1 # never timout
+        kwargs['max_retries'] = -1 # retry infinitely
         super(DispatchService, self).__init__(**kwargs)
         self.logger = logging.getLogger('DispatchService')
         
