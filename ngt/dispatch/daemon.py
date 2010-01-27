@@ -139,49 +139,51 @@ def postprocess_job(job, state):
 class JobCacheRefreshThread(threading.Thread):
     def __init__(self, job_cache, delay=0, *args, **kwargs):
         super(JobCacheRefreshThread, self).__init__(*args, **kwargs)
+        self.name = "jobcache refresh"
         self.job_cache = job_cache
         self.delay = delay
+        self.daemon = True
+        self.refresh_event = threading.Event()
+        
+    def refresh(self):
+        logger.debug("refresh thread refresh() was called.")
+        self.refresh_event.set()
+        
     def run(self):
         statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
-        time.sleep(self.delay)
-        dblock.acquire()
-        for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
-            jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
-            for job in jobs:
-                self.job_cache.add(job)
-        db.connection.close() # force django to close connections, otherwise it won't
-        dblock.release()
+        while True:
+            logger.debug("Waiting for refresh event.")
+            self.refresh_event.wait()
+            time.sleep(self.delay)
+            logger.debug("Refreshing the job cache.")
+            dblock.acquire()
+            for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
+                jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
+                for job in jobs:
+                    self.job_cache.add(job)
+            #db.connection.close() # force django to close connections, otherwise it won't
+            dblock.release()
+            self.refresh_event.clear()
 
-def generate_jobs(job_cache):
-    #statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
-    #QUERY_LIMIT=50
-    #prev_jobs = set()
+def generate_jobs(job_cache, refresh_thread):
     REFRESH_TRIGGER_SIZE = 3
     while True:
         if len(job_cache) > 0:
             if len(job_cache) <= REFRESH_TRIGGER_SIZE:
-                JobCacheRefreshThread(job_cache, delay=0.1).start()
+                logger.debug("Job cache low.")
+                refresh_thread.refresh()
             yield job_cache.pop()
         else:
-            #query_more_jobs(job_cache)
-            JobCacheRefreshThread(job_cache).start()
+
+            logger.debug("Job cache empty")
+            refresh_thread.refresh()
             raise StopIteration
-            """
-            for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
-                jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:QUERY_LIMIT]
-                for job in jobs:
-                    job_cache.append(job)
-            set_job_cache = set(job_cache)
-            if not job_cache or set_job_cache == prev_jobs:  # The latter condition means all the jobs we've retrieved are unrunnable for some reason.
-                if not any(check_readiness(j) for j in job_cache):
-                    raise StopIteration
-            
-            prev_jobs = set_job_cache
-            """
+
     
 job_cache = LockingOrderedSet()
-
-job_generator = generate_jobs(job_cache)
+refresh_thread = JobCacheRefreshThread(job_cache)
+refresh_thread.start()
+job_generator = generate_jobs(job_cache, refresh_thread)
 
 def get_next_job(msgbytes):
     global job_generator
@@ -198,28 +200,11 @@ def get_next_job(msgbytes):
     except StopIteration:
         job = None
         logger.debug("Reached end of job_generator. Resetting.")
-        job_generator = generate_jobs(job_cache) # reset the job generator
+        job_generator = generate_jobs(job_cache, refresh_thread) # reset the job generator
     if not job:
         logger.info("No jobs or job not ready.")
         return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
-    """
-    i = 0
-    for job in job_generator:
-        i += 1
-        logger.debug("Checking job %d" % i)
-        if check_readiness(job):
-            logger.debug("Job %d OK." % i)
-            break
-        else:
-            logger.debug("Job %d rejected by JobCommand for %s" % (i, job.command))
-    else:
-        logger.info("No jobs available. job_generator will be reset.")
-        job_generator = generate_jobs(job_cache) # reset the job generator
-        logger.info("No jobs available")
-        return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
-    t1 = time.time()
-    logger.debug("Found usable job in %d iterations (%s)" % ( i, str(t1-t0) ) )
-    """
+
     t1 = time.time()
     logger.debug("Fetched a job in %s sec." % str(t1-t0))
             
