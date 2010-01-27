@@ -181,6 +181,9 @@ class JobSet(models.Model):
         if 'snapshot' in self.name.lower():
             self.jobs.filter(command='snapshot').delete()
 
+    def nudge(self):
+        return self.jobs.filter(status_enum=Job.StatusEnum.DISPATCHED).update(status_enum=Job.StatusEnum.NEW)
+
     @classmethod
     @transaction.commit_on_success
     def reset_active(klass):
