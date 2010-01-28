@@ -73,16 +73,22 @@ class LockingOrderedSet(OrderedSet):
 
     def add(self, key):
         self.lock.acquire()
-        super(LockingOrderedSet, self).add(key)
-        self.lock.release()
+        try:
+            super(LockingOrderedSet, self).add(key)
+        finally:
+            self.lock.release()
         
     def discard(self, key):
         self.lock.acquire()
-        super(LockingOrderedSet, self).discard(key)
-        self.lock.release()
+        try:
+            super(LockingOrderedSet, self).discard(key)
+        finally:
+            self.lock.release()
         
     def pop(self, last=False):
         self.lock.acquire()
-        retval = super(LockingOrderedSet, self).pop(last=last)
-        self.lock.release()
+        try:
+            retval = super(LockingOrderedSet, self).pop(last=last)
+        finally:
+            self.lock.release()
         return retval
