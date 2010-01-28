@@ -78,16 +78,16 @@ class TaskQueueThread(threading.Thread):
         
     def enqueue(self, method, *args, **kwargs):
         priority = kwargs.pop('priority', self.default_priority)
-        logger.debug("%s is enqueueing a %s task with priority %d." % (self.name, method.__name__, priority) )
-        logger.debug("ARGS: %s :: %s" % ( str(args) , str(kwargs) ) )
+        #logger.debug("%s is enqueueing a %s task with priority %d." % (self.name, method.__name__, priority) )
+        #logger.debug("ARGS: %s :: %s" % ( str(args) , str(kwargs) ) )
         self.task_queue.put( (priority, method, args, kwargs) )
         
     def run(self):
         logger.debug("%s is running." % self.name)
         while True:
             priority, method, args, kwargs = self.task_queue.get()
-            logger.debug("%s is executing a %s task" % (self.name, method.__name__))
-            logger.debug("ARGS: %s :: %s" % ( str(args) , str(kwargs) ) )
+            #logger.debug("%s is executing a %s task" % (self.name, method.__name__))
+            #logger.debug("ARGS: %s :: %s" % ( str(args) , str(kwargs) ) )
             method(*args, **kwargs)
             self.task_queue.task_done()
 
@@ -168,7 +168,9 @@ class JobBuffer(LockingOrderedSet):
 
     def __init__(self, *args, **kwargs):
         super(JobBuffer, self).__init__(*args, **kwargs)
+        self.REFRESH_TRIGGER_SIZE = 3
         self.refreshing = False
+        self.dispatch_pending = None #holds on to a job while it's in the process of being dispatched
 
     def _refresh(self):
         statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
@@ -177,7 +179,10 @@ class JobBuffer(LockingOrderedSet):
         for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
             jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
             for job in jobs:
-                self.add(job)
+                if job != self.dispatch_pending: #make sure a this job isn't in the middle of being dispatched
+                    self.add(job)
+                else:
+                    logger.debug("REFRESH: %s rejected because it's being dispatched" % str(job))
         #db.connection.close() # force django to close connections, otherwise it won't
         dblock.release()
         self.refreshing = False
@@ -186,40 +191,40 @@ class JobBuffer(LockingOrderedSet):
         if not self.refreshing:
             self.refreshing = True
             thread_database.enqueue(self._refresh, priority=1)
+            
+    def next_job(self):
+        logger.debug("%d jobs in buffer. Refreshing: %s" % (len(self), str(self.refreshing)))
+        if len(self) <= self.REFRESH_TRIGGER_SIZE:
+            logger.debug("Job buffer low.  Requesting refresh.")
+            self.refresh()
+        j = self.dispatch_pending = self.pop()
+        return j
+        
+    def ack(self, job):
+        if job != self.dispatch_pending:
+            raise KeyError("Job does not match the one in dispatch_pending.")
+        self.dispatch_pending = None
 
-def generate_jobs(job_buffer):
-    REFRESH_TRIGGER_SIZE = 3
-    while True:
-        if len(job_buffer) > 0:
-            if len(job_buffer) <= REFRESH_TRIGGER_SIZE:
-                logger.debug("Job buffer low.")
-                job_buffer.refresh()
-            yield job_buffer.pop()
-        else:
-            logger.debug("Job buffer empty")
-            job_buffer.refresh()
-            raise StopIteration
 
     
 job_buffer = JobBuffer()
-job_generator = generate_jobs(job_buffer)
+#job_generator = generate_jobs(job_buffer)
 
 def get_next_job(msgbytes):
-    global job_generator
     global job_buffer
     t0 = time.time()
     logger.debug("Looking for the next job.")
     request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
     
     try:
-        job = job_generator.next()
+        job = job_buffer.next_job()
         if not check_readiness(job):
             logger.debug("Job %d not ready.  Rejecting." % job.id)
+            job_buffer.ack(job)
             job = None
-    except StopIteration:
+    except KeyError:
         job = None
-        logger.debug("Reached end of job_generator. Resetting.")
-        job_generator = generate_jobs(job_buffer) # reset the job generator
+        logger.debug("Job buffer empty.")
     if not job:
         logger.info("No jobs or job not ready.")
         return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
@@ -239,6 +244,7 @@ def get_next_job(msgbytes):
     job.processor = request.reaper_uuid
     dblock.acquire()
     job.save()
+    job_buffer.ack(job)
     job = None
     dblock.release()
     if options.show_queries:
