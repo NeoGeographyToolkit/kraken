@@ -237,10 +237,10 @@ def get_next_job(msgbytes):
     logger.info("Sending job %s to reaper %s (%s)" % (job.uuid[:8], request.reaper_uuid[:8], str(time.time() - t0)))
     job.status = "dispatched"
     job.processor = request.reaper_uuid
-    #dblock.acquire()
+    dblock.acquire()
     job.save()
     job = None
-    #dblock.release()
+    dblock.release()
     if options.show_queries:
         # print the slowest queries
         from django.db import connection
