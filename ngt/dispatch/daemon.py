@@ -2,6 +2,7 @@
 import sys, logging, threading, os, atexit, time, optparse
 from datetime import datetime
 import itertools, traceback, json
+import Queue
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 #from ngt.protocols import * # <-- dotdict, pack, unpack
@@ -42,9 +43,10 @@ command_map = {
 }
 
 
-JOB_FETCH_LIMIT = 25
-MAX_DB_CONNECTIONS = 60
-dblock = threading.Semaphore(MAX_DB_CONNECTIONS)
+JOB_FETCH_LIMIT = 50
+#MAX_DB_CONNECTIONS = 60
+#dblock = threading.Semaphore(MAX_DB_CONNECTIONS)
+dblock = threading.RLock()
 
 def create_jobcommand_map():
     ''' Create a map of command names to JobCommand subclasses from the jobcommand module '''
@@ -62,7 +64,32 @@ logger.debug("jobcommand_map initialized: %s" % str(jobcommand_map))
 logger.debug("Valid jobcommands:")
 for k in jobcommand_map.keys():
     logger.debug(k)
+    
 
+####
+# Database Thread
+###
+class TaskQueueThread(threading.Thread):
+    def __init__(self, *args, **kwargs):
+        super(TaskQueueThread, self).__init__(*args, **kwargs)
+        self.daemon = True
+        self.task_queue = Queue.PriorityQueue()
+        self.default_priority = 3
+        
+    def enqueue(self, method, *args, **kwargs):
+        priority = kwargs.pop('priority', self.default_priority)
+        logger.debug("%s is enqueueing a %s task with priority %d." % (self.name, method.__name__, priority) )
+        logger.debug("ARGS: %s :: %s" % ( str(args) , str(kwargs) ) )
+        self.task_queue.put( (priority, method, args, kwargs) )
+        
+    def run(self):
+        logger.debug("%s is running." % self.name)
+        while True:
+            priority, method, args, kwargs = self.task_queue.get()
+            logger.debug("%s is executing a %s task" % (self.name, method.__name__))
+            logger.debug("ARGS: %s :: %s" % ( str(args) , str(kwargs) ) )
+            method(*args, **kwargs)
+            self.task_queue.task_done()
 
 
 ###
@@ -136,58 +163,50 @@ def postprocess_job(job, state):
         logger.debug("Skipping postprocessing because the job's command is not in jobcommand_map.")
         return job
 
-class JobCacheRefreshThread(threading.Thread):
-    def __init__(self, job_cache, delay=0, *args, **kwargs):
-        super(JobCacheRefreshThread, self).__init__(*args, **kwargs)
-        self.name = "jobcache refresh"
-        self.job_cache = job_cache
-        self.delay = delay
-        self.daemon = True
-        self.refresh_event = threading.Event()
-        
-    def refresh(self):
-        logger.debug("refresh thread refresh() was called.")
-        self.refresh_event.set()
-        
-    def run(self):
-        statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
-        while True:
-            logger.debug("Waiting for refresh event.")
-            self.refresh_event.wait()
-            time.sleep(self.delay)
-            logger.debug("Refreshing the job cache.")
-            dblock.acquire()
-            for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
-                jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
-                for job in jobs:
-                    self.job_cache.add(job)
-            #db.connection.close() # force django to close connections, otherwise it won't
-            dblock.release()
-            self.refresh_event.clear()
 
-def generate_jobs(job_cache, refresh_thread):
+class JobBuffer(LockingOrderedSet):
+
+    def __init__(self, *args, **kwargs):
+        super(JobBuffer, self).__init__(*args, **kwargs)
+        self.refreshing = False
+
+    def _refresh(self):
+        statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
+        logger.debug("Refreshing the job buffer.")
+        dblock.acquire()
+        for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
+            jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
+            for job in jobs:
+                self.add(job)
+        #db.connection.close() # force django to close connections, otherwise it won't
+        dblock.release()
+        self.refreshing = False
+
+    def refresh(self):
+        if not self.refreshing:
+            self.refreshing = True
+            thread_database.enqueue(self._refresh, priority=1)
+
+def generate_jobs(job_buffer):
     REFRESH_TRIGGER_SIZE = 3
     while True:
-        if len(job_cache) > 0:
-            if len(job_cache) <= REFRESH_TRIGGER_SIZE:
-                logger.debug("Job cache low.")
-                refresh_thread.refresh()
-            yield job_cache.pop()
+        if len(job_buffer) > 0:
+            if len(job_buffer) <= REFRESH_TRIGGER_SIZE:
+                logger.debug("Job buffer low.")
+                job_buffer.refresh()
+            yield job_buffer.pop()
         else:
-
-            logger.debug("Job cache empty")
-            refresh_thread.refresh()
+            logger.debug("Job buffer empty")
+            job_buffer.refresh()
             raise StopIteration
 
     
-job_cache = LockingOrderedSet()
-refresh_thread = JobCacheRefreshThread(job_cache)
-refresh_thread.start()
-job_generator = generate_jobs(job_cache, refresh_thread)
+job_buffer = JobBuffer()
+job_generator = generate_jobs(job_buffer)
 
 def get_next_job(msgbytes):
     global job_generator
-    global job_cache
+    global job_buffer
     t0 = time.time()
     logger.debug("Looking for the next job.")
     request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
@@ -200,7 +219,7 @@ def get_next_job(msgbytes):
     except StopIteration:
         job = None
         logger.debug("Reached end of job_generator. Resetting.")
-        job_generator = generate_jobs(job_cache, refresh_thread) # reset the job generator
+        job_generator = generate_jobs(job_buffer) # reset the job generator
     if not job:
         logger.info("No jobs or job not ready.")
         return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
@@ -249,17 +268,15 @@ def verify_reaper_id(job_uuid, reported_uuid, recorded_uuid):
         tup = (job_uuid[:8], reported_uuid[:8], recorded_uuid[:8])
         logger.warning("Job %s expected to be handled by Reaper %s, but a status message came from reaper %s.  Probably not good." % tup )
 
-def job_started(msgbytes):
+def _job_started(request):
     '''Update the Job record to with properties defined at job start (pid, start_time,...)'''
-    request = protocols.unpack(protobuf.ReaperJobStartRequest, msgbytes)
-    logger.debug("Received job start message: %s" % str(request))
+    logger.debug("Setting job %s to processing." % request.job_id[:8])
     try:
         dblock.acquire()
         job = Job.objects.get(uuid=request.job_id)
         logger.debug("Got job %s from DB." % job.uuid[:8])
     except Job.DoesNotExist:
         job_does_not_exist(request.job_id)
-        #return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.NOACK})
         raise
     verify_reaper_id(request.job_id, request.reaper_id, job.processor)
     
@@ -289,15 +306,20 @@ def job_started(msgbytes):
     """
     dblock.release()
     
-    # ...
+def job_started(msgbytes):
+    '''Update the Job record to with properties defined at job start (pid, start_time,...)'''
+    request = protocols.unpack(protobuf.ReaperJobStartRequest, msgbytes)
+    logger.debug("Received job start message: %s" % str(request))
+    
+    # add request to the database queue
+    thread_database.enqueue(_job_started, request)
+    
     resp = {'ack': protobuf.AckResponse.ACK}
     logger.debug("Response to send: " + str(resp))
     return protocols.pack(protobuf.AckResponse, resp)
 
-def job_ended(msgbytes):
-    '''Update job record with properties defined at job end time ()'''
-    request = protocols.unpack(protobuf.ReaperJobEndRequest, msgbytes)
-    logger.info("Job %s ended: %s" % (request.job_id[:8], request.state))
+def _job_ended(request):
+    logger.info("Setting job %s to %s" % (request.job_id[:8], request.state))
     dblock.acquire()
     try:
         job = Job.objects.get(uuid=request.job_id)
@@ -332,6 +354,13 @@ def job_ended(msgbytes):
             job.save()
             
     dblock.release()
+
+def job_ended(msgbytes):
+    '''Update job record with properties defined at job end time ()'''
+    request = protocols.unpack(protobuf.ReaperJobEndRequest, msgbytes)
+    logger.info("Job %s ended: %s" % (request.job_id[:8], request.state))
+    
+    thread_database.enqueue(_job_ended, request)
     
     return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
     
@@ -394,7 +423,7 @@ def shutdown():
     
 def init():
     logger.debug("dispatch daemon initializing")
-    global command_ctag, status_ctag, thread_consume_loop, shutdown_event
+    global command_ctag, status_ctag, thread_consume_loop, thread_database, shutdown_event
     shutdown_event = threading.Event()
     logging.getLogger('messagebus').setLevel(logging.DEBUG)
 
@@ -404,6 +433,9 @@ def init():
             js.jobs.filter(status__in=('dispatched','processing')).update(status='requeue')
     
     atexit.register(shutdown)
+    
+    thread_database = TaskQueueThread(name="thread_database")
+    thread_database.start()
     
     # setup command queue
     CONTROL_QUEUE = 'control.dispatch'
