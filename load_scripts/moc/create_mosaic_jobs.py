@@ -38,7 +38,7 @@ def create_mipmap_jobs(n_jobs=None):
     transaction_id_sequence.setval(1) # reset the transaction_id sequence
     assets = Asset.objects.filter(class_label='scaled image int8')[:n_jobs]
     jobset = JobSet()
-    jobset.name = "Debug MipMap"
+    jobset.name = "Debug MipMap (%d)" % n_jobs
     jobset.command = "mipmap"
     jobset.save()
     _build_mipmap_jobs(jobset, assets)
@@ -83,9 +83,9 @@ def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_j
     
 
 @transaction.commit_on_success   
-def create_snapshot_jobs(mmjobset=None):
+def create_snapshot_jobs(mmjobset=None, interval=256):
     snapshot_jobset = JobSet()
-    snapshot_jobset.name = "mosaic snapshots"
+    snapshot_jobset.name = "mosaic snapshots (js%d)" % mmjobset.id
     snapshot_jobset.command = "snapshot"
     snapshot_jobset.save()
 
@@ -100,7 +100,7 @@ def create_snapshot_jobs(mmjobset=None):
         jobs_for_dependency.append(mmjob)
         if not transaction_range_start:
             transaction_range_start = mmjob.transaction_id        
-        if i % 256 == 0:
+        if i % interval == 0:
             transaction_range = (transaction_range_start, mmjob.transaction_id)
             startjob, endjob = _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, endjob)
             #clear transaction range and jobs for dependency list
