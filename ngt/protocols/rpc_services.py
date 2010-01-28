@@ -176,7 +176,7 @@ class RpcChannel(object):
     retries = 0
     while True: # begin retry loop
         if self.max_retries > -1 and retries > self.max_retries:
-            rpc_controller.SetFailed("Too many retries.")
+            rpc_controller.SetFailed("Too many retries. (Max was %d)" % self.max_retries)
             #if done:
             #    done(None)
             
@@ -271,7 +271,7 @@ class AmqpService(object):
         exchange='Control_Exchange',
         request_routing_key=None,
         reply_queue=None,
-        timeout_ms=3000,
+        timeout_ms=10000,
         max_retries=3):
         
         self.amqp_channel = amqp_channel or MessageBus().channel
