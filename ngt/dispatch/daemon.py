@@ -431,7 +431,7 @@ def init():
     logger.debug("dispatch daemon initializing")
     global command_ctag, status_ctag, thread_consume_loop, thread_database, shutdown_event
     shutdown_event = threading.Event()
-    logging.getLogger('messagebus').setLevel(logging.DEBUG)
+    #logging.getLogger('messagebus').setLevel(logging.DEBUG)
 
     if options.requeue_lost_jobs:
         logger.info("Resetting lost jobs.")
