@@ -147,7 +147,7 @@ class StartSnapshot(JobCommand):
         logger.info("start_snapshot executed.  Generating snapshot jobs")
         job_transaction_range = minmax(d.transaction_id for d in job.dependencies.all())
         jcount = 0
-        for level in range(maxlevel + 1):
+        for level in range(maxlevel):
             for region in klass._generate_partitions(level):
                 logger.debug("Generating snapshot job for region %s" % str(region))
                 snapjob = Job(
