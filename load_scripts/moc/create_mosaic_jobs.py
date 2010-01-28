@@ -84,13 +84,13 @@ def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_j
 
 @transaction.commit_on_success   
 def create_snapshot_jobs(mmjobset=None, interval=256):
+    if not mmjobset:
+        mmjobset = JobSet.objects.filter(name__contains="MipMap").latest('pk')
     snapshot_jobset = JobSet()
     snapshot_jobset.name = "mosaic snapshots (js%d)" % mmjobset.id
     snapshot_jobset.command = "snapshot"
     snapshot_jobset.save()
 
-    if not mmjobset:
-        mmjobset = JobSet.objects.filter(name__contains="MipMap").latest('pk')
     i = 0
     transaction_range_start = None
     jobs_for_dependency = []

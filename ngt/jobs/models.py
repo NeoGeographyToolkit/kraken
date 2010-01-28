@@ -133,7 +133,6 @@ class JobSet(models.Model):
     name = models.CharField(max_length=256)
     assets = models.ManyToManyField('assets.Asset') # this collection of assets can be used to populate jobs
     #jobs = models.ManyToManyField(Job, editable=False) # now a foreign key in the Job model
-    status = models.CharField(max_length=32, default='new')
     command = models.CharField(max_length=64)
     active = models.BooleanField(default=False)
     priority = models.IntegerField(default=0)
