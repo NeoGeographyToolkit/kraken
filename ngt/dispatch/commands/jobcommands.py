@@ -174,7 +174,7 @@ class EndSnapshot(JobCommand):
     
     @classmethod
     def build_arguments(klass, job, **kwargs):
-        args = ['--finish', '-t', str(job.transaction_id)]
+        args = ['--finish', '-t', str(job.transaction_id), kwargs['platefile']]
         return args
         
     
