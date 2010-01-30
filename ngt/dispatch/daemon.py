@@ -8,7 +8,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 #from ngt.protocols import * # <-- dotdict, pack, unpack
 import ngt.protocols as protocols
 from ngt.protocols import protobuf, dotdict, rpc_services
-from ngt.utils.containers import LockingOrderedSet
+from ngt.utils.containers import UniquePriorityQueue
 
 from ngt.messaging import messagebus
 from ngt.messaging.messagebus import MessageBus
@@ -164,27 +164,29 @@ def postprocess_job(job, state):
         return job
 
 
-class JobBuffer(LockingOrderedSet):
+class JobBuffer(UniquePriorityQueue):
 
-    def __init__(self, *args, **kwargs):
-        super(JobBuffer, self).__init__(*args, **kwargs)
-        self.REFRESH_TRIGGER_SIZE = 3
+    def __init__(self, maxsize):
+        UniquePriorityQueue.__init__(self, maxsize)
+        self.REFRESH_TRIGGER_SIZE = 5
         self.refreshing = False
         self.dispatch_pending = None #holds on to a job while it's in the process of being dispatched
+        self.refresh()
 
     def _refresh(self):
         statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
         logger.debug("Refreshing the job buffer.")
         dblock.acquire()
-        for active_jobset in JobSet.objects.filter(active=True).order_by('-priority'):
-            jobs = active_jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
+        for jobset in JobSet.objects.filter(active=True).order_by('priority'):
+            jobs = jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
             for job in jobs:
                 if job != self.dispatch_pending: #make sure a this job isn't in the middle of being dispatched
-                    self.add(job)
+                    self.put((jobset.priority, job))
                 else:
                     logger.debug("REFRESH: %s rejected because it's being dispatched" % str(job))
         #db.connection.close() # force django to close connections, otherwise it won't
         dblock.release()
+        logger.debug("Refresh complete.  New size: %s" % self.qsize())
         self.refreshing = False
 
     def refresh(self):
@@ -192,37 +194,35 @@ class JobBuffer(LockingOrderedSet):
             self.refreshing = True
             thread_database.enqueue(self._refresh, priority=1)
             
-    def next_job(self):
-        logger.debug("%d jobs in buffer. Refreshing: %s" % (len(self), str(self.refreshing)))
-        if len(self) <= self.REFRESH_TRIGGER_SIZE:
+    def next(self):
+        logger.debug("%d jobs in buffer. Refreshing: %s" % (self.qsize(), str(self.refreshing)))
+        if self.qsize() <= self.REFRESH_TRIGGER_SIZE:
             logger.debug("Job buffer low.  Requesting refresh.")
             self.refresh()
-        j = self.dispatch_pending = self.pop()
-        return j
+        priority, job = self.get(False) # False means non-blocking
+        self.dispatch_pending = job
+        return job
         
     def ack(self, job):
         if job != self.dispatch_pending:
-            raise KeyError("Job does not match the one in dispatch_pending.")
+            raise KeyError("Job acked does not match the one in dispatch_pending.")
         self.dispatch_pending = None
+        self.task_done()
 
 
     
-job_buffer = JobBuffer()
-#job_generator = generate_jobs(job_buffer)
-
 def get_next_job(msgbytes):
-    global job_buffer
     t0 = time.time()
     logger.debug("Looking for the next job.")
     request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
     
     try:
-        job = job_buffer.next_job()
+        job = job_buffer.next()
         if not check_readiness(job):
             logger.debug("Job %d not ready.  Rejecting." % job.id)
             job_buffer.ack(job)
             job = None
-    except KeyError:
+    except Queue.Empty:
         job = None
         logger.debug("Job buffer empty.")
     if not job:
@@ -429,7 +429,7 @@ def shutdown():
     
 def init():
     logger.debug("dispatch daemon initializing")
-    global command_ctag, status_ctag, thread_consume_loop, thread_database, shutdown_event
+    global command_ctag, status_ctag, thread_consume_loop, thread_database, shutdown_event, job_buffer
     shutdown_event = threading.Event()
     #logging.getLogger('messagebus').setLevel(logging.DEBUG)
 
@@ -442,6 +442,7 @@ def init():
     
     thread_database = TaskQueueThread(name="thread_database")
     thread_database.start()
+    job_buffer = JobBuffer(0)
     
     # setup command queue
     CONTROL_QUEUE = 'control.dispatch'
@@ -454,7 +455,7 @@ def init():
     mb.queue_bind(queue=CONTROL_QUEUE, exchange='Control_Exchange', routing_key='dispatch')
     command_ctag = mb.basic_consume(callback=command_handler, queue=CONTROL_QUEUE)
 
-    logger.debug("Launching consume thread.")
+    logger.info("Launching consume thread.")
     mb.start_consuming()
 
 
@@ -472,6 +473,7 @@ if __name__ == '__main__':
         logger.setLevel(logging.DEBUG)
     logger.debug("Starting init()")
     init()
+    logger.info("READY.")
     try:
         while True:
             if not mb.consumption_thread.is_alive():

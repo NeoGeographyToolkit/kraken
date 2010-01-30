@@ -40,6 +40,7 @@ def create_mipmap_jobs(n_jobs=None):
     jobset = JobSet()
     jobset.name = "Debug MipMap (%d)" % n_jobs
     jobset.command = "mipmap"
+    jobset.priority = 3
     jobset.save()
     _build_mipmap_jobs(jobset, assets)
         
