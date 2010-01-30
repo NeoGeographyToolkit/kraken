@@ -213,11 +213,12 @@ class JobSet(models.Model):
         print "%s deactivated." % str(js)
             
 def active_jobsets():
-    from pprint import pprint
     jobsets = JobSet.objects.filter(active=True)
-    pprint( dict( [(js, js.status()) for js in jobsets] ) )
-    del pprint
     return jobsets
+def status():
+    jobsets = active_jobsets()
+    from pprint import pprint
+    pprint( dict( [(js, js.status()) for js in jobsets] ) )
 
 def foo():
     return 'bar'
