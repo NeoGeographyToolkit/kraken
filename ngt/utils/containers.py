@@ -1,5 +1,6 @@
 import collections
 import threading
+import Queue
 
 KEY, PREV, NEXT = range(3)
 
@@ -92,3 +93,20 @@ class LockingOrderedSet(OrderedSet):
         finally:
             self.lock.release()
         return retval
+        
+        
+class UniquePriorityQueue(Queue.PriorityQueue):
+    def __init__(self, maxsize):
+        self.items = set()
+        Queue.PriorityQueue.__init__(self, maxsize)
+        
+    def put(self, *args):
+        item = args[0]
+        if item not in self.items:
+            self.items.add(item)
+            Queue.PriorityQueue.put(self, *args)
+    
+    def get(self, *args):
+        item = Queue.PriorityQueue.get(self, *args)
+        self.items.remove(item)
+        return item
