@@ -39,7 +39,7 @@ class JobCommand(object):
         return job
     
     @classmethod
-    def postprocess_job(klass, job, state):
+    def postprocess_job(klass, job):
         return job
         
     @classmethod
@@ -49,8 +49,28 @@ class JobCommand(object):
         else:
             return []
             
+class RetryingJobCommand(JobCommand):
+    name='_retry_abc'
+    failures = {}
+    max_failures = 3
+    
+    @classmethod
+    @transaction.commit_on_success
+    def postprocess_job(klass, job):
+        if job.status == 'failed':
+            if job.id in klass.failures:
+                klass.failures[job.id] += 1
+            else:
+                klass.failures[job.id] = 1
+            if klass.failures[job.id] <= klass.max_failures:
+                logger.debug("Job %d failed.  Requeueing." % job.id)
+                job.status = 'requeue'
+            else:
+                logger.debug("Job %d failed.  Max number of requeues exceeded." % job.id)
+        return job
+            
         
-class MipMapCommand(JobCommand):
+class MipMapCommand(RetryingJobCommand):
     name = 'mipmap'
 
     @classmethod
@@ -58,7 +78,7 @@ class MipMapCommand(JobCommand):
         args = "-t %s %s -o %s" % (job.transaction_id, kwargs['file_path'], kwargs['platefile'])
         return args.split(' ')
         
-class Snapshot(JobCommand):
+class Snapshot(RetryingJobCommand):
     name = 'snapshot'
     
     @classmethod
@@ -134,7 +154,7 @@ class StartSnapshot(JobCommand):
     
     @classmethod
     @transaction.commit_on_success
-    def postprocess_job(klass, job, state):
+    def postprocess_job(klass, job):
         # parse pyramid depth (max level) from job output
         maxlevel = klass._get_maxlevel(job.output)
         # get corresponding end_snapshot job
@@ -221,10 +241,10 @@ class MosaicJobCommand(JobCommand):
         return transaction_id, platefile_id
 
     @classmethod
-    def postprocess_job(klass, job, state):
+    def postprocess_job(klass, job):
         if job.uuid in klass.current_footprints:
             del klass.current_footprints[job.uuid]
-        if state == 'failed':
+        if job.status == 'failed':
             transaction_id, platefile_id = klass.get_plate_info(job.output)
             if transaction_id and platefile_id:
                 idx_transaction_failed = {
@@ -246,12 +266,16 @@ class MosaicJobCommand(JobCommand):
 ####
 # For testing dependencies...
 ####
+
+class Test(RetryingJobCommand):
+    name = 'test'
+
 class Fjord(JobCommand):
     ''' Fjord jobs are only ready 90% of the time and take forever to get going. '''
     name = 'test_fjord'
     
     @classmethod
-    def postprocess_job(klass, job, state):
+    def postprocess_job(klass, job):
         print "Fjord ran."
         return job
         
@@ -278,6 +302,6 @@ class Bjorn(JobCommand):
     name = 'test_bjorn'
     
     @classmethod
-    def postprocess_job(klass, job, state):
+    def postprocess_job(klass, job):
         print "Bjorn ran."
         return job

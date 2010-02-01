@@ -155,10 +155,10 @@ def preprocess_job(job):
     else:
         return job
 
-def postprocess_job(job, state):
+def postprocess_job(job):
     ''' Anything that needs to get done after the job is completed '''
     if job.command in jobcommand_map:
-        return jobcommand_map[job.command].postprocess_job(job, state)
+        return jobcommand_map[job.command].postprocess_job(job)
     else:
         logger.debug("Skipping postprocessing because the job's command is not in jobcommand_map.")
         return job
@@ -337,7 +337,7 @@ def _job_ended(request):
     job.status = request.state
     job.time_ended = request.end_time.replace('T',' ') # django DateTimeField should be able to parse it this way. (pyiso8601 would be the alternative).
     job.output = request.output
-    job = postprocess_job(job, request.state)
+    job = postprocess_job(job)
     job.save()
     # TODO: get reaper and increment job count
     try:
