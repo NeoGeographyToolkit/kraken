@@ -43,6 +43,7 @@ def create_mipmap_jobs(n_jobs=None):
     jobset.priority = 3
     jobset.save()
     _build_mipmap_jobs(jobset, assets)
+    return jobset
         
 
 def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, last_endjob):
@@ -68,7 +69,7 @@ def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_j
         command = 'end_snapshot',
         jobset = snapshot_jobset
     )
-    endjob.arguments = json.dumps(EndSnapshot.build_arguments(endjob))
+    endjob.arguments = json.dumps(EndSnapshot.build_arguments(endjob, platefile=PLATEFILE))
     #import pdb; pdb.set_trace()
     startjob.save()
     endjob.save()
@@ -108,9 +109,11 @@ def create_snapshot_jobs(mmjobset=None, interval=256):
             transaction_range_start = None
             jobs_for_dependency = []
     else: # after the last iteration, start a snapshot with whatever's left.
-        transaction_range = (transaction_range_start, mmjob.transaction_id)
-        _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, endjob)
+        if jobs_for_dependency:
+            transaction_range = (transaction_range_start, mmjob.transaction_id)
+            _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, endjob)
     print "Setting priority to 1 and activating."
     snapshot_jobset.priority = 1
     snapshot_jobset.active = True
     snapshot_jobset.save()
+    return snapshot_jobset
