@@ -212,6 +212,7 @@ class JobBuffer(UniquePriorityQueue):
 
     
 def get_next_job(msgbytes):
+    global dispatched_job_count
     t0 = time.time()
     logger.debug("Looking for the next job.")
     request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
@@ -252,6 +253,7 @@ def get_next_job(msgbytes):
         from django.db import connection
         from pprint import pprint
         pprint([q for q in connection.queries if float(q['time']) > 0.001])
+    dispatched_job_count += 1
     return protocols.pack(protobuf.ReaperJobResponse, response)
     
 ####
@@ -378,6 +380,8 @@ def command_handler(msg):
     """ Unpack a message and process commands 
         Speaks the command protocol.
     """
+    global command_request_count
+    command_request_count += 1
     #cmd = protocols.unpack(protocols.Command, msg.body)
     request = protocols.unpack(protobuf.RpcRequestWrapper, msg.body)
     logger.debug("command_handler got a command: %s" % str(request.method))
@@ -429,17 +433,19 @@ def shutdown():
     
 def init():
     logger.debug("dispatch daemon initializing")
-    global command_ctag, status_ctag, thread_consume_loop, thread_database, shutdown_event, job_buffer
+    global command_ctag, status_ctag, thread_consume_loop, thread_database, shutdown_event, job_buffer, dispatched_job_count, command_request_count
     shutdown_event = threading.Event()
     #logging.getLogger('messagebus').setLevel(logging.DEBUG)
 
     if options.requeue_lost_jobs:
         logger.info("Resetting lost jobs.")
         for js in JobSet.objects.filter(active=True):
-            js.jobs.filter(status__in=('dispatched','processing')).update(status='requeue')
+            js.jobs.filter(status_enum__in=(Job.StatusEnum.DISPATCHED,Job.StatusEnum.PROCESSING)).update(status_enum=Job.StatusEnum.REQUEUE)
     
     atexit.register(shutdown)
     
+    dispatched_job_count = 0
+    command_request_count = 0
     thread_database = TaskQueueThread(name="thread_database")
     thread_database.start()
     job_buffer = JobBuffer(0)
@@ -457,25 +463,40 @@ def init():
 
     logger.info("Launching consume thread.")
     mb.start_consuming()
+    
+def do_report(dt):
+    global job_buffer, thread_database, dispatched_job_count, command_request_count
+    report = "%f commands/sec\t %f jobs/sec\t %d in job buffer\t%d in db queue" % (command_request_count / dt, dispatched_job_count / dt, job_buffer.qsize(), thread_database.task_queue.qsize())
+    command_request_count = 0
+    dispatched_job_count = 0
+    print report
+    
 
 
 if __name__ == '__main__':
     logger.debug("__name__ == '__main__'")
     global options
     parser = optparse.OptionParser()
-    parser.add_option('-r', '--restart', dest="restart", action='store_true', help="Don't purge the control queue.")
-    parser.add_option('-d', '--debug', dest='debug', action='store_true', help='Turn on debug logging.')
+    parser.add_option('--restart', dest="restart", action='store_true', help="Don't purge the control queue.")
+    parser.add_option('--verbose', '--info', dest='loglevel', action='store_const', const=logging.INFO, help='Set log level to INFO.')
+    parser.add_option('-v', '--debug', dest='loglevel', action='store_const', const=logging.DEBUG, help='Set log level to DEBUG.')
     parser.add_option('--queries', dest='show_queries', action='store_true', help='Print out the slow queries (django.db.connection.queries)')
     parser.add_option('--lost-jobs', dest='requeue_lost_jobs', action='store_true', help="Requeue jobs marooned with a 'dispatched' or 'processing' status'.")
+    parser.add_option('--report-interval', '-i', action='store', type='int', dest='report_interval', help="Report interval in seconds.")
+    parser.set_defaults(loglevel=logging.WARNING, report_interval=1)
     (options, args) = parser.parse_args()
     
-    if options.debug:
-        logger.setLevel(logging.DEBUG)
+    logger.setLevel(options.loglevel)
     logger.debug("Starting init()")
     init()
-    logger.info("READY.")
+    print "READY."
     try:
+        t0 = time.time()
         while True:
+            dt = time.time() - t0
+            if dt > 1: #one second
+                do_report(dt)
+                t0 = time.time()
             if not mb.consumption_thread.is_alive():
                 logger.error("Consumtion thread died.  Shutting down dispatch.")
                 shutdown()
