@@ -3,6 +3,7 @@ if not settings.DISABLE_GEO:
     from django.contrib.gis.db import models
 else:
     from django.db import models
+from django import db
 from django.db import transaction
 import os, time, hashlib, datetime
 import uuid
@@ -25,6 +26,13 @@ class Job(models.Model):
         FAILED = 5
         end_states = (COMPLETE, FAILED)
         
+        @classmethod
+        def reverse(klass, value):
+            for k,v in klass.__dict__.items():
+                if v == value: return k.lower()
+            else:
+                raise ValueError("Value %d not found in %s." % (value, klass.__name__))
+        
     class EnumDescriptor(object):
         '''
         A sneaky way to use an enum values without 
@@ -35,13 +43,11 @@ class Job(models.Model):
             self.enum_class = enum_class
         def __get__(self, instance, owner):
             value = getattr(instance, self.enum_field_name)
-            for k,v in self.enum_class.__dict__.items():
-                if v == value: return k.lower()
-            else:
-                raise ValueError("Value %d not found in %s." % (value, self.enum_class.__name__))
+            return self.enum_class.reverse(value)
         
         def __set__(self, instance, value):
             setattr(instance, self.enum_field_name, getattr(self.enum_class, value.upper()))
+            
     #
     ###
     
@@ -166,13 +172,14 @@ class JobSet(models.Model):
     # Convenience Methods for jobset wrangling.
     ####
     def status(self):
-        tally = {}
-        for job in self.jobs.all():
-            if job.status in tally:
-                tally[job.status] += 1
-            else:
-                tally[job.status] = 1
-        return tally
+        qry = "SELECT status_int, count(*) FROM jobs_job WHERE jobset_id = %d GROUP BY status_int" % self.id
+        cursor = db.connection.cursor()
+        cursor.execute(qry)
+        counts = {}
+        for row in cursor.fetchall():
+            counts[Job.StatusEnum.reverse(row[0])] = row[1]
+        return counts
+
         
     @transaction.commit_on_success
     def reset(self):
