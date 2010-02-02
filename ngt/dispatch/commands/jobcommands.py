@@ -134,14 +134,15 @@ class StartSnapshot(JobCommand):
         Give all the  partitions of a 2**level tilespace.
         Divide the space into 16x16 regions
         '''
-        tiles = 16 # actually there are tiles**2 tiles
+        print '\n\n****** Generating Partitions!!!!! ******\n\n'
+        tiles = 4 # actually there are tiles**2 tiles
         if 2**level <= tiles:
             yield(0, 2**level, 0, 2**level)
         else:
             side = 2**level / tiles
             for i in range(tiles):
                 for j in range(tiles):
-                    yield (i*side, (i+1)*side-1, j*side, (j+1)*side-1)
+                    yield (i*side, j*side, (i+1)*side-1, (j+1)*side-1)
                     
     @classmethod
     def _get_maxlevel(klass, output):
@@ -170,6 +171,7 @@ class StartSnapshot(JobCommand):
         for level in range(maxlevel):
             for region in klass._generate_partitions(level):
                 logger.debug("Generating snapshot job for region %s" % str(region))
+                #print "Generating snapshot job for region " + str(region) + " at " + str(level)
                 snapjob = Job(
                     command = 'snapshot',
                     transaction_id = job.transaction_id,
