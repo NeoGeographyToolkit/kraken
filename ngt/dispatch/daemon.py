@@ -177,16 +177,21 @@ class JobBuffer(UniquePriorityQueue):
         statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
         logger.debug("Refreshing the job buffer.")
         dblock.acquire()
+        rejected_count = 0
         for jobset in JobSet.objects.filter(active=True).order_by('priority'):
             jobs = jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
             for job in jobs:
                 if job != self.dispatch_pending: #make sure a this job isn't in the middle of being dispatched
-                    self.put((jobset.priority, job))
+                    if check_readiness(job):
+                        self.put((jobset.priority, job))
+                    else:
+                        rejected_count += 1
+                        logger.debug("REFRESH: %s rejected because it's not ready to run." % str(job))
                 else:
                     logger.debug("REFRESH: %s rejected because it's being dispatched" % str(job))
         #db.connection.close() # force django to close connections, otherwise it won't
         dblock.release()
-        logger.debug("Refresh complete.  New size: %s" % self.qsize())
+        logger.debug("Refresh complete.  New size: %d Rejected: %d" % (self.qsize(), rejected_count) )
         self.refreshing = False
 
     def refresh(self):
@@ -219,10 +224,12 @@ def get_next_job(msgbytes):
     
     try:
         job = job_buffer.next()
+        ''' # readness checking now being done on buffer insertion
         if not check_readiness(job):
             logger.debug("Job %d not ready.  Rejecting." % job.id)
             job_buffer.ack(job)
             job = None
+        '''
     except Queue.Empty:
         job = None
         logger.debug("Job buffer empty.")
