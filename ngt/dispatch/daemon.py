@@ -96,12 +96,8 @@ class TaskQueueThread(threading.Thread):
 # COMMANDS
 ###
 
-def register_reaper(msgbytes):
-    # TODO: Handle the corner case where a reaper has been expired or soft-deleted, and tries to register itself again.
-    # Currently this would result in a ProgrammerError from psycopg
-    request = protocols.unpack(protobuf.ReaperRegistrationRequest, msgbytes)
-    
-    logger.info("Got registration request from reaper %s" % request.reaper_uuid)
+def _register_reaper(request):
+    dblock.acquire()
     try:
         r = Reaper.objects.get(uuid=request.reaper_uuid) # will get deleted or expired reapers, too
         logger.info("Reaper %s exists.  Resurrecting." % request.reaper_uuid[:8])
@@ -109,27 +105,39 @@ def register_reaper(msgbytes):
             r.hostname = request.hostname
         r.deleted = False
         r.expired = False
-        dblock.acquire()
         r.save()
-        dblock.release()
     except Reaper.DoesNotExist:
         r = Reaper(uuid=request.reaper_uuid, type=request.reaper_type)
         if 'hostname' in request:
             r.hostname = request.hostname
-        dblock.acquire()
         r.save()
-        dblock.release()
         logger.info("Registered reaper: %s" % request.reaper_uuid)
+    finally:
+        dblock.release()
+
+def register_reaper(msgbytes):
+    # TODO: Handle the corner case where a reaper has been expired or soft-deleted, and tries to register itself again.
+    # Currently this would result in a ProgrammerError from psycopg
+    request = protocols.unpack(protobuf.ReaperRegistrationRequest, msgbytes)
+    
+    logger.info("Got registration request from reaper %s" % request.reaper_uuid)
+    thread_database.enqueue(_register_reaper, request)
     return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
 
-def unregister_reaper(msgbytes):
-    request = protocols.unpack(protobuf.ReaperUnregistrationRequest, msgbytes)
+def _unregister_reaper(request):
+    dblock.acquire()
     try:
         r = Reaper.objects.get(uuid=request.reaper_uuid)
         r.soft_delete()
         logger.info("Reaper deleted: %s" % request.reaper_uuid)
     except Reaper.DoesNotExist:
         logger.error("Tried to delete an unregistered reaper, UUID %s" % reaper_uuid)
+    finally:
+        dblock.release()
+
+def unregister_reaper(msgbytes):
+    request = protocols.unpack(protobuf.ReaperUnregistrationRequest, msgbytes)
+    thread_database.enqueue(_unregister_reaper, request)
     return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
 
 ####
