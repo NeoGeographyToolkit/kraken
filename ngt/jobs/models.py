@@ -87,7 +87,11 @@ class Job(models.Model):
     @property
     def command_string(self):
         return self.command + ' ' + ' '.join(json.loads(self.arguments))
-       
+        
+    @property
+    def reaper(self):
+        from ngt.dispatch.models import Reaper
+        return Reaper.objects.get(uuid=self.processor)       
             
     def dependencies_met(self):
         ''' 
