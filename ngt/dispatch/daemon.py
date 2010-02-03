@@ -196,6 +196,7 @@ class JobBuffer(UniquePriorityQueue):
         statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
         logger.debug("Refreshing the job buffer.")
         dblock.acquire()
+        t0 = time.time()
         rejected_count = 0
         for jobset in JobSet.objects.filter(active=True).order_by('priority'):
             jobs = jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
@@ -210,7 +211,7 @@ class JobBuffer(UniquePriorityQueue):
 
         #db.connection.close() # force django to close connections, otherwise it won't
         dblock.release()
-        logger.debug("Refresh complete.  New size: %d Rejected: %d" % (self.qsize(), rejected_count) )
+        d_logger.debug("Refresh complete in %f secs.  New size: %d Rejected: %d" % (time.time() - t0, self.qsize(), rejected_count) )
         self.refreshing = False
 
     def refresh(self):
@@ -489,7 +490,7 @@ def init():
     
 def do_report(dt):
     global job_buffer, thread_database, dispatched_job_count, command_request_count
-    report = "%f commands/sec\t %f jobs/sec\t %d in job buffer\t%d in db queue" % (command_request_count / dt, dispatched_job_count / dt, job_buffer.qsize(), thread_database.task_queue.qsize())
+    report = "%f commands/sec\t %f jobs/sec\t %d in job queue\t%d in db queue" % (command_request_count / dt, dispatched_job_count / dt, job_buffer.qsize(), thread_database.task_queue.qsize())
     command_request_count = 0
     dispatched_job_count = 0
     print report
