@@ -112,22 +112,7 @@ class StartSnapshot(JobCommand):
         description = "Snapshot of transactions %d --> %d" % t_range
         args = ['--start', '"%s"' % description, '-t', str(job.transaction_id), kwargs['platefile']]
         return args
-    """    
-    @classmethod
-    def _generate_partitions(klass, level):
-        '''
-        Give all the 1024x1024 partitions of a 2**level tilespace.
-        Yields 4-tuples
-        '''
-        width = 2**level
-        if width < 1024:
-            yield (0,width, 0,width)
-        else:
-            for i in range(width / 1024):
-                for j in range(width / 1024):
-                    yield (i*1024, (i+1)*1024-1, j*1024, (j+1)*1024-1)
-    """
-                    
+
     @classmethod
     def _generate_partitions(klass, level):
         '''
@@ -135,14 +120,14 @@ class StartSnapshot(JobCommand):
         Divide the space into 16x16 regions
         '''
         print '\n\n****** Generating Partitions!!!!! ******\n\n'
-        tiles = 4 # actually there are tiles**2 tiles
+        tiles = 8 # actually there are tiles**2 tiles
         if 2**level <= tiles:
-            yield(0, 2**level, 0, 2**level)
+            yield(0, 0, 2**level, 2**level)
         else:
             side = 2**level / tiles
             for i in range(tiles):
                 for j in range(tiles):
-                    yield (i*side, j*side, (i+1)*side-1, (j+1)*side-1)
+                    yield (i*side, j*side, (i+1)*side, (j+1)*side)
                     
     @classmethod
     def _get_maxlevel(klass, output):
