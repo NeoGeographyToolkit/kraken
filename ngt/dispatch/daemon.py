@@ -15,6 +15,9 @@ from ngt.messaging.messagebus import MessageBus
 from amqplib.client_0_8 import Message
 logger = logging.getLogger('dispatch')
 logger.setLevel(logging.INFO)
+d_logger = logging.getLogger('dispatch_debug')
+#d_logger.addHandler(logging.FileHandler('dispatch.log', 'w') )
+#d_logger.setLevel(logging.DEBUG)
 #logging.getLogger().setLevel(logging.DEBUG)
 #logging.getLogger('protocol').setLevel(logging.DEBUG)
 
@@ -43,10 +46,14 @@ command_map = {
 }
 
 
-JOB_FETCH_LIMIT = 50
-#MAX_DB_CONNECTIONS = 60
-#dblock = threading.Semaphore(MAX_DB_CONNECTIONS)
-dblock = threading.RLock()
+JOB_FETCH_LIMIT = 30   
+REFRESH_TRIGGER_SIZE = 3
+
+class NoopLock(object):
+    def acquire(self): pass
+    def release(self): pass
+#dblock = threading.RLock()
+dblock = NoopLock()
 
 def create_jobcommand_map():
     ''' Create a map of command names to JobCommand subclasses from the jobcommand module '''
@@ -73,7 +80,8 @@ class TaskQueueThread(threading.Thread):
     def __init__(self, *args, **kwargs):
         super(TaskQueueThread, self).__init__(*args, **kwargs)
         self.daemon = True
-        self.task_queue = Queue.PriorityQueue()
+        #self.task_queue = Queue.PriorityQueue()
+        self.task_queue = Queue.Queue()
         self.default_priority = 3
         
     def enqueue(self, method, *args, **kwargs):
@@ -95,6 +103,11 @@ class TaskQueueThread(threading.Thread):
 ###
 # COMMANDS
 ###
+
+def _save_job(job):
+    dblock.acquire()
+    job.save()
+    dblock.release()
 
 def _register_reaper(request):
     dblock.acquire()
@@ -176,47 +189,43 @@ class JobBuffer(UniquePriorityQueue):
 
     def __init__(self, maxsize):
         UniquePriorityQueue.__init__(self, maxsize)
-        self.REFRESH_TRIGGER_SIZE = 5
         self.refreshing = False
-        self.dispatch_pending = None #holds on to a job while it's in the process of being dispatched
         self.refresh()
 
     def _refresh(self):
         statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
         logger.debug("Refreshing the job buffer.")
         dblock.acquire()
+        t0 = time.time()
+        rejected_count = 0
         for jobset in JobSet.objects.filter(active=True).order_by('priority'):
             jobs = jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
             for job in jobs:
-                if job != self.dispatch_pending: #make sure a this job isn't in the middle of being dispatched
+                if check_readiness(job):
+                    job.status_enum = Job.StatusEnum.DISPATCHED
+                    job.save()
                     self.put((jobset.priority, job))
                 else:
-                    logger.debug("REFRESH: %s rejected because it's being dispatched" % str(job))
+                    rejected_count += 1
+                    logger.debug("REFRESH: %s rejected because it's not ready to run." % str(job))
+
         #db.connection.close() # force django to close connections, otherwise it won't
         dblock.release()
-        logger.debug("Refresh complete.  New size: %s" % self.qsize())
+        d_logger.debug("Refresh complete in %f secs.  New size: %d Rejected: %d" % (time.time() - t0, self.qsize(), rejected_count) )
         self.refreshing = False
 
     def refresh(self):
         if not self.refreshing:
             self.refreshing = True
-            thread_database.enqueue(self._refresh, priority=1)
+            thread_database.enqueue(self._refresh)
             
     def next(self):
         logger.debug("%d jobs in buffer. Refreshing: %s" % (self.qsize(), str(self.refreshing)))
-        if self.qsize() <= self.REFRESH_TRIGGER_SIZE:
+        if self.qsize() <= REFRESH_TRIGGER_SIZE:
             logger.debug("Job buffer low.  Requesting refresh.")
             self.refresh()
         priority, job = self.get(False) # False means non-blocking
-        self.dispatch_pending = job
         return job
-        
-    def ack(self, job):
-        if job != self.dispatch_pending:
-            raise KeyError("Job acked does not match the one in dispatch_pending.")
-        self.dispatch_pending = None
-        self.task_done()
-
 
     
 def get_next_job(msgbytes):
@@ -227,16 +236,11 @@ def get_next_job(msgbytes):
     
     try:
         job = job_buffer.next()
-        if not check_readiness(job):
-            logger.debug("Job %d not ready.  Rejecting." % job.id)
-            job_buffer.ack(job)
-            job = None
     except Queue.Empty:
         job = None
-        logger.debug("Job buffer empty.")
-    if not job:
-        logger.info("No jobs or job not ready.")
+        logger.info("Job buffer empty.")
         return protocols.pack(protobuf.ReaperJobResponse,{'job_available': False})
+    assert job
 
     t1 = time.time()
     logger.debug("Fetched a job in %s sec." % str(t1-t0))
@@ -251,17 +255,18 @@ def get_next_job(msgbytes):
     logger.info("Sending job %s to reaper %s (%s)" % (job.uuid[:8], request.reaper_uuid[:8], str(time.time() - t0)))
     job.status = "dispatched"
     job.processor = request.reaper_uuid
-    dblock.acquire()
-    job.save()
-    job_buffer.ack(job)
+    #dblock.acquire()
+    #job.save()
+    thread_database.enqueue(_save_job, job)
     job = None
-    dblock.release()
+    #dblock.release()
     if options.show_queries:
         # print the slowest queries
         from django.db import connection
         from pprint import pprint
         pprint([q for q in connection.queries if float(q['time']) > 0.001])
     dispatched_job_count += 1
+    d_logger.debug("Dispatching %s" % response['uuid'][:8])
     return protocols.pack(protobuf.ReaperJobResponse, response)
     
 ####
@@ -287,6 +292,7 @@ def verify_reaper_id(job_uuid, reported_uuid, recorded_uuid):
 def _job_started(request):
     '''Update the Job record to with properties defined at job start (pid, start_time,...)'''
     logger.debug("Setting job %s to processing." % request.job_id[:8])
+    d_logger.debug("Commit start: %s" % request.job_id[:8])
     try:
         dblock.acquire()
         job = Job.objects.get(uuid=request.job_id)
@@ -296,6 +302,7 @@ def _job_started(request):
         raise
     verify_reaper_id(request.job_id, request.reaper_id, job.processor)
     
+    # assert job.status == 'dispatched'
     job.time_started = request.start_time.replace('T',' ') # django DateTimeField should be able to parse it this way. (pyiso8601 would be the alternative).
     job.pid = request.pid
     job.status = request.state or 'processing'
@@ -326,6 +333,7 @@ def job_started(msgbytes):
     '''Update the Job record to with properties defined at job start (pid, start_time,...)'''
     request = protocols.unpack(protobuf.ReaperJobStartRequest, msgbytes)
     logger.debug("Received job start message: %s" % str(request))
+    d_logger.debug("Request start: %s" % request.job_id[:8])
     
     # add request to the database queue
     thread_database.enqueue(_job_started, request)
@@ -336,6 +344,7 @@ def job_started(msgbytes):
 
 def _job_ended(request):
     logger.info("Setting job %s to %s" % (request.job_id[:8], request.state))
+    d_logger.debug("Commit end: %s (%s)" % (request.job_id[:8], request.state))
     dblock.acquire()
     try:
         job = Job.objects.get(uuid=request.job_id)
@@ -343,7 +352,8 @@ def _job_ended(request):
         job_does_not_exist(request.job_id)
         raise
         #return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.NOACK})
-        
+    
+    # assert job.status == 'processing'
     job.status = request.state
     job.time_ended = request.end_time.replace('T',' ') # django DateTimeField should be able to parse it this way. (pyiso8601 would be the alternative).
     job.output = request.output
@@ -375,7 +385,8 @@ def job_ended(msgbytes):
     '''Update job record with properties defined at job end time ()'''
     request = protocols.unpack(protobuf.ReaperJobEndRequest, msgbytes)
     logger.info("Job %s ended: %s" % (request.job_id[:8], request.state))
-    
+    d_logger.debug("Request end: %s (%s)" % (request.job_id[:8], request.state) )
+    #time.sleep(0.10)
     thread_database.enqueue(_job_ended, request)
     
     return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
@@ -390,6 +401,7 @@ def command_handler(msg):
     """
     global command_request_count
     command_request_count += 1
+    mb.basic_ack(msg.delivery_tag)
     #cmd = protocols.unpack(protocols.Command, msg.body)
     request = protocols.unpack(protobuf.RpcRequestWrapper, msg.body)
     logger.debug("command_handler got a command: %s" % str(request.method))
@@ -416,7 +428,7 @@ def command_handler(msg):
         response.error = True
         response.error_text = "Invalid Command: %s" % request.method
 
-    mb.basic_ack(msg.delivery_tag)
+    #mb.basic_ack(msg.delivery_tag)
     response_bytes = protocols.pack(protobuf.RpcResponseWrapper, response)
     mb.basic_publish(Message(response_bytes), routing_key=request.requestor)
         
@@ -444,11 +456,15 @@ def init():
     global command_ctag, status_ctag, thread_consume_loop, thread_database, shutdown_event, job_buffer, dispatched_job_count, command_request_count
     shutdown_event = threading.Event()
     #logging.getLogger('messagebus').setLevel(logging.DEBUG)
+    
+    logger.info("Resetting previously dispatched jobs.")
+    for js in JobSet.objects.filter(active=True):
+            js.jobs.filter(status_enum=Job.StatusEnum.DISPATCHED).update(status_enum=Job.StatusEnum.REQUEUE)
 
     if options.requeue_lost_jobs:
-        logger.info("Resetting lost jobs.")
+        logger.info("Resetting previously processing jobs.")
         for js in JobSet.objects.filter(active=True):
-            js.jobs.filter(status_enum__in=(Job.StatusEnum.DISPATCHED,Job.StatusEnum.PROCESSING)).update(status_enum=Job.StatusEnum.REQUEUE)
+            js.jobs.filter(status_enum__in=(Job.StatusEnum.PROCESSING,)).update(status_enum=Job.StatusEnum.REQUEUE)
     
     atexit.register(shutdown)
     
@@ -474,7 +490,7 @@ def init():
     
 def do_report(dt):
     global job_buffer, thread_database, dispatched_job_count, command_request_count
-    report = "%f commands/sec\t %f jobs/sec\t %d in job buffer\t%d in db queue" % (command_request_count / dt, dispatched_job_count / dt, job_buffer.qsize(), thread_database.task_queue.qsize())
+    report = "%f commands/sec\t %f jobs/sec\t %d in job queue\t%d in db queue" % (command_request_count / dt, dispatched_job_count / dt, job_buffer.qsize(), thread_database.task_queue.qsize())
     command_request_count = 0
     dispatched_job_count = 0
     print report
