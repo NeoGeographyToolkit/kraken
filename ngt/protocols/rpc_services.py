@@ -284,7 +284,7 @@ class AmqpService(object):
             else:
                 raise AmqpService.ParameterMissing("%s is a required parameter." % param)
                 
-        self.rpc_channel = RpcChannel(self.exchange, self.reply_queue, 'dispatch', max_retries=3, timeout_ms=timeout_ms)
+        self.rpc_channel = RpcChannel(self.exchange, self.reply_queue, 'dispatch', max_retries=max_retries, timeout_ms=timeout_ms)
         #self.rpc_service = service_stub_class(self.rpc_channel)
         self.amqp_rpc_controller = AmqpRpcController()
         
