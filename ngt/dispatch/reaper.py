@@ -73,37 +73,42 @@ class Reaper(object):
                 self.logger.debug("Requesting job.")
                 job = self.dispatch.get_a_job(self.reaper_id)
                 self.logger.debug("Job request returned.")
-            if job:
-                if job.command in self.commands:  # only commands allowed by the configuration will be executed
-                    args = self.commands[job.command].split(' ')  + list(job.args or [])
-                    self.logger.debug("ARGS: %s" % str(args))
-                    self.logger.info("Executing %s" % ' '.join(args))
-                    start_time = datetime.utcnow()
-                    p = Popen(args, stdout=PIPE, stderr=STDOUT)
-                    self.dispatch.report_job_start(self.reaper_id, job, p.pid, start_time) # note that "job" here is a Protobuf object
-                    output=""
-                    while True:
-                        line = p.stdout.readline()
-                        if line == '' and p.poll() != None:
-                            break
-                        output += line
-                        sys.stdout.write(line)
-                    resultcode = p.wait()
-                    end_time = datetime.utcnow()
-                    if resultcode == 0:
-                        state = 'complete'
+                if job:
+                    if job.command in self.commands:  # only commands allowed by the configuration will be executed
+                        args = self.commands[job.command].split(' ')  + list(job.args or [])
+                        self.logger.debug("ARGS: %s" % str(args))
+                        self.logger.info("Executing %s" % ' '.join(args))
+                        start_time = datetime.utcnow()
+                        p = Popen(args, stdout=PIPE, stderr=STDOUT)
+                        self.dispatch.report_job_start(self.reaper_id, job, p.pid, start_time) # note that "job" here is a Protobuf object
+                        output=""
+                        while True:
+                            line = p.stdout.readline()
+                            if line == '' and p.poll() != None:
+                                break
+                            output += line
+                            sys.stdout.write(line)
+                        resultcode = p.wait()
+                        end_time = datetime.utcnow()
+                        if resultcode == 0:
+                            state = 'complete'
+                        else:
+                            state = 'failed'
+                        self.logger.info("Job %s: %s" % (job.uuid[:8], state) )
+                        self.dispatch.report_job_end(job, state, end_time, output)
                     else:
-                        state = 'failed'
-                    self.logger.info("Job %s: %s" % (job.uuid[:8], state) )
-                    self.dispatch.report_job_end(job, state, end_time, output)
+                        end_time = datetime.utcnow()
+                        self.logger.error("Command: '%s' not found in amq_config's list of valid commands." % job.command)
+                        self.dispatch.report_job_end(job, 'failed', end_time, "Command: '%s' not found in the list of valid commands for reaper %s" % (job.command, self.reaper_id))
                 else:
-                    end_time = datetime.utcnow()
-                    self.logger.error("Command: '%s' not found in amq_config's list of valid commands." % job.command)
-                    self.dispatch.report_job_end(job, 'failed', end_time, "Command: '%s' not found in the list of valid commands for reaper %s" % (job.command, self.reaper_id))
+                    self.logger.info("No jobs available.")
+                    time.sleep(self.JOB_POLL_INTERVAL)
+                self.logger.debug("Reached end of job loop.")
+                
             else:
-                self.logger.info("No jobs available.")
-                time.sleep(self.JOB_POLL_INTERVAL)
-            self.logger.debug("Reached end of job loop.")
+                # not registered yet
+                self.logger.debug("Waiting for registration.")
+                sleep(0.1)
     
     
     ####
