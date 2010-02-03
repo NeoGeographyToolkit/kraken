@@ -16,8 +16,8 @@ from amqplib.client_0_8 import Message
 logger = logging.getLogger('dispatch')
 logger.setLevel(logging.INFO)
 d_logger = logging.getLogger('dispatch_debug')
-d_logger.addHandler(logging.FileHandler('dispatch.log', 'w') )
-d_logger.setLevel(logging.DEBUG)
+#d_logger.addHandler(logging.FileHandler('dispatch.log', 'w') )
+#d_logger.setLevel(logging.DEBUG)
 #logging.getLogger().setLevel(logging.DEBUG)
 #logging.getLogger('protocol').setLevel(logging.DEBUG)
 

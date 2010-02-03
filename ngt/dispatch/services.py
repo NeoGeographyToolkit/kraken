@@ -4,8 +4,8 @@ from ngt.protocols.rpc_services import RPCFailure
 import logging
 
 d_logger = logging.getLogger('reaper.debug')
-d_logger.addHandler(logging.FileHandler('reaper.log', 'w'))
-d_logger.setLevel(logging.DEBUG)
+#d_logger.addHandler(logging.FileHandler('reaper.log', 'w'))
+#d_logger.setLevel(logging.DEBUG)
 
 class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_Stub):
     
