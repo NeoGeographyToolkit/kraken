@@ -3,6 +3,10 @@ from ngt.protocols import rpc_services, protobuf
 from ngt.protocols.rpc_services import RPCFailure
 import logging
 
+d_logger = logging.getLogger('reaper.debug')
+d_logger.addHandler(logging.FileHandler('reaper.log', 'w'))
+d_logger.setLevel(logging.DEBUG)
+
 class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_Stub):
     
     '''
@@ -46,6 +50,7 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
             return None
         else:
             self.logger.info("Got a job: %s" % response.uuid[:8])
+            d_logger.debug("%s dispatched" % response.uuid[:8])
             return response
             
     def report_job_start(self, reaper_id, job, pid, start_time):
@@ -58,6 +63,7 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
         request.start_time = start_time.isoformat()
         request.pid = pid
         
+        d_logger.debug("Requesting start: %s" % request.job_id [:8])
         response = self.keep_calling(self.jobStarted, request)
 
         self.logger.debug("ACK response: %d" % response.ack)
@@ -69,7 +75,7 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
             # TODO: cancel the job when this happens... or retry?
         elif response.ack == protobuf.AckResponse.ACK:
             # We're good!
-            pass
+            return True
             
     def report_job_end(self, job, state, end_time, output):
         # note that "job" here is a Protobuf object
@@ -80,6 +86,7 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
         request.end_time = end_time.isoformat()
         request.output = output
         
+        d_logger.debug("Requesting end: %s" % request.job_id[:8])
         response = self.keep_calling(self.jobEnded, request)
 
         if response.ack == protobuf.AckResponse.NOACK: 
@@ -90,7 +97,7 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
             # TODO: cancel the job when this happens... or retry?
         elif response.ack == protobuf.AckResponse.ACK:
             # We're good!
-            pass
+            return True
             
     def register_reaper(self, reaper_id, reaper_type, hostname=None):
         request = protobuf.ReaperRegistrationRequest()
