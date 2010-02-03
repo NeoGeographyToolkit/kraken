@@ -96,12 +96,8 @@ class TaskQueueThread(threading.Thread):
 # COMMANDS
 ###
 
-def register_reaper(msgbytes):
-    # TODO: Handle the corner case where a reaper has been expired or soft-deleted, and tries to register itself again.
-    # Currently this would result in a ProgrammerError from psycopg
-    request = protocols.unpack(protobuf.ReaperRegistrationRequest, msgbytes)
-    
-    logger.info("Got registration request from reaper %s" % request.reaper_uuid)
+def _register_reaper(request):
+    dblock.acquire()
     try:
         r = Reaper.objects.get(uuid=request.reaper_uuid) # will get deleted or expired reapers, too
         logger.info("Reaper %s exists.  Resurrecting." % request.reaper_uuid[:8])
@@ -109,27 +105,39 @@ def register_reaper(msgbytes):
             r.hostname = request.hostname
         r.deleted = False
         r.expired = False
-        dblock.acquire()
         r.save()
-        dblock.release()
     except Reaper.DoesNotExist:
         r = Reaper(uuid=request.reaper_uuid, type=request.reaper_type)
         if 'hostname' in request:
             r.hostname = request.hostname
-        dblock.acquire()
         r.save()
-        dblock.release()
         logger.info("Registered reaper: %s" % request.reaper_uuid)
+    finally:
+        dblock.release()
+
+def register_reaper(msgbytes):
+    # TODO: Handle the corner case where a reaper has been expired or soft-deleted, and tries to register itself again.
+    # Currently this would result in a ProgrammerError from psycopg
+    request = protocols.unpack(protobuf.ReaperRegistrationRequest, msgbytes)
+    
+    logger.info("Got registration request from reaper %s" % request.reaper_uuid)
+    thread_database.enqueue(_register_reaper, request)
     return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
 
-def unregister_reaper(msgbytes):
-    request = protocols.unpack(protobuf.ReaperUnregistrationRequest, msgbytes)
+def _unregister_reaper(request):
+    dblock.acquire()
     try:
         r = Reaper.objects.get(uuid=request.reaper_uuid)
         r.soft_delete()
         logger.info("Reaper deleted: %s" % request.reaper_uuid)
     except Reaper.DoesNotExist:
         logger.error("Tried to delete an unregistered reaper, UUID %s" % reaper_uuid)
+    finally:
+        dblock.release()
+
+def unregister_reaper(msgbytes):
+    request = protocols.unpack(protobuf.ReaperUnregistrationRequest, msgbytes)
+    thread_database.enqueue(_unregister_reaper, request)
     return protocols.pack(protobuf.AckResponse, {'ack': protobuf.AckResponse.ACK})
 
 ####
@@ -177,21 +185,16 @@ class JobBuffer(UniquePriorityQueue):
         statuses_to_fetch = (Job.StatusEnum.NEW, Job.StatusEnum.REQUEUE)
         logger.debug("Refreshing the job buffer.")
         dblock.acquire()
-        rejected_count = 0
         for jobset in JobSet.objects.filter(active=True).order_by('priority'):
             jobs = jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
             for job in jobs:
                 if job != self.dispatch_pending: #make sure a this job isn't in the middle of being dispatched
-                    if check_readiness(job):
-                        self.put((jobset.priority, job))
-                    else:
-                        rejected_count += 1
-                        logger.debug("REFRESH: %s rejected because it's not ready to run." % str(job))
+                    self.put((jobset.priority, job))
                 else:
                     logger.debug("REFRESH: %s rejected because it's being dispatched" % str(job))
         #db.connection.close() # force django to close connections, otherwise it won't
         dblock.release()
-        logger.debug("Refresh complete.  New size: %d Rejected: %d" % (self.qsize(), rejected_count) )
+        logger.debug("Refresh complete.  New size: %s" % self.qsize())
         self.refreshing = False
 
     def refresh(self):
@@ -224,12 +227,10 @@ def get_next_job(msgbytes):
     
     try:
         job = job_buffer.next()
-        ''' # readness checking now being done on buffer insertion
         if not check_readiness(job):
             logger.debug("Job %d not ready.  Rejecting." % job.id)
             job_buffer.ack(job)
             job = None
-        '''
     except Queue.Empty:
         job = None
         logger.debug("Job buffer empty.")

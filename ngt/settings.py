@@ -26,7 +26,8 @@ DEVELOPMENT_MODE = True
 
 # Django settings for ngt project.
 
-DEBUG = DEVELOPMENT_MODE
+#DEBUG = DEVELOPMENT_MODE
+DEBUG = False
 TEMPLATE_DEBUG = DEBUG
 
 ADMINS = (

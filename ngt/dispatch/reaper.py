@@ -38,12 +38,13 @@ class Reaper(object):
     commands = {}
 
 
-    def __init__(self):
+    def __init__(self, job_poll_interval = 10):
         self.reaper_id = uuid.uuid1().hex
         self.messagebus = MessageBus()
         self.chan = self.messagebus.channel
         self.is_registered = None
         
+        self.JOB_POLL_INTERVAL = job_poll_interval
         self.CONTROL_QUEUE_NAME = "control.reaper.%s" % self.reaper_id
         self.REPLY_QUEUE_NAME = "reply.reaper.%s" % self.reaper_id # queue for RPC responses
         self.logger = logging.getLogger('reaper.%s' % self.reaper_id)
@@ -247,6 +248,7 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     parser.add_option('--debug', dest='debug', action='store_true', help="Print debug statements")
     parser.add_option('--noop', dest='noop', action='store_true', default=False, help='Only pretent to run mipmap and snapshot jobs.')
+    parser.add_option('-i','--poll-interval', action='store', type='float', dest='poll_interval', default=10)
     (options, args) = parser.parse_args()
     del optparse
     if options.debug:
@@ -257,6 +259,6 @@ if __name__ == '__main__':
     logging.basicConfig(stream=sys.stdout, level=loglevel)
     logging.getLogger('amqprpc').setLevel(loglevel)
     init_reaper_commands()
-    r = Reaper()
+    r = Reaper(job_poll_interval=options.poll_interval)
     r.launch()
 
