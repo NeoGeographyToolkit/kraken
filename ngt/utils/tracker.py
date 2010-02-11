@@ -16,11 +16,11 @@ class Tracker(object):
     Tracks the progress of a given iterator.
     """
     def __init__(self, 
-        name="TRACKER", 
-        report_every=1, 
-        target=None, 
         iter=None, 
+        report_every=1,
+        target=None, 
         progress=False,
+        name="TRACKER", 
         output_to=sys.stderr
     ):
 
@@ -43,9 +43,9 @@ class Tracker(object):
     def _report_spew(self):
         if self.target:
             remaining = (datetime.now() - self.starttime) / self.count * (self.target - self.count)
-            self.output_stream.write( "%s: %d of %d done. (%s remaining)\n" % (self.name, self.count, self.target, str(remaining)) )
+            self.output_stream.write( "\r%s: %d of %d done. (%s remaining)\n" % (self.name, self.count, self.target, str(remaining)) )
         else:
-            self.output_stream.write( "%s: %d done. (%s)\n" % (self.name, self.count, str(datetime.now() - self.starttime) ) )
+            self.output_stream.write( "\r%s: %d done. (%s)\n" % (self.name, self.count, str(datetime.now() - self.starttime) ) )
             
     def _report_bar(self):
         scale = 80
