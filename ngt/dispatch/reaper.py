@@ -237,6 +237,7 @@ def init_reaper_commands():
         'snapshot': '/big/software/visionworkbench/bin/snapshot',
         'start_snapshot': '/big/software/visionworkbench/bin/snapshot',
         'end_snapshot': '/big/software/visionworkbench/bin/snapshot',
+        'hirise2plate': os.path.join(COMMAND_PATH, 'hirise2plate.py'
     }
     if options.noop:
         print "Running in no-op mode."
