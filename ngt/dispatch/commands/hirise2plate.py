@@ -121,7 +121,7 @@ def generate_tif(jp2_path, label_path):
         os.system(cmd)
     '''
     
-    cmd = '%s -i %s -o %s' % (externals['kdu_expand'], jp2, kdu_tif)
+    cmd = '%s -i %s -o %s -fprec 16L' % (externals['kdu_expand'], jp2, kdu_tif) # the fprec 16L argument will oversample the image to 16 bits.  hirise2tif will scale it down to 8bits.
     print cmd
     exit_status = os.system(cmd)
     if exit_status != 0:
