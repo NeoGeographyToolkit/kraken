@@ -78,6 +78,12 @@ class MipMapCommand(RetryingJobCommand):
         args = "-t %s %s -o %s" % (job.transaction_id, kwargs['file_path'], kwargs['platefile'])
         return args.split(' ')
         
+class hirise2plateCommand(RetryingJobCommand):
+    name = 'hirise2plate'
+    def build_arguments(klass, job, **kwargs):
+        args = "%s %s -t %d" % (kwargs['file_path'], kwargs['platefile'], job.transaction_id)
+        return args.split(' ')
+        
 class Snapshot(RetryingJobCommand):
     name = 'snapshot'
     
