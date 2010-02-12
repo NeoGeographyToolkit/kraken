@@ -3,9 +3,10 @@ import os.path
 from django.db import transaction
 from assets.models import Asset, DATA_ROOT
 import sqlite3 as sqlite
+from ngt.utils.tracker import Tracker
 
-BASEDIR = '/big/sourcedata/hirise/PDS/'
-CHECKLIST_DBFILE = '/big/sourcedata/hirise/PDS/checklist.sqlite'
+BASEDIR = '/big/assets/hirise/PDS/'
+CHECKLIST_DBFILE = '/big/sourcedata/mars/hirise/checklist.sqlite'
 
 class HiRiseAssetInventory(object):
     filetypes = {
@@ -18,12 +19,17 @@ class HiRiseAssetInventory(object):
         self.products = {} # product_id --> (path, md5_check, [flag,flag,flag,flag]) # flags are filetypes found
         
     def add(self, url, md5_check):
-        path = os.path.join(BASEDIR, url.partition('PDS/')[-1])
-        product_id = path.split('/')[-2]
-        filetype = path.split('_')[-1]
-        if product_id not in self.products:
-            self.assets[product_id] = (path, md5_check, False for i in range(4)])
-        self.products[product_id][1][self.filetypes[filetype]] = True
+        file_path = os.path.join(BASEDIR, url.partition('PDS/')[-1])
+        observation_path = os.path.split(file_path)[0]
+        product_id = file_path.split('/')[-2]
+        filetype = file_path.split('_')[-1]
+        if filetype in self.filetypes:
+            if verify(file_path):
+                if product_id not in self.products:
+                    self.products[product_id] = [observation_path, md5_check, [False for i in range(4)]]
+                self.products[product_id][2][self.filetypes[filetype]] = True
+                if self.products[product_id][1] and not md5_check:
+                    self.products[product_id][1] = False
         
 
 @transaction.commit_on_success
@@ -34,21 +40,21 @@ def create_assets():
     inventory = HiRiseAssetInventory()
 
     print "Scanning download tracking DB."
-    for record in Tracker(records, 100):
+    for record in Tracker(records, 100, progress=True):
         url, md5_check = record
-        inventory.add(url)
+        inventory.add(url, md5_check)
     
     print "Creating Assets."
-    for (product_id, (path, mdcheck, fileflags)) in Tracker(inventory.assets.items(), progress=True):
+    for (product_id, (path, md5_check, fileflags)) in Tracker(inventory.products.items(), progress=True):
         f = fileflags
         assetize_this = False
-        if f[0] and verify(f[0]):
-            if f[1] and verify(f[1]):
+        if f[0]:
+            if f[1]:
                 assetize_this = True
             else:
                 error("Metadata missing: product %s" % product_id)
-        if f[2] and verify(f[2]):
-            if f[3] and verify(f[3]):
+        if f[2]:
+            if f[3]:
                 assetize_this = True
             else:
                 error("Metadata missing: product %s" % product_id)            
@@ -78,13 +84,13 @@ def verify(path):
         return False
             
     
-def make_asset(product_id, path, md5_checl):
+def make_asset(product_id, path, md5_check):
     asset = Asset()
     asset.class_label = 'hirise product'
     asset.instrument_name = 'HiRISE'
     asset.product_id = product_id
     asset.md5_check = md5_check
-    asset.relative_file_path = path.partition('DATA_ROOT')[-1]
+    asset.relative_file_path = path.partition(DATA_ROOT)[-1]
     asset.save()
     
     
