@@ -205,7 +205,8 @@ def image2plate(imagefile, platefile):
     cmd = ' '.join(cmd)
     exit_status = 0
     print cmd
-    exit_status = os.system(cmd)
+    if options.write_to_plate:
+        exit_status = os.system(cmd)
     if exit_status != 0:
         raise Exception("image2plate failed!")
     
@@ -215,7 +216,8 @@ if __name__ == '__main__':
     parser.add_option('--tmp', action='store', dest='tmpdir', help="Where to write intermediate images (default: /tmp)")
     parser.add_option('-t', '--transaction-id', action='store', dest='transaction_id', type='int')
     parser.add_option('--preserve', '-p', dest='delete_files', action='store_false', help="Don't delete the intermediate files.")
-    parser.set_defaults(tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True)
+    parser.add_option('--noplate', dest='write_to_plate', action='store_false', help="Don't really run image2plate.  Just pretend and print the command arguments.")
+    parser.set_defaults(tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True)
     parser.set_usage("Usage: %prog [options] observation_path platefile")
     try:
         (options, args) = parser.parse_args()
