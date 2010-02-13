@@ -200,7 +200,7 @@ def make_geotiff(obs, alpha=True):
 def image2plate(imagefile, platefile):
     cmd = [externals['image2plate']]
     if options.transaction_id:
-        cmd += ('-t', options.transaction_id)
+        cmd += ('-t', str(options.transaction_id))
     cmd += ('-o', platefile, imagefile)
     cmd = ' '.join(cmd)
     exit_status = 0
