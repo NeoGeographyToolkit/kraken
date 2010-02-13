@@ -8,11 +8,15 @@ from subprocess import Popen, PIPE
 
 DEFAULT_TMP_DIR = '/tmp/'
 
+VWBIN_DIR = '/big/software/visionworkbench/bin'
+if VWBIN_DIR not in os.environ['PATH']:
+    os.putenv('PATH', VWBIN_DIR + ':' + os.environ['PATH'])
+
 def which(command):
     return Popen(('which', command), stdout=PIPE).stdout.read().strip()
     
 externals = {}
-for command in ('gdal_translate','kdu_expand','hirise2tif','img2plate'):
+for command in ('gdal_translate','kdu_expand','hirise2tif','image2plate'):
     externals[command] = which(command)
     if not externals[command]:
         raise Exception("Could not find %s in $PATH." % command)
@@ -27,7 +31,7 @@ class Observation(object):
         'COLOR.LBL': 'color_label'
     }
 
-    def __init__(img_path):
+    def __init__(self, img_path):
         self.path = img_path
         if self.path[-1] == '/':
             self.obsid = os.path.basename(self.path[:-1])
@@ -36,12 +40,15 @@ class Observation(object):
         files = os.listdir(img_path)
         for file in files:
             key = file.split('_')[-1]
-            if key in propmap:
-                self.__dict__[propmap[key]] = os.path.join(self.img_path, file)
-            for propname in propmap.values():
-                if propname not in self.__dict__:
-                    print "%s file not found" % propname
-                    self.__dict__[propname] = None
+            if key in self.propmap:
+                self.__dict__[self.propmap[key]] = os.path.join(self.path, file)
+                print "%s matched key %s" % (file, key)
+            else:
+                print "No match for %s" % file
+        for propname in self.propmap.values():
+            if propname not in self.__dict__:
+                print "%s file not found" % propname
+                self.__dict__[propname] = None
 
 class Label(object):
     ''' 
@@ -67,31 +74,31 @@ class Label(object):
         self.file = label_file
         info = open(self.file, 'r')
         for line in info:
-            m = proj_type_re.match( line )
+            m = self.proj_type_re.match( line )
             if m: self.proj_type = m.group(1)
-            m = radius_re.match( line )
+            m = self.radius_re.match( line )
             if m: self.radius = float(m.group(1))*1000
-            m = center_lat_re.match( line )
+            m = self.center_lat_re.match( line )
             if m: self.center_lat = float(m.group(1))
-            m = center_lon_re.match( line )
+            m = self.center_lon_re.match( line )
             if m: self.center_lon = float(m.group(1))
-            m = rows_re.match( line )
+            m = self.rows_re.match( line )
             if m: self.rows = int(m.group(1))
-            m = cols_re.match( line )
+            m = self.cols_re.match( line )
             if m: self.cols = int(m.group(1))
-            m = scale_re.match( line )
+            m = self.scale_re.match( line )
             if m: self.scale = float(m.group(1))
-            m = line_offset_re.match( line )
+            m = self.line_offset_re.match( line )
             if m: self.line_offset = float(m.group(1))
-            m = sample_offset_re.match( line )
+            m = self.sample_offset_re.match( line )
             if m: self.sample_offset = float(m.group(1))
-            m = max_lat_re.match( line )
+            m = self.max_lat_re.match( line )
             if m: self.max_lat = float(m.group(1))
-            m = min_lat_re.match( line )
+            m = self.min_lat_re.match( line )
             if m: self.min_lat = float(m.group(1))
-            m = east_lon_re.match( line )
+            m = self.east_lon_re.match( line )
             if m: self.east_lon = float(m.group(1))
-            m = west_lon_re.match( line )
+            m = self.west_lon_re.match( line )
             if m: self.west_lon = float(m.group(1))
             
             
@@ -121,7 +128,7 @@ def generate_tif(jp2_path, label_path):
         os.system(cmd)
     '''
     
-    cmd = '%s -i %s -o %s -fprec 16L' % (externals['kdu_expand'], jp2, kdu_tif) # the fprec 16L argument will oversample the image to 16 bits.  hirise2tif will scale it down to 8bits.
+    cmd = '%s -fprec 16L -i %s -o %s' % (externals['kdu_expand'], jp2, kdu_tif) # oversample to 16 bits
     print cmd
     exit_status = os.system(cmd)
     if exit_status != 0:
@@ -148,12 +155,14 @@ def generate_tif(jp2_path, label_path):
     lrx = -scalex * info.sample_offset + scalex * info.cols + info.center_lon
     lry = scaley * info.line_offset - scaley * info.rows
 
-    cmd = '%s -of GTiff -co TILED=YES -co BIGTIFF=YES -co COMPRESS=LZW -a_srs %s -a_ullr %f %f %f %f %s %s' % (externals['gdal_translate'],srs.replace('"','\\"'),ulx,uly,lrx,lry,kdu_tif,tif)
+    #cmd = '%s -of GTiff -co TILED=YES -co BIGTIFF=YES -co COMPRESS=LZW -a_srs %s -a_ullr %f %f %f %f %s %s' % (externals['gdal_translate'],srs.replace('"','\\"'),ulx,uly,lrx,lry,kdu_tif,tif)
+    cmd = '%s -of GTiff -co TILED=YES -co BIGTIFF=YES -co COMPRESS=NONE -a_srs %s -a_ullr %f %f %f %f %s %s' % (externals['gdal_translate'],srs.replace('"','\\"'),ulx,uly,lrx,lry,kdu_tif,tif)
     print cmd
     exit_status = os.system(cmd)
     if exit_status != 0:
         raise Exception("gdal_translate failed!")
-    os.unlink(kdu_tif)
+    if options.delete_files:
+        os.unlink(kdu_tif)
     return tif
     
 def make_intermediates(obs):
@@ -167,9 +176,9 @@ def make_intermediates(obs):
 
 def make_geotiff(obs, alpha=True):
     if alpha:
-        tif = os.path.join(options.tmpdir, obs.obsid, '.alpha.tif')
+        tif = os.path.join(options.tmpdir, obs.obsid + '.alpha.tif')
     else:
-        tif = os.path.join(options.tmpdir, obs.obsid, '.tif')
+        tif = os.path.join(options.tmpdir, obs.obsid + '.tif')
     '''
     if os.path.exists(tif):
         print '(Using existing ' + tif + ')'
@@ -183,26 +192,30 @@ def make_geotiff(obs, alpha=True):
     exit_status = os.system(cmd)
     if exit_status != 0:
         raise Exception("hirise2tif failed!")
-    os.unlink(red_tif)
+    if options.delete_files:
+        os.unlink(red_tif)
     if color_tif: os.unlink(color_tif)
     return tif
 
-def img2plate(imagefile, platefile):
-    cmd = [externals['img2plate']]
+def image2plate(imagefile, platefile):
+    cmd = [externals['image2plate']]
     if options.transaction_id:
         cmd += ('-t', options.transaction_id)
     cmd += ('-o', platefile, imagefile)
     cmd = ' '.join(cmd)
+    exit_status = 0
+    print cmd
     exit_status = os.system(cmd)
     if exit_status != 0:
-        raise Exception("img2plate failed!")
+        raise Exception("image2plate failed!")
     
 if __name__ == '__main__':
     global options
     parser = optparse.OptionParser()
-    parser.add_option('--tmp', action='store', dest='tmpdir')
+    parser.add_option('--tmp', action='store', dest='tmpdir', help="Where to write intermediate images (default: /tmp)")
     parser.add_option('-t', '--transaction-id', action='store', dest='transaction_id', type='int')
-    parser.set_defaults(tmpdir=DEFAULT_TMP_DIR, transaction_id=None)
+    parser.add_option('--preserve', '-p', dest='delete_files', action='store_false', help="Don't delete the intermediate files.")
+    parser.set_defaults(tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True)
     parser.set_usage("Usage: %prog [options] observation_path platefile")
     try:
         (options, args) = parser.parse_args()
@@ -213,7 +226,8 @@ if __name__ == '__main__':
     
     obs = Observation(source_path)
     geotiff = make_geotiff(obs)
-    img2plate(geotiff, platefile)
-    os.unlink(geotiff)
+    image2plate(geotiff, platefile)
+    if options.delete_files:
+        os.unlink(geotiff)
     print "Mipmap successful!"
     sys.exit(0)
