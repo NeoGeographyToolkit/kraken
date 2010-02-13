@@ -7,6 +7,7 @@ import math
 from subprocess import Popen, PIPE
 
 DEFAULT_TMP_DIR = '/tmp/'
+KDU_EXPAND_THREADS = 3
 
 VWBIN_DIR = '/big/software/visionworkbench/bin'
 if VWBIN_DIR not in os.environ['PATH']:
@@ -128,7 +129,7 @@ def generate_tif(jp2_path, label_path):
         os.system(cmd)
     '''
     
-    cmd = '%s -fprec 16L -i %s -o %s' % (externals['kdu_expand'], jp2, kdu_tif) # oversample to 16 bits
+    cmd = '%s -fprec 16L -num_threads %d -i %s -o %s' % (externals['kdu_expand'], KDU_EXPAND_THREADS, jp2, kdu_tif) # oversample to 16 bits
     print cmd
     exit_status = os.system(cmd)
     if exit_status != 0:
