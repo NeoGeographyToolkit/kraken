@@ -11,22 +11,21 @@ from ngt.jobs.models import JobSet, Job
 from ngt.assets.models import Asset
 from ngt.utils.tracker import Tracker
 from ngt.django_extras.db.sequence import Sequence
-from ngt.dispatch.commands.jobcommands import hirise2plateCommand, StartSnapshot, EndSnapshot
+from ngt.dispatch.commands.jobcommands import MipMapCommand, hirise2plateCommand, StartSnapshot, EndSnapshot
 
 PLATEFILE = 'pf://wwt10one/index/hirise_v1.plate'
 transaction_id_sequence = Sequence('seq_transaction_id')
-
-
-def _build_mipmap_jobs(jobset, asset_queryset):
+        
+def _build_jobs(command_class, jobset, asset_queryset):
     for asset in Tracker(iter=asset_queryset, target=asset_queryset.count(), progress=True):
         job = Job()
         while True:  # Get the next even transaction ID
             job.transaction_id = transaction_id_sequence.nextval()
             if job.transaction_id % 2 == 0:
                 break
-        job.command = 'hirise2plate'
-        job.arguments = json.dumps(hirise2plateCommand.build_arguments(job, platefile=PLATEFILE, file_path=asset.file_path))
-        # job.footprint = asset.footprint # TODO: Generate footprints from label metadata.
+        job.command = command_class.name
+        job.arguments = json.dumps(command_class.build_arguments(job, platefile=PLATEFILE, file_path=asset.file_path))
+        job.footprint = asset.footprint # TODO: Generate footprints from label metadata.
         job.jobset = jobset
         job.save()
         job.assets.add(asset)
@@ -42,8 +41,8 @@ def create_mipmap_jobs(n_jobs=None, basemap=True):
     jobset.priority = 3
     jobset.save()
     if basemap:
-        _build_mipmap_jobs(jobset, Asset.objects.filter(class_label='color basemap'))
-    _build_mipmap_jobs(jobset, assets)
+        _build_jobs(MipMapCommand, jobset, Asset.objects.filter(class_label='color basemap'))
+    _build_jobs(hirise2plateCommand, jobset, assets)
     return jobset
         
 
