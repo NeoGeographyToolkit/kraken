@@ -4,6 +4,7 @@ import optparse
 import sys, os, os.path
 import re
 import math
+import subprocess, shlex
 from subprocess import Popen, PIPE
 
 DEFAULT_TMP_DIR = '/tmp/'
@@ -103,6 +104,10 @@ class Label(object):
             if m: self.west_lon = float(m.group(1))
             
             
+def execute(cmdstr):
+    ''' Execute the specified command and return its exit status. '''
+    return subprocess.call(shlex.split(cmdstr), stderr=subprocess.STDOUT)
+
 def generate_tif(jp2_path, label_path):
     
     # Parameters: name, geogcs, projection, center_lat ; radius
@@ -126,12 +131,12 @@ def generate_tif(jp2_path, label_path):
     else:
         cmd = '%s -i %s -o %s' % (kdu_expand_path, jp2, kdu_tif)
         print cmd
-        os.system(cmd)
+        execute(cmd)
     '''
     
     cmd = '%s -fprec 16L -num_threads %d -i %s -o %s' % (externals['kdu_expand'], KDU_EXPAND_THREADS, jp2, kdu_tif) # oversample to 16 bits
     print cmd
-    exit_status = os.system(cmd)
+    exit_status = execute(cmd)
     if exit_status != 0:
         raise Exception("kdu_expand failed!")
 
@@ -159,7 +164,7 @@ def generate_tif(jp2_path, label_path):
     #cmd = '%s -of GTiff -co TILED=YES -co BIGTIFF=YES -co COMPRESS=LZW -a_srs %s -a_ullr %f %f %f %f %s %s' % (externals['gdal_translate'],srs.replace('"','\\"'),ulx,uly,lrx,lry,kdu_tif,tif)
     cmd = '%s -of GTiff -co TILED=YES -co BIGTIFF=YES -co COMPRESS=NONE -a_srs %s -a_ullr %f %f %f %f %s %s' % (externals['gdal_translate'],srs.replace('"','\\"'),ulx,uly,lrx,lry,kdu_tif,tif)
     print cmd
-    exit_status = os.system(cmd)
+    exit_status = execute(cmd)
     if exit_status != 0:
         raise Exception("gdal_translate failed!")
     if options.delete_files:
@@ -190,7 +195,7 @@ def make_geotiff(obs, alpha=True):
     if alpha:
         cmd = cmd + ' --alpha'
     print cmd
-    exit_status = os.system(cmd)
+    exit_status = execute(cmd)
     if exit_status != 0:
         raise Exception("hirise2tif failed!")
     if options.delete_files:
@@ -207,7 +212,7 @@ def image2plate(imagefile, platefile):
     exit_status = 0
     print cmd
     if options.write_to_plate:
-        exit_status = os.system(cmd)
+        exit_status = execute(cmd)
     if exit_status != 0:
         raise Exception("image2plate failed!")
     
