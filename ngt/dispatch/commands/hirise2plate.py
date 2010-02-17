@@ -8,7 +8,7 @@ import subprocess, shlex
 from subprocess import Popen, PIPE
 
 DEFAULT_TMP_DIR = '/tmp/'
-KDU_EXPAND_THREADS = 3
+KDU_EXPAND_THREADS = 2
 
 VWBIN_DIR = '/big/software/visionworkbench/bin'
 if VWBIN_DIR not in os.environ['PATH']:
