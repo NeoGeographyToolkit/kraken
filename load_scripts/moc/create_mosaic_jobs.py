@@ -36,7 +36,7 @@ def _build_mipmap_jobs(jobset, asset_queryset):
 def create_mipmap_jobs(n_jobs=None, basemap=True):
     # where n_jobs is the number of jobs to generate.  Default (None) builds jobs for all assets in the queryset.
     transaction_id_sequence.setval(1) # reset the transaction_id sequence
-    assets = Asset.objects.filter(class_label='scaled image int8')[:n_jobs]
+    assets = Asset.objects.filter(has_errors=False, class_label='scaled image int8')[:n_jobs]
     jobset = JobSet()
     jobset.name = "Debug MipMap (%s)" % (n_jobs or 'all')
     jobset.command = "mipmap"
