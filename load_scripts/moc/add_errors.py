@@ -3,6 +3,8 @@ from pds.ingestion.cum_index import Table
 from ngt.utils.tracker import Tracker
 from assets.models import Asset
 
+from django.db import transaction
+
 moc_meta_path = '/big/sourcedata/moc/meta'
 moc_rootpath='/big/assets/mocsource/'
 
@@ -40,6 +42,7 @@ def build_index():
     
     return index
     
+@transaction.commit_on_success
 def main():
     index = build_index()
     
