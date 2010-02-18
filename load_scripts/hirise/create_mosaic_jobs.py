@@ -31,7 +31,7 @@ def _build_jobs(command_class, jobset, asset_queryset):
         job.assets.add(asset)
         
 @transaction.commit_on_success
-def create_mipmap_jobs(n_jobs=None, basemap=True):
+def create_mipmap_jobs(n_jobs=None, basemap=False):
     # where n_jobs is the number of jobs to generate.  Default (None) builds jobs for all assets in the queryset.
     transaction_id_sequence.setval(1) # reset the transaction_id sequence
     assets = Asset.objects.filter(class_label='hirise product', md5_check=True)[:n_jobs]
