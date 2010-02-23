@@ -87,6 +87,10 @@ class Job(models.Model):
     @property
     def command_string(self):
         return self.command + ' ' + ' '.join(json.loads(self.arguments))
+
+    @property
+    def runtime(self):
+        return self.time_ended - self.time_started
         
     @property
     def reaper(self):
