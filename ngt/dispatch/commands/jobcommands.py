@@ -1,5 +1,6 @@
 import json
 import re
+import shlex
 from amqplib.client_0_8 import Message
 from ngt.messaging.messagebus import MessageBus
 from ngt import protocols
@@ -9,8 +10,6 @@ import logging
 logger = logging.getLogger('dispatch')
 
 from django.db import transaction
-
-PLATEFILE = 'pf://wwt10one/index/hrsc_v1.plate'
 
 def minmax(iter):
     '''Find the minimum and maximum values in one pass'''
@@ -149,6 +148,11 @@ class StartSnapshot(JobCommand):
     @classmethod
     @transaction.commit_on_success
     def postprocess_job(klass, job):
+        # get platefile from job arguments
+        pfpattern = re.compile('pf:')
+        args = shlex.split(str(job.command_string))
+        platefile = filter(pfpattern.match, args)[0]
+
         # parse pyramid depth (max level) from job output
         maxlevel = klass._get_maxlevel(job.output)
         # get corresponding end_snapshot job
@@ -175,7 +179,7 @@ class StartSnapshot(JobCommand):
                     region = region,
                     level = level,
                     transaction_range = job_transaction_range,
-                    platefile = PLATEFILE,
+                    platefile = platefile,
                 ))
                 snapjob.save()
                 endjob.dependencies.add(snapjob)
