@@ -10,7 +10,7 @@ logger = logging.getLogger('dispatch')
 
 from django.db import transaction
 
-PLATEFILE = 'pf://wwt10one/index/moc_v1.plate'
+PLATEFILE = 'pf://wwt10one/index/hrsc_v1.plate'
 
 def minmax(iter):
     '''Find the minimum and maximum values in one pass'''
