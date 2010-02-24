@@ -162,7 +162,7 @@ def generate_tif(jp2_path, label_path):
     lry = scaley * info.line_offset - scaley * info.rows
 
     #cmd = '%s -of GTiff -co TILED=YES -co BIGTIFF=YES -co COMPRESS=LZW -a_srs %s -a_ullr %f %f %f %f %s %s' % (externals['gdal_translate'],srs.replace('"','\\"'),ulx,uly,lrx,lry,kdu_tif,tif)
-    cmd = '%s -of GTiff -co TILED=YES -co BIGTIFF=YES -co COMPRESS=NONE -a_srs %s -a_ullr %f %f %f %f %s %s' % (externals['gdal_translate'],srs.replace('"','\\"'),ulx,uly,lrx,lry,kdu_tif,tif)
+    cmd = '%s -of GTiff --config GDAL_CACHEMAX 512 -co TILED=YES -co BIGTIFF=YES -co COMPRESS=NONE -a_srs %s -a_ullr %f %f %f %f %s %s' % (externals['gdal_translate'],srs.replace('"','\\"'),ulx,uly,lrx,lry,kdu_tif,tif)
     print cmd
     exit_status = execute(cmd)
     if exit_status != 0:
