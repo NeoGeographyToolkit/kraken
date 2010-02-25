@@ -1,4 +1,3 @@
-import json
 import re
 from amqplib.client_0_8 import Message
 from ngt.messaging.messagebus import MessageBus
@@ -170,13 +169,13 @@ class StartSnapshot(JobCommand):
                     transaction_id = job.transaction_id,
                     jobset = snapjobset,
                 )
-                snapjob.arguments = json.dumps(Snapshot.build_arguments(
+                snapjob.arguments = Snapshot.build_arguments(
                     job,
                     region = region,
                     level = level,
                     transaction_range = job_transaction_range,
                     platefile = PLATEFILE,
-                ))
+                )
                 snapjob.save()
                 endjob.dependencies.add(snapjob)
                 
