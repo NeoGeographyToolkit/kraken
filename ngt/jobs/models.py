@@ -7,7 +7,8 @@ from django import db
 from django.db import transaction
 import os, time, hashlib, datetime
 import uuid
-import json
+#import json
+from django_extras.fields import JSONField
 #from ngt.assets.models import Asset, DATA_ROOT
 
 import logging
@@ -47,6 +48,35 @@ class Job(models.Model):
         
         def __set__(self, instance, value):
             setattr(instance, self.enum_field_name, getattr(self.enum_class, value.upper()))
+
+    class ArgumentDescriptor(object):
+        '''
+        This descriptor emulates the old arguments property.
+        It accepts and return a list of strings, but uses the context dict for storage.
+        '''
+        def __init__(self, jsonfield_name):
+            self.fieldname = jsonfield_name
+
+        def __get__(self, instance, owner):
+            json = getattr(instance, self.fieldname)
+            if type(json) == list: # This is for backwards compatibility with legacy jobs.
+                arguments = json
+            elif type(json) == dict:
+                arguments = json['arguments']
+            else:
+                raise ValueError("ListDescriptor encountered a value that deserializes to an unsupported type.")
+            assert type(arguments) == list
+            return arguments
+
+        def __set__(self, instance, value):
+            if type(value) != list:
+                raise ValueError("ListDescriptor requires a list value.")
+            if type(getattr(instance, self.fieldname)) == type(None):
+                setattr(instance, self.fieldname, dict()) # default to a dict-style representation if the storage field is unset
+            if type(getattr(instance, self.fieldname)) == list:
+                setattr(instance, self.fieldname, value)
+            elif type(getattr(instance, self.fieldname)) == dict:
+                getattr(instance, self.fieldname)['arguments'] = value
             
     #
     ###
@@ -55,7 +85,9 @@ class Job(models.Model):
     jobset = models.ForeignKey('JobSet', related_name="jobs")
     transaction_id = models.IntegerField(null=True)
     command = models.CharField(max_length=64)
-    arguments = models.TextField(default='') # an array seriaized as json
+    #arguments = models.TextField(default='') # an array seriaized as json
+    context = JSONField(default={})
+    arguments = ArgumentDescriptor('context')
     #status = models.CharField(max_length=32, default='new')
     status_enum = models.IntegerField(db_column='status_int', default=0)
     status = EnumDescriptor('status_enum', StatusEnum)
@@ -76,6 +108,8 @@ class Job(models.Model):
     if not settings.DISABLE_GEO:
             footprint = models.PolygonField(null=True, srid=949900)
     
+        
+
     def _generate_uuid(self):
         '''Returns a unique job ID that is the MD5 hash of the local
         hostname, the local time of day, and the command & arguments for this job.'''
@@ -86,7 +120,10 @@ class Job(models.Model):
 
     @property
     def command_string(self):
-        return self.command + ' ' + ' '.join(json.loads(self.arguments))
+        if type(self.arguments) == list:
+            return self.command + ' ' + ' '.join(self.arguments)
+        else:
+            raise NotImplementedError
         
     @property
     def reaper(self):
