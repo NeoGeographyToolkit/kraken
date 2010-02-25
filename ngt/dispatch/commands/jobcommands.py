@@ -1,4 +1,3 @@
-import json
 import re
 import shlex
 from amqplib.client_0_8 import Message
@@ -174,7 +173,7 @@ class StartSnapshot(JobCommand):
                     transaction_id = job.transaction_id,
                     jobset = snapjobset,
                 )
-                snapjob.arguments = json.dumps(Snapshot.build_arguments(
+                snapjob.arguments = Snapshot.build_arguments(
                     job,
                     region = region,
                     level = level,
