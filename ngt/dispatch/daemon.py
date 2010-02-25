@@ -1,7 +1,7 @@
 #!/usr/bin/env python2.6
 import sys, logging, threading, os, atexit, time, optparse
 from datetime import datetime
-import itertools, traceback, json
+import itertools, traceback
 import Queue
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
@@ -250,7 +250,7 @@ def get_next_job(msgbytes):
         'job_available' : True,
         'uuid' : job.uuid,
         'command' : job.command,
-        'args' : json.loads(job.arguments or '[]'),
+        'args' : job.arguments or '[]',
         }
     logger.info("Sending job %s to reaper %s (%s)" % (job.uuid[:8], request.reaper_uuid[:8], str(time.time() - t0)))
     job.status = "dispatched"
