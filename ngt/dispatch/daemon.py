@@ -72,6 +72,30 @@ logger.debug("Valid jobcommands:")
 for k in jobcommand_map.keys():
     logger.debug(k)
     
+####
+# Signal handlers for on-the-fly debugging
+####
+import signal, traceback
+import sighandle
+
+def usr1(signum, frame):
+    try:
+        reload(sighandle)
+        sighandle.handle_usr1(signum, frame)
+    except Exception as e:
+        print "Error in signal %d handler:" % signum
+        traceback.print_exc()
+
+def usr2(signum, frame):
+    try:
+        reload(sighandle)
+        sighandle.handle_usr2(signum, frame)
+    except Exception as e:
+        print "Error in signal %d handler:" % signum
+        traceback.print_exc()
+signal.signal(signal.SIGUSR1, usr1)
+signal.signal(signal.SIGUSR2, usr2)
+
 
 ####
 # Database Thread
