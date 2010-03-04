@@ -79,16 +79,20 @@ class Reaper(object):
                         self.logger.debug("ARGS: %s" % str(args))
                         self.logger.info("Executing %s" % ' '.join(args))
                         start_time = datetime.utcnow()
-                        p = Popen(args, stdout=PIPE, stderr=STDOUT)
-                        self.dispatch.report_job_start(self.reaper_id, job, p.pid, start_time) # note that "job" here is a Protobuf object
-                        output=""
-                        while True:
-                            line = p.stdout.readline()
-                            if line == '' and p.poll() != None:
-                                break
-                            output += line
-                            sys.stdout.write(line)
-                        resultcode = p.wait()
+                        try:
+                            output=""
+                            p = Popen(args, stdout=PIPE, stderr=STDOUT)
+                            self.dispatch.report_job_start(self.reaper_id, job, p.pid, start_time) # note that "job" here is a Protobuf object
+                            while True:
+                                line = p.stdout.readline()
+                                if line == '' and p.poll() != None:
+                                    break
+                                output += line
+                                sys.stdout.write(line)
+                            resultcode = p.wait()
+                        except OSError as oserr:
+                            resultcode = -1
+                            output += "OSError: %s" % oserr.strerror
                         end_time = datetime.utcnow()
                         if resultcode == 0:
                             state = 'complete'
