@@ -272,8 +272,5 @@ def status():
     from pprint import pprint
     pprint( dict( [(js, js.status()) for js in jobsets] ) )
 
-def foo():
-    return 'bar'
-
 from ngt.assets.models import Asset, DATA_ROOT # putting this here helps avoid circular imports
 

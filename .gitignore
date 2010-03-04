@@ -5,5 +5,4 @@
 ngt/local_settings.py
 ngt/messaging/amq_config.py
 local_settings.py
-local_settings.py
 wwt.sqlite
