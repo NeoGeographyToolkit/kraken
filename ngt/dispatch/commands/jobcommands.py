@@ -194,7 +194,7 @@ class StartSnapshot(JobCommand):
                     level = level,
                     transaction_range = job_transaction_range,
                     platefile = platefile,
-                ))
+                )
                 snapjob.save()
                 endjob.dependencies.add(snapjob)
                 
