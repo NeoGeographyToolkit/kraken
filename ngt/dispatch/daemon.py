@@ -46,7 +46,7 @@ command_map = {
 }
 
 
-JOB_FETCH_LIMIT = 30   
+JOB_FETCH_LIMIT = 50   
 REFRESH_TRIGGER_SIZE = 3
 
 class NoopLock(object):

@@ -12,10 +12,15 @@ from ngt.assets.models import Asset
 from ngt.utils.tracker import Tracker
 from ngt.django_extras.db.sequence import Sequence
 from ngt.dispatch.commands.jobcommands import MipMapCommand, hirise2plateCommand, StartSnapshot, EndSnapshot
-from load_scripts.snapshot.create_jobs import create_snapshot_jobs
+from load_scripts.snapshot.create_jobs import create_snapshot_jobs as _create_snapshot_jobs
 
 PLATEFILE = 'pf://wwt10one/index/hirise_v2.plate'
 transaction_id_sequence = Sequence('seq_transaction_id')
+
+def create_snapshot_jobs(*args, **kwargs):
+    if 'platefile' not in kwargs:
+        kwargs['platefile'] = PLATEFILE
+    return _create_snapshot_jobs(*args, **kwargs)
         
 def _build_jobs(command_class, jobset, asset_queryset):
     for asset in Tracker(iter=asset_queryset, target=asset_queryset.count(), progress=True):

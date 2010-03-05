@@ -1,5 +1,7 @@
 from ngt.utils.tracker import Tracker
 from django.db import transaction
+from ngt.jobs.models import Job,JobSet
+from ngt.dispatch.commands.jobcommands import MipMapCommand, hirise2plateCommand, StartSnapshot, EndSnapshot
 
 def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, last_endjob, platefile):
     transaction_id = transaction_range[1] + 1
@@ -10,12 +12,10 @@ def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_j
         command = 'start_snapshot',
         jobset = snapshot_jobset
     )
-    startjob.arguments = json.dumps(
-        StartSnapshot.build_arguments(
-            startjob, 
-            transaction_range = transaction_range,
-            platefile = platefile
-        )
+    startjob.arguments = StartSnapshot.build_arguments(
+        startjob, 
+        transaction_range = transaction_range,
+        platefile = platefile
     )
     
     endjob = Job(
@@ -23,8 +23,7 @@ def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_j
         command = 'end_snapshot',
         jobset = snapshot_jobset
     )
-    endjob.arguments = json.dumps(EndSnapshot.build_arguments(endjob, platefile=PLATEFILE))
-    #import pdb; pdb.set_trace()
+    endjob.arguments = EndSnapshot.build_arguments(endjob, platefile=platefile)
     startjob.save()
     endjob.save()
     # add dependencies
