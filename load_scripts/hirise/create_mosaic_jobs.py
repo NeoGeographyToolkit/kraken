@@ -14,7 +14,7 @@ from ngt.django_extras.db.sequence import Sequence
 from ngt.dispatch.commands.jobcommands import MipMapCommand, hirise2plateCommand, StartSnapshot, EndSnapshot
 from load_scripts.snapshot.create_jobs import create_snapshot_jobs
 
-PLATEFILE = 'pf://wwt10one/index/hirise_v1.plate'
+PLATEFILE = 'pf://wwt10one/index/hirise_v2.plate'
 transaction_id_sequence = Sequence('seq_transaction_id')
         
 def _build_jobs(command_class, jobset, asset_queryset):
