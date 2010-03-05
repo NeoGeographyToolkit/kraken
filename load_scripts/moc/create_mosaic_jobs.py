@@ -16,7 +16,7 @@ from load_scripts.snapshot.create_jobs import create_snapshot_jobs
 
 
 ROOTPATH='/big/assets/moc/'
-PLATEFILE = 'pf://wwt10one/index/moc_v2.plate'
+PLATEFILE = 'pf://wwt10one/index/moc_v3.plate'
 transaction_id_sequence = Sequence('seq_transaction_id')
 
 
