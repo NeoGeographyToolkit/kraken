@@ -25,7 +25,8 @@ class Job(models.Model):
         PROCESSING = 3
         COMPLETE = 4
         FAILED = 5
-        end_states = (COMPLETE, FAILED)
+        #end_states = (COMPLETE, FAILED)
+        end_states = (COMPLETE, )
         
         @classmethod
         def reverse(klass, value):
