@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-#!/usr/bin/env python
 
 import optparse
 import sys, os, os.path
@@ -83,7 +82,6 @@ class Label(object):
     max_stretch1_re = re.compile(r' *MRO:MAXIMUM_STRETCH *= *([0-9]*)')
     min_stretch3_re = re.compile(r' *MRO:MINIMUM_STRETCH *= *\(*([0-9]*), ([0-9]*), ([0-9]*)\)*')
     max_stretch3_re = re.compile(r' *MRO:MAXIMUM_STRETCH *= *\(*([0-9]*), ([0-9]*), ([0-9]*)\)*')
-   
 
     def __init__(self,label_file):
         self.file = label_file
@@ -164,13 +162,10 @@ def generate_tif(jp2_path, label_path):
                                                          KDU_EXPAND_THREADS,
                                                          jp2, kdu_tif) # oversample to 16 bits
     print cmd
-    try:
-        exit_status = 0# execute(cmd)
-        if exit_status != 0:
-            raise Exception("kdu_expand failed!")
-    finally:
-        if options.delete_files:
-            unlink_if_exists(kdu_tif)
+    exit_status = execute(cmd)
+    if exit_status != 0:
+        unlink_if_exists(kdu_tif)
+        raise Exception("kdu_expand failed!")
 
     # Extract georeferencing parameters
     if info.proj_type == 'POLAR STEREOGRAPHIC':
@@ -245,6 +240,7 @@ def make_geotiff(obs, alpha=True):
     try:
         exit_status = execute(cmd)
         if exit_status != 0:
+            unlink_if_exists(tif)
             raise Exception("hirise2tif failed!")
     finally:
         if options.delete_files:
@@ -262,7 +258,7 @@ def image2plate(imagefile, platefile):
     exit_status = 0
     print cmd
     if options.write_to_plate:
-        exit_status = 0 # execute(cmd)
+        exit_status = execute(cmd)
     if exit_status != 0:
         raise Exception("image2plate failed!")
     
@@ -284,8 +280,8 @@ if __name__ == '__main__':
         sys.exit(2)
     
     obs = Observation(source_path)
+    geotiff = make_geotiff(obs)
     try:
-        geotiff = make_geotiff(obs)
         image2plate(geotiff, platefile)
     finally:
         if options.delete_files:
