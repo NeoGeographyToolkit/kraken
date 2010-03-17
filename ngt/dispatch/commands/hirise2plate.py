@@ -8,7 +8,7 @@ import subprocess, shlex
 from subprocess import Popen, PIPE
 
 DEFAULT_TMP_DIR = '/scratch/tmp'
-KDU_EXPAND_THREADS = 2
+KDU_EXPAND_THREADS = 4
 
 VWBIN_DIR = '/big/software/visionworkbench/bin'
 if VWBIN_DIR not in os.environ['PATH']:
@@ -141,9 +141,10 @@ def generate_tif(jp2_path, label_path):
     stretch = (info.min_stretch, info.max_stretch)
     
     jp2 = jp2_path
+    print jp2
     (root, ext) = os.path.splitext(os.path.basename(jp2_path))
     # tif = os.path.join(options.tmpdir, root + '.tif')
-    kdu_tif = os.path.join(options.tmpdir, root + '.kdu.tif')
+    # kdu_tif = os.path.join(options.tmpdir, root + '.kdu.tif')
 
     '''
     if os.path.exists(tif):
@@ -158,14 +159,14 @@ def generate_tif(jp2_path, label_path):
         execute(cmd)
     '''
     
-    cmd = '%s -fprec 16L -num_threads %d -i %s -o %s' % (externals['kdu_expand'],
-                                                         KDU_EXPAND_THREADS,
-                                                         jp2, kdu_tif) # oversample to 16 bits
-    print cmd
-    exit_status = execute(cmd)
-    if exit_status != 0:
-        unlink_if_exists(kdu_tif)
-        raise Exception("kdu_expand failed!")
+    #cmd = '%s -fprec 16L -num_threads %d -i %s -o %s' % (externals['kdu_expand'],
+#                                                         KDU_EXPAND_THREADS,
+#                                                         jp2, kdu_tif) # oversample to 16 bits
+    #print cmd
+    #exit_status = 0 #execute(cmd)
+    #if exit_status != 0:
+    #    unlink_if_exists(kdu_tif)
+    #    raise Exception("kdu_expand failed!")
 
     # Extract georeferencing parameters
     if info.proj_type == 'POLAR STEREOGRAPHIC':
@@ -195,7 +196,7 @@ def generate_tif(jp2_path, label_path):
     ullr = [ulx,uly,lrx,lry]
 
     # Return final results
-    return (kdu_tif, stretch, wkt, ullr)
+    return (jp2, stretch, wkt, ullr)
     
 def make_geotiff(obs, alpha=True):
     if alpha:
@@ -209,17 +210,17 @@ def make_geotiff(obs, alpha=True):
     '''
 
     # Make intermediates using kdu_expand
-    (red_tif, red_stretch, red_wkt, red_ullr) = generate_tif(obs.red_image, obs.red_label)
+    (red_jp2, red_stretch, red_wkt, red_ullr) = generate_tif(obs.red_image, obs.red_label)
     if obs.color_image:
         assert obs.color_label
-        (color_tif, color_stretch, color_wkt, color_ullr) = generate_tif(obs.color_image,
+        (color_jp2, color_stretch, color_wkt, color_ullr) = generate_tif(obs.color_image,
                                                                          obs.color_label)
     else:
         raise Exception("hirise2plate failed.  This hirise image does not have a color channel!!!")
 
     # Build the hirise2tif command line (it's long!!)
     cmd = '%s %s %s --stats %d,%d;%d,%d;%d,%d;%d,%d --wkt-gray \"%s\" --wkt-color \"%s\" --ullr-gray %0.9f,%0.9f,%0.9f,%0.7f --ullr-color %0.9f,%0.9f,%0.9f,%0.9f -o %s' % (externals['hirise2tif'],
-                                                                                                                                                    red_tif,color_tif,
+                                                                                                                                                    red_jp2,color_jp2,
                                                                                                                                                     red_stretch[0][0],
                                                                                                                                                     red_stretch[1][0],
                                                                                                                                                     color_stretch[0][0],
@@ -243,10 +244,11 @@ def make_geotiff(obs, alpha=True):
             unlink_if_exists(tif)
             raise Exception("hirise2tif failed!")
     finally:
-        if options.delete_files:
-            unlink_if_exists(red_tif)
-        if color_tif and options.delete_files:
-            unlink_if_exists(color_tif)
+        pass
+#        if options.delete_files:
+#            unlink_if_exists(red_tif)
+#        if color_tif and options.delete_files:
+#            unlink_if_exists(color_tif)
     return tif
 
 def image2plate(imagefile, platefile):
