@@ -6,6 +6,13 @@ import re
 import math
 import subprocess, shlex
 
+try:
+    from termcolor import colored
+except ImportError:
+    def colored(value, *unused_args, **unused_kw):
+        return value
+
+
 DEFAULT_TMP_DIR = '/scratch/tmp'
 KDU_EXPAND_THREADS = 4
 
@@ -122,9 +129,17 @@ class Label(object):
             m = self.max_stretch3_re.match( line )
             if m: self.max_stretch = [ int(m.group(1)), int(m.group(2)), int(m.group(3)) ]
             
-def execute(cmdstr):
+def execute(cmdstr, display=True, pretend=None):
     ''' Execute the specified command and return its exit status. '''
-    return subprocess.call(shlex.split(cmdstr), stderr=subprocess.STDOUT)
+    if pretend is None or options.dry_run:
+        pretend = options.dry_run
+    if display:
+        print colored('Running command: %s\n' % (cmdstr,), 'blue', attrs=['bold'])
+
+    if pretend:
+        return 0
+    else:
+        return subprocess.call(shlex.split(cmdstr), stderr=subprocess.STDOUT)
 
 def generate_tif(jp2_path, label_path):
     
@@ -248,7 +263,6 @@ def make_geotiff(obs, alpha=True):
 
     if alpha:
         cmd = cmd + ' --alpha'
-    print cmd
     try:
         exit_status = execute(cmd)
         if exit_status != 0:
@@ -268,10 +282,8 @@ def image2plate(imagefile, platefile):
         cmd += ('-t', str(options.transaction_id))
     cmd += ('--file-type auto -o', platefile, imagefile)
     cmd = ' '.join(cmd)
-    exit_status = 0
-    print cmd
-    if options.write_to_plate:
-        exit_status = execute(cmd)
+
+    exit_status = execute(cmd, pretend=not options.write_to_plate)
     if exit_status != 0:
         raise Exception("image2plate failed!")
     
@@ -282,8 +294,9 @@ if __name__ == '__main__':
     parser.add_option('--tmp', action='store', dest='tmpdir', help="Where to write intermediate images (default: /tmp)")
     parser.add_option('-t', '--transaction-id', action='store', dest='transaction_id', type='int')
     parser.add_option('--preserve', '-p', dest='delete_files', action='store_false', help="Don't delete the intermediate files.")
-    parser.add_option('--noplate', dest='write_to_plate', action='store_false', help="Don't really run image2plate.  Just pretend and print the command arguments.")
-    parser.set_defaults(tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True)
+    parser.add_option('--noplate', dest='write_to_plate', action='store_false', help="Like --dry-run, except run everything but image2plate")
+    parser.add_option('--dry-run', dest='dry_run', action='store_true', help='Print the commands to be run without actually running them')
+    parser.set_defaults(tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True, dry_run=False)
     parser.set_usage("Usage: %prog [options] observation_path platefile")
     try:
         (options, args) = parser.parse_args()
