@@ -10,7 +10,8 @@ from subprocess import Popen, PIPE
 DEFAULT_TMP_DIR = '/scratch/tmp'
 KDU_EXPAND_THREADS = 4
 
-VWBIN_DIR = '/big/software/visionworkbench/bin'
+VWBIN_DIR = '/home/mbroxton/projects/visionworkbench/build/bin'
+#VWBIN_DIR = '/big/software/visionworkbench/bin'
 if VWBIN_DIR not in os.environ['PATH']:
     os.putenv('PATH', VWBIN_DIR + ':' + os.environ['PATH'])
 
@@ -215,26 +216,37 @@ def make_geotiff(obs, alpha=True):
         assert obs.color_label
         (color_jp2, color_stretch, color_wkt, color_ullr) = generate_tif(obs.color_image,
                                                                          obs.color_label)
-    else:
-        raise Exception("hirise2plate failed.  This hirise image does not have a color channel!!!")
 
     # Build the hirise2tif command line (it's long!!)
-    cmd = '%s %s %s --stats %d,%d;%d,%d;%d,%d;%d,%d --wkt-gray \"%s\" --wkt-color \"%s\" --ullr-gray %0.9f,%0.9f,%0.9f,%0.7f --ullr-color %0.9f,%0.9f,%0.9f,%0.9f -o %s' % (externals['hirise2tif'],
-                                                                                                                                                    red_jp2,color_jp2,
-                                                                                                                                                    red_stretch[0][0],
-                                                                                                                                                    red_stretch[1][0],
-                                                                                                                                                    color_stretch[0][0],
-                                                                                                                                                    color_stretch[1][0],
-                                                                                                                                                    color_stretch[0][1],
-                                                                                                                                                    color_stretch[1][1],
-                                                                                                                                                    color_stretch[0][2],
-                                                                                                                                                    color_stretch[1][2],
-                                                                                                                                                    red_wkt, color_wkt,
-                                                                                                                                                    red_ullr[0], red_ullr[1],
-                                                                                                                                                    red_ullr[2], red_ullr[3],
-                                                                                                                                                    color_ullr[0], color_ullr[1],
-                                                                                                                                                    color_ullr[2], color_ullr[3],
-                                                                                                                                                    tif)
+    if (obs.color_image): 
+        cmd = '%s %s %s --stats %d,%d;%d,%d;%d,%d;%d,%d --wkt-gray \"%s\" --wkt-color \"%s\" --ullr-gray %0.9f,%0.9f,%0.9f,%0.7f --ullr-color %0.9f,%0.9f,%0.9f,%0.9f -o %s' % (externals['hirise2tif'],
+                                                                                                                                                                                red_jp2,color_jp2,
+                                                                                                                                                                                red_stretch[0][0],
+                                                                                                                                                                                red_stretch[1][0],
+                                                                                                                                                                                color_stretch[0][0],
+                                                                                                                                                                                color_stretch[1][0],
+                                                                                                                                                                                color_stretch[0][1],
+                                                                                                                                                                                color_stretch[1][1],
+                                                                                                                                                                                color_stretch[0][2],
+                                                                                                                                                                                color_stretch[1][2],
+                                                                                                                                                                                red_wkt, color_wkt,
+                                                                                                                                                                                red_ullr[0], red_ullr[1],
+                                                                                                                                                                                red_ullr[2], red_ullr[3],
+                                                                                                                                                                                color_ullr[0], color_ullr[1],
+                                                                                                                                                                                color_ullr[2], color_ullr[3],
+                                                                                                                                                                                tif)
+    else: 
+        cmd = '%s %s --stats %d,%d;%d,%d;%d,%d;%d,%d --wkt-gray \"%s\" --ullr-gray %0.9f,%0.9f,%0.9f,%0.7f -o %s' % (externals['hirise2tif'],
+                                                                                                                     red_jp2,
+                                                                                                                     red_stretch[0][0],
+                                                                                                                     red_stretch[1][0],
+                                                                                                                     0,0,0,0,0,0,
+                                                                                                                     red_wkt,
+                                                                                                                     red_ullr[0], red_ullr[1],
+                                                                                                                     red_ullr[2], red_ullr[3],
+                                                                                                                     tif)
+
+
     if alpha:
         cmd = cmd + ' --alpha'
     print cmd
@@ -255,7 +267,7 @@ def image2plate(imagefile, platefile):
     cmd = [externals['image2plate']]
     if options.transaction_id:
         cmd += ('-t', str(options.transaction_id))
-    cmd += ('-o', platefile, imagefile)
+    cmd += ('--file-type auto -o', platefile, imagefile)
     cmd = ' '.join(cmd)
     exit_status = 0
     print cmd
