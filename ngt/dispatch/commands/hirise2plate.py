@@ -192,7 +192,7 @@ def generate_tif(jp2_path, label_path):
             srs = projcs % ('South_Polar_Stereographic',(geogcs%(info.radius,)),
                             'Polar_Stereographic',info.center_lat)
         else:
-            raise ValuError('Unsupported center latitude in polar stereographic projection')
+            raise ValueError('Unsupported center latitude in polar stereographic projection')
         scalex = info.scale
         scaley = info.scale
     elif info.proj_type == 'EQUIRECTANGULAR':
@@ -291,7 +291,7 @@ if __name__ == '__main__':
 
     global options
     parser = optparse.OptionParser()
-    parser.add_option('--tmp', action='store', dest='tmpdir', help="Where to write intermediate images (default: /tmp)")
+    parser.add_option('--tmp', action='store', dest='tmpdir', help="Where to write intermediate images (default: %s)" % DEFAULT_TMP_DIR)
     parser.add_option('-t', '--transaction-id', action='store', dest='transaction_id', type='int')
     parser.add_option('--preserve', '-p', dest='delete_files', action='store_false', help="Don't delete the intermediate files.")
     parser.add_option('--noplate', dest='write_to_plate', action='store_false', help="Like --dry-run, except run everything but image2plate")
