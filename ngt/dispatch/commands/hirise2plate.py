@@ -5,7 +5,6 @@ import sys, os, os.path
 import re
 import math
 import subprocess, shlex
-from subprocess import Popen, PIPE
 
 DEFAULT_TMP_DIR = '/scratch/tmp'
 KDU_EXPAND_THREADS = 4
@@ -16,7 +15,7 @@ if VWBIN_DIR not in os.environ['PATH']:
     os.putenv('PATH', VWBIN_DIR + ':' + os.environ['PATH'])
 
 def which(command):
-    return Popen(('which', command), stdout=PIPE).stdout.read().strip()
+    return subprocess.Popen(('which', command), stdout=subprocess.PIPE).stdout.read().strip()
     
 externals = {}
 for command in ('gdal_translate','kdu_expand','hirise2tif','image2plate'):
