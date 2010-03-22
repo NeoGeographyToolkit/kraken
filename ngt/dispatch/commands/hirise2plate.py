@@ -233,7 +233,7 @@ def make_geotiff(obs, alpha=True):
 
     # Build the hirise2tif command line (it's long!!)
     if (obs.color_image): 
-        cmd = '%s %s %s --stats %d,%d;%d,%d;%d,%d;%d,%d --wkt-gray \"%s\" --wkt-color \"%s\" --ullr-gray %0.9f,%0.9f,%0.9f,%0.7f --ullr-color %0.9f,%0.9f,%0.9f,%0.9f -o %s' % (externals['hirise2tif'],
+        cmd = '%s %s %s --stats \"%d,%d;%d,%d;%d,%d;%d,%d\" --wkt-gray \"%s\" --wkt-color \"%s\" --ullr-gray %0.9f,%0.9f,%0.9f,%0.7f --ullr-color %0.9f,%0.9f,%0.9f,%0.9f -o %s' % (externals['hirise2tif'],
                                                                                                                                                                                 red_jp2,color_jp2,
                                                                                                                                                                                 red_stretch[0][0],
                                                                                                                                                                                 red_stretch[1][0],
