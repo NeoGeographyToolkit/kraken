@@ -4,6 +4,8 @@ from django.db import transaction
 from assets.models import Asset, DATA_ROOT
 from ngt.utils.tracker import Tracker
 from pds.ingestion.cum_index import Table
+from assetize_hirise import make_asset
+from django.db import transaction
 import json
 import urllib
 
@@ -17,6 +19,8 @@ ASSET_CLASS = 'hirise product'
 #ERRLOG = sys.stderr
 ERRLOG = open('/home/ted/hirise_inventory_error.log','w')
 
+def log_error( message):
+    ERRLOG.write(message + "\n")
 
 def linecount(filename):
     f = open(filename)                  
@@ -32,16 +36,42 @@ def linecount(filename):
     return lines
 
 class Observation(object):
-    def __init__(self, asset):
-        self.id = asset.product_id
-        self.path = asset.file_path
-        self.file_base = self.path + '/' + self.id
-        self.asset = asset
+    def __init__(self, initial):
+        ''' initalize the observation with either an Asset or a PDS Row instance '''
 
+        self.asset = None
         self.red_record = None
         self.color_record = None
         self.red_image_missing = False
         self.color_image_missing = False
+
+        if type(initial) == Asset:
+            self.asset = initial
+            self.id = self.asset.product_id
+            self.path = self.asset.file_path
+        elif type(initial) == Table.Row:
+            self.id = initial.observation_id
+            self.path = os.path.dirname(row.file_name_specification)
+            self.add_index_row(initial)
+        else:
+            raise ValueError("Tried to initialize Observation with invalid type: %s" % str(type(initial)))
+        self.file_base = self.path + '/' + self.id
+
+    def add_index_record(self, record):
+        # record is a Row instance
+        if '_RED' in record.product_id:
+            self.red_record = record
+            if not os.path.exists(self.red_image_file):
+                self.red_record_missing = True
+                log_error("image file missing: %s" % record.product_id)
+        elif '_COLOR' in record.product_id:
+            self.color_record = record
+            if not os.path.exists(self.color_image_file):
+                self.color_record_missing = True
+                log_error("image file missing: %s" % record.product_id)
+        else:
+            raise ValueError("Invalid product_id: %s" % record.product_id)
+        
 
     @property
     def red_image_file(self):
@@ -55,8 +85,6 @@ class ObservationInventory(dict):
     def __init__(self):
         super(ObservationInventory, self).__init__()
 
-    def log_error(self, message):
-        ERRLOG.write(message + "\n")
     
     def add_asset(self, asset):
         assert asset.product_id not in self # asset / observation ids should be unique
@@ -66,20 +94,9 @@ class ObservationInventory(dict):
         try:
             obs = self[record.observation_id]
         except KeyError:
-            self.log_error("no asset for observation %s" % record.observation_id)
-            return None
-        if '_RED' in record.product_id:
-            obs.red_record = record
-            if not os.path.exists(obs.red_image_file):
-                obs.red_record_missing = True
-                self.log_error("image file missing: %s" % record.product_id)
-        elif '_COLOR' in record.product_id:
-            obs.color_record = record
-            if not os.path.exists(obs.color_image_file):
-                obs.color_record_missing = True
-                self.log_error("image file missing: %s" % record.product_id)
-        else:
-            raise ValueError("Invalid product_id: %s" % record.product_id)
+            log_error("no asset for observation %s" % record.observation_id)
+            raise
+        obs.add_index_record(record)
 
 def build_index():
     print "Reading cumulative index table %s." % INDEXTAB
@@ -98,13 +115,17 @@ def scan_assets():
         inventory.add_asset(asset)
     return inventory
 
-def scan_index(inventory, labelfile, tablefile):
+def scan_index(inventory, labelfile=INDEXLBL, tablefile=INDEXTAB):
     print "Reading cumulative index table %s." % INDEXTAB
     indexlength = linecount(tablefile)
     table = Table(labelfile, tablefile)
+    missing_products = []
     for row in Tracker(table, target=indexlength, progress=True):
-        inventory.add_index_record(row)
-    return inventory
+        try:
+            inventory.add_index_record(row)
+        except KeyError:
+            missing_products.append(row)
+    return inventory, missing_products
 
 def replace_missing_files():
     MISSING_FILES_JSON = '/home/ted/failed_product_ids.json'
@@ -132,14 +153,38 @@ def download_file(url, dest_filename):
     def _report(blockcount, blocksize, totalsize):
         sys.stdout.write("\r%s of %s bytes retrieved." % (blockcount * blocksize, totalsize))
     print "%s --> %s" % (url, dest_filename)
+    if not os.path.exists(os.path.dirname(dest_filename)):
+        print "Directory %s does not exist.  Creating" % os.path.dirname(dest_filename)
+        os.makedirs(os.path.dirname(dest_filename))
     urllib.urlretrieve(url, dest_filename, _report)
+
+@transaction.commit_on_success
+def download_and_assetize_pds_products(index_rows):
+    observations = {}
+    for row in index_rows:
+        try:
+            obs = observations[row.observation_id]
+            obs.add_index_record(row)
+        except KeyError:
+            obs = Observation(row)
+            observations[row.observation_id] = obs     
+    for observation_id, obs in observations.items():
+        if obs.color_record and not os.path.exists(obs.color_record.file_name_specification):
+            # TODO: EXPAND FILE PATHS BELOW
+            try:
+                download_file(BASE_URL + obs.color_record.file_name_specification, OBSERVATION_PATH+FILENAME)
+            except:
+                os.unlink(OBSERVATION_PATH+FILENAME)
+        
+       
 
 def do_inventory():
     inventory = scan_assets()
-    inventory = scan_index(inventory, INDEXLBL, INDEXTAB)
+    inventory, missing_products = scan_index(inventory, INDEXLBL, INDEXTAB)
     count = 0
     print "Final inventory pass."
     for obs in Tracker(inventory.values(), progress=True):
         if obs.red_image_missing or obs.color_image_missing:
             count += 1
     print "%d images missing." % count
+
