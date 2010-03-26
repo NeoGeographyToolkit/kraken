@@ -14,12 +14,31 @@ def centroid(index_row):
     )
     return lr.centroid
 
+def check_angles():
+    inventory = scan_assets()
+    inventory, missing = scan_index(inventory)
+        
+    iter = inventory.values()
+    for i in range(20):
+        row = iter.pop().red_record
+        print "%f, %f" % (row.spacecraft_altitude, row.emission_angle)
+
 def output_metadata(filename, fields=FIELDS):
     inventory = scan_assets()
     inventory, missing = scan_index(inventory)
     
     print "Outputting to %s" % filename
-    metadata_writer = csv.writer(open(filename, 'w'))
+    outfile = open(filename, 'w')
+    metadata_writer = csv.writer(outfile)
+    header_line = "# " + ','.join((
+        'observation_id',
+        'latitude',
+        'longitude',
+        'url',
+        'description',
+        'image_lines',
+    ))
+    outfile.write(header_line + "\n")
     for observation_id, observation in inventory.items():
         if observation.red_record:
             record = observation.red_record
