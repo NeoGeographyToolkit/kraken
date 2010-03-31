@@ -47,7 +47,7 @@ command_map = {
 
 
 JOB_FETCH_LIMIT = 50   
-REFRESH_TRIGGER_SIZE = 3
+REFRESH_TRIGGER_SIZE = 5
 
 class NoopLock(object):
     def acquire(self): pass
@@ -221,11 +221,14 @@ class JobBuffer(UniquePriorityQueue):
         logger.debug("Refreshing the job buffer.")
         dblock.acquire()
         t0 = time.time()
+        fetch_count = 0
         rejected_count = 0
         for jobset in JobSet.objects.filter(active=True).order_by('priority'):
+            if fetch_count > 0: break # quit fetching if one of the jobsets has usable jobs.
             jobs = jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
             for job in jobs:
                 if check_readiness(job):
+                    fetch_count += 1
                     job.status_enum = Job.StatusEnum.DISPATCHED
                     job.save()
                     self.put((jobset.priority, job))
