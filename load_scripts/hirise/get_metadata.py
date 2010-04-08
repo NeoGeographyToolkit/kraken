@@ -2,6 +2,7 @@ from inventory_hirise import scan_assets, scan_index
 import csv
 from django.contrib.gis.geos import LinearRing
 FIELDS = []
+CENTERPOINT_FILE = '/big/sourcedata/mars/hirise/metadata/HiRISE_coords.csv'
 
 def centroid(index_row):
     r = index_row
@@ -23,9 +24,20 @@ def check_angles():
         row = iter.pop().red_record
         print "%f, %f" % (row.spacecraft_altitude, row.emission_angle)
 
+def get_centerpoints(cp_filename):
+    centerpoints = {}
+    print "Reading image centerpoints from %s" % cp_filename
+    cpreader = csv.reader(open(cp_filename, 'rb'), delimiter='\t')
+    cpreader.next() # throw away the header row
+    for observation_id, lat, lon in cpreader:
+        centerpoints[observation_id] = (lat, lon)
+    print "Done."
+    return centerpoints
+
 def output_metadata(filename, fields=FIELDS):
     inventory = scan_assets()
     inventory, missing = scan_index(inventory)
+    centerpoints = get_centerpoints(CENTERPOINT_FILE)
     
     print "Outputting to %s" % filename
     outfile = open(filename, 'w')
@@ -45,11 +57,16 @@ def output_metadata(filename, fields=FIELDS):
         else:
             record = observation.color_record
         assert record
-        centerpoint = centroid(record)       
+        #centerpoint = centroid(record)       
+        try:
+            centerpoint = centerpoints[record.observation_id]
+        except KeyError:
+            print "No centerpoint: %s" % record.observation_id
+            continue
         metadata_writer.writerow((
             record.observation_id,
-            centerpoint.y,
-            centerpoint.x,
+            centerpoint[0],
+            centerpoint[1],
             "http://hirise.lpl.arizona.edu/" + record.observation_id,
             record.rationale_desc,
             record.image_lines
