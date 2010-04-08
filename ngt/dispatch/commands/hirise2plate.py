@@ -25,7 +25,7 @@ def which(command):
     return subprocess.Popen(('which', command), stdout=subprocess.PIPE).stdout.read().strip()
     
 externals = {}
-for command in ('gdal_translate','kdu_expand','hirise2tif','image2plate'):
+for command in ('kdu_expand','hirise2tif','image2plate'):
     externals[command] = which(command)
     if not externals[command]:
         raise Exception("Could not find %s in $PATH." % command)
