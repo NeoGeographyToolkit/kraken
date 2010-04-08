@@ -9,6 +9,7 @@ from django.db import transaction
 import json
 import urllib
 
+BASE_URL = 'http://hirise-pds.lpl.arizona.edu/PDS/'
 BASEDIR = '/big/assets/hirise/PDS/'
 PDSBASEDIR = '/big/sourcedata/mars/hirise/PDS/'
 INDEXDIR = '/big/sourcedata/mars/hirise/PDS/INDEX'
@@ -35,6 +36,15 @@ def linecount(filename):
     f.close()
     return lines
 
+def unlink_if_exists(filepath):
+    try:
+        os.unlink(filepath)
+    except OSError as err:
+        if err.errno == 2: # file doesn't exist
+            pass  # ignore ignore the error
+        else:
+            raise err
+
 class Observation(object):
     def __init__(self, initial):
         ''' initalize the observation with either an Asset or a PDS Row instance '''
@@ -51,8 +61,8 @@ class Observation(object):
             self.path = self.asset.file_path
         elif type(initial) == Table.Row:
             self.id = initial.observation_id
-            self.path = os.path.dirname(row.file_name_specification)
-            self.add_index_row(initial)
+            self.path = os.path.dirname(initial.file_name_specification)
+            self.add_index_record(initial)
         else:
             raise ValueError("Tried to initialize Observation with invalid type: %s" % str(type(initial)))
         self.file_base = self.path + '/' + self.id
@@ -75,10 +85,10 @@ class Observation(object):
 
     @property
     def red_image_file(self):
-        return self.file_base + '_RED.JP2'
+        return self.path + '_RED.JP2'
     @property
     def color_image_file(self):
-        return self.file_base + '_COLOR.JP2'
+        return self.path + '_COLOR.JP2'
         
 class ObservationInventory(dict):
     ''' keys are observation_ids, values are Observation instances '''
@@ -169,13 +179,21 @@ def download_and_assetize_pds_products(index_rows):
             obs = Observation(row)
             observations[row.observation_id] = obs     
     for observation_id, obs in observations.items():
-        if obs.color_record and not os.path.exists(obs.color_record.file_name_specification):
-            # TODO: EXPAND FILE PATHS BELOW
-            try:
-                download_file(BASE_URL + obs.color_record.file_name_specification, OBSERVATION_PATH+FILENAME)
-            except:
-                os.unlink(OBSERVATION_PATH+FILENAME)
-        
+        for record in (obs.color_record, obs.red_record):
+            if record and not os.path.exists(BASEDIR + record.file_name_specification):
+                try:
+                    download_file(BASE_URL + record.file_name_specification, BASEDIR + record.file_name_specification)
+                except:
+                    print "Download failed.  Unlinking."
+                    unlink_if_exists(BASEDIR + record.file_name_specification)
+                    raise
+        for record in (obs.color_record, obs.red_record):
+            # double check to make sure files exist
+            if record: 
+                assert os.path.exists(BASEDIR + record.file_name_specification)
+                obs_path = os.path.dirname(BASEDIR + record.file_name_specification)
+        print "Creating an asset for %s" % observation_id
+        make_asset(observation_id, obs_path, True, class_label="fresh hirise product") 
        
 
 def do_inventory():
@@ -187,4 +205,7 @@ def do_inventory():
         if obs.red_image_missing or obs.color_image_missing:
             count += 1
     print "%d images missing." % count
+    print "%d observations not acquired." % len(missing_products)
+    print "Downloading missing observations."
+    download_and_assetize_pds_products(missing_products)
 
