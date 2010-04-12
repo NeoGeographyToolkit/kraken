@@ -50,6 +50,7 @@ JOB_FETCH_LIMIT = 50
 REFRESH_TRIGGER_SIZE = 5
 
 class NoopLock(object):
+    ''' A dummy implementation of the Lock interface that does nothing. '''
     def acquire(self): pass
     def release(self): pass
 #dblock = threading.RLock()
@@ -280,7 +281,7 @@ def get_next_job(msgbytes):
         'args' : job.arguments or '[]',
         }
     logger.info("Sending job %s to reaper %s (%s)" % (job.uuid[:8], request.reaper_uuid[:8], str(time.time() - t0)))
-    job.status = "dispatched"
+    job.status = "enqueued"
     job.processor = request.reaper_uuid
     #dblock.acquire()
     #job.save()
@@ -386,7 +387,6 @@ def _job_ended(request):
     job.output = request.output
     job = postprocess_job(job)
     job.save()
-    # TODO: get reaper and increment job count
     try:
         reaper = Reaper.objects.get(uuid=job.processor)
         reaper.jobcount += 1
