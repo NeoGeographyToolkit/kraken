@@ -1,8 +1,9 @@
 from inventory_hirise import scan_assets, scan_index
-import csv
+import csv, sys
 from django.contrib.gis.geos import LinearRing
-FIELDS = []
+
 CENTERPOINT_FILE = '/big/sourcedata/mars/hirise/metadata/HiRISE_coords.csv'
+THEME_FILE = '/big/sourcedata/mars/hirise/metadata/HiRISE_themes.csv'
 
 def centroid(index_row):
     r = index_row
@@ -34,15 +35,45 @@ def get_centerpoints(cp_filename):
     print "Done."
     return centerpoints
 
-def output_metadata(filename, fields=FIELDS):
+def reduce_themefile(theme_filename):
+    themes = {}
+    print "Reading Theme File %s" % theme_filename
+    themereader = csv.reader(open(theme_filename, 'rb'), delimiter='\t')
+    themereader.next() # throw away the header row
+    i = 0
+    for observation_id, theme, precedence in themereader:
+        i += 1
+        sys.stderr.write('\r%d' % i)
+        if (observation_id, theme) not in themes:
+            themes[(observation_id, theme)] = int(precedence)
+        elif themes[(observation_id, theme)] > int(precedence):
+            themes[(observation_id, theme)] = int(precedence)
+    sys.stderr.write('\n')
+    def flatten(themes):
+        for (observation_id, theme), precedence in themes.items():
+            yield (observation_id, theme, precedence)
+    return flatten(themes)
+
+def output_themes(output_file, theme_filename=THEME_FILE):
+    themes = reduce_themefile(theme_filename)
+    outfile = open(output_file, 'w')
+    writer = csv.writer(outfile)
+    header = ('observation_id','theme','max_precedence')
+    writer.writerow(header)
+    for tup in themes:
+        writer.writerow(tup)
+    outfile.close()
+
+def output_metadata(filename):
     inventory = scan_assets()
     inventory, missing = scan_index(inventory)
     centerpoints = get_centerpoints(CENTERPOINT_FILE)
+    #themes = scan
     
     print "Outputting to %s" % filename
     outfile = open(filename, 'w')
     metadata_writer = csv.writer(outfile)
-    header_line = "# " + ','.join((
+    header_line = ','.join((
         'observation_id',
         'latitude',
         'longitude',
