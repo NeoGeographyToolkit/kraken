@@ -21,11 +21,12 @@ class Job(models.Model):
     class StatusEnum(object):
         NEW = 0
         REQUEUE = 1
-        DISPATCHED = 2
+        ENQUEUED = 2
         PROCESSING = 3
         COMPLETE = 4
         FAILED = 5
-        end_states = (COMPLETE, FAILED)
+        FAILED_NONBLOCKING = 6
+        end_states = (COMPLETE, FAILED_NONBLOCKING)
         #end_states = (COMPLETE, )
         
         @classmethod
@@ -206,12 +207,6 @@ class JobSet(models.Model):
                 arguments='["%s"]' % asset.file_path, #json-decodable lists of one
                 creates_new_asset = creates_new_asset,
             )
-    
-    def execute(self):
-        #self.simple_populate()
-        self.status = "dispatched"
-        for job in self.jobs.filter(status_enum=Job.StatusEnum.NEW):
-            job.enqueue()
 
 
     ####
