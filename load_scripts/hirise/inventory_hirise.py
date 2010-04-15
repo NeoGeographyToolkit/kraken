@@ -159,9 +159,20 @@ def replace_missing_files():
                 download_file(url, observation_path + '/' + imgfile)
     print "Done!"
 
+def sizeof_human(numbytes):
+    ''' Human-readable size strings '''
+    if numbytes < 0:    # urlretrieve passes -1 for totalsize if it can't get the filesize from the server
+        return '???'
+    for x in ['bytes','KB','MB','GB','TB','PB']:
+        if numbytes < 1024.0:
+            return "%3.2f%s" % (numbytes, x)
+        numbytes /= 1024.0
+    else:
+        return "Exabytes!"
+
 def download_file(url, dest_filename):
     def _report(blockcount, blocksize, totalsize):
-        sys.stdout.write("\r%s of %s bytes retrieved." % (blockcount * blocksize, totalsize))
+        sys.stdout.write("\r%s of %s retrieved." % (sizeof_human(blockcount * blocksize), sizeof_human(totalsize)))
     print "%s --> %s" % (url, dest_filename)
     if not os.path.exists(os.path.dirname(dest_filename)):
         print "Directory %s does not exist.  Creating" % os.path.dirname(dest_filename)
