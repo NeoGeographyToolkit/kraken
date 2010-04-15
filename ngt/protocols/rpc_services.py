@@ -266,8 +266,7 @@ class AmqpService(object):
         pass
         
     def __init__(self, 
-        #pb_service_class=None,
-        amqp_channel=None,
+        amqp_channel=None, # If None, a new connection & channel will be created.
         exchange='Control_Exchange',
         request_routing_key=None,
         reply_queue=None,

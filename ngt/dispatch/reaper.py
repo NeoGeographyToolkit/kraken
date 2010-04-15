@@ -204,6 +204,7 @@ class Reaper(object):
             self.logger.info("Registering and launching message handlers...")
             #signal.signal(signal.SIGINT, self._sig_shutdown)   
             
+            # Launch Control Loop
             self.logger.debug("\tcontrol will consume from %s" % self.CONTROL_QUEUE_NAME)
             self.control_listener.set_callback(queue=self.CONTROL_QUEUE_NAME, no_ack=False, callback=self.control_command_handler)
 
