@@ -220,7 +220,7 @@ def download_and_assetize_pds_products(index_rows):
         print "Creating an asset for %s" % observation_id
         make_asset(observation_id, obs_path, True, class_label="fresh hirise product") 
 
- def output_download_list(index_rows, outfilename, jobsetname='download new hirise images'):
+def output_download_list(index_rows, outfilename, jobsetname='download new hirise images'):
     '''Output a list that can be fed to jobs/create_jobset.py to make a download list.'''
     observations = index_rows_to_observations(index_rows)
     print "Writing JobSet load file to %s" % outfilename
@@ -229,7 +229,7 @@ def download_and_assetize_pds_products(index_rows):
     for observation_id, obs in observations.items():
         for record in (obs.color_record, obs.red_record):
             if record and not os.path.exists(BASEDIR + record.file_name_specification):
-                outfile.write("download %s %s\n" % (BASE_URL + record.file_name_specification, BASEDIR + record.file_name_specification)
+                outfile.write("download %s %s\n" % (BASE_URL + record.file_name_specification, BASEDIR + record.file_name_specification))
     outfile.close()
     print "Done."
 
@@ -243,6 +243,6 @@ def do_inventory():
             count += 1
     print "%d images missing." % count
     print "%d observations not acquired." % len(missing_products)
-    print "Downloading missing observations."
+    #print "Downloading missing observations."
     #download_and_assetize_pds_products(missing_products)
     return (inventory, missing_products)
