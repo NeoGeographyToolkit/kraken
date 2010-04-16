@@ -5,6 +5,10 @@ from django.contrib.gis.geos import LinearRing
 CENTERPOINT_FILE = '/big/sourcedata/mars/hirise/metadata/HiRISE_coords.csv'
 THEME_FILE = '/big/sourcedata/mars/hirise/metadata/HiRISE_themes.csv'
 
+DEFAULT_OUTPUT_CENTERPOINT_FILE = 'hirise_meta.csv'
+DEFAULT_OUTPUT_THEME_FILE = 'hirise_themes.csv'
+
+
 def centroid(index_row):
     r = index_row
     lr = LinearRing(
@@ -35,7 +39,7 @@ def get_centerpoints(cp_filename):
     print "Done."
     return centerpoints
 
-def reduce_themefile(theme_filename):
+def reduce_themefile(theme_filename, inventory=None):
     themes = {}
     print "Reading Theme File %s" % theme_filename
     themereader = csv.reader(open(theme_filename, 'rb'), delimiter='\t')
@@ -44,6 +48,9 @@ def reduce_themefile(theme_filename):
     for observation_id, theme, precedence in themereader:
         i += 1
         sys.stderr.write('\r%d' % i)
+        if inventory and observation_id not in inventory.keys():
+            print "\nObservation %s not in inventory" % observation_id
+            continue
         if (observation_id, theme) not in themes:
             themes[(observation_id, theme)] = int(precedence)
         elif themes[(observation_id, theme)] > int(precedence):
@@ -54,8 +61,8 @@ def reduce_themefile(theme_filename):
             yield (observation_id, theme, precedence)
     return flatten(themes)
 
-def output_themes(output_file, theme_filename=THEME_FILE):
-    themes = reduce_themefile(theme_filename)
+def output_themes(output_file, inventory=None, theme_filename=THEME_FILE):
+    themes = reduce_themefile(theme_filename, inventory=inventory)
     outfile = open(output_file, 'w')
     writer = csv.writer(outfile)
     header = ('observation_id','theme','max_precedence')
@@ -64,12 +71,14 @@ def output_themes(output_file, theme_filename=THEME_FILE):
         writer.writerow(tup)
     outfile.close()
 
-def output_metadata(filename):
+def scan_and_output_metadata(meta_filename=DEFAULT_OUTPUT_CENTERPOINT_FILE, theme_filename=DEFAULT_OUTPUT_THEME_FILE):
     inventory = scan_assets()
     inventory, missing = scan_index(inventory)
-    centerpoints = get_centerpoints(CENTERPOINT_FILE)
-    #themes = scan
+    output_metadata(meta_filename, inventory)
+    output_themes(theme_filename, inventory=inventory)
     
+def output_metadata(filename, inventory):
+    centerpoints = get_centerpoints(CENTERPOINT_FILE)
     print "Outputting to %s" % filename
     outfile = open(filename, 'w')
     metadata_writer = csv.writer(outfile)
