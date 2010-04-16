@@ -108,11 +108,11 @@ class ObservationInventory(dict):
             raise
         obs.add_index_record(record)
 
-def build_index():
-    print "Reading cumulative index table %s." % INDEXTAB
-    indexlength = linecount(INDEXTAB)
+def scan_index(labelfile=INDEXLBL, tablefile=INDEXTAB):
+    print "Reading cumulative index table %s." % tablefile
+    indexlength = linecount(tablefile)
     index = {}
-    table = Table(INDEXLBL,INDEXTAB)
+    table = Table(labelfile,tablefile)
     for row in Tracker(table, target=indexlength, progress=True):   
         index[row.product_id] = row
     return index
@@ -125,7 +125,10 @@ def scan_assets():
         inventory.add_asset(asset)
     return inventory
 
-def scan_index(inventory, labelfile=INDEXLBL, tablefile=INDEXTAB):
+def compare_to_index(inventory, labelfile=INDEXLBL, tablefile=INDEXTAB):
+    ''' Add PDS index rows to an asset inventory where they match. 
+        Put them in a seperate list otherwise.
+    '''
     print "Reading cumulative index table %s." % INDEXTAB
     indexlength = linecount(tablefile)
     table = Table(labelfile, tablefile)
@@ -137,12 +140,16 @@ def scan_index(inventory, labelfile=INDEXLBL, tablefile=INDEXTAB):
             missing_products.append(row)
     return inventory, missing_products
 
+###
+# The method below is for replacing HiRISE assets that were accidentally deleted at one point.
+# Probably shouldn't be used under normal circumstances.
+# 
 def replace_missing_files():
     MISSING_FILES_JSON = '/home/ted/failed_product_ids.json'
     BASE_URL = 'http://hirise-pds.lpl.arizona.edu/PDS/'
     missing_files = json.loads(open(MISSING_FILES_JSON, 'r').read())   
     print "%s missing files." % len(missing_files)
-    index = build_index()
+    index = scan_index()
     for observation_id, observation_path in missing_files.items():
         print "Checking %s" % observation_id
         for postfix in ('_COLOR','_RED'):
@@ -158,6 +165,8 @@ def replace_missing_files():
                 url = BASE_URL + index[product_id].file_name_specification
                 download_file(url, observation_path + '/' + imgfile)
     print "Done!"
+#
+####
 
 def sizeof_human(numbytes):
     ''' Human-readable size strings '''
@@ -179,8 +188,8 @@ def download_file(url, dest_filename):
         os.makedirs(os.path.dirname(dest_filename))
     urllib.urlretrieve(url, dest_filename, _report)
 
-@transaction.commit_on_success
-def download_and_assetize_pds_products(index_rows):
+def index_rows_to_observations(index_rows):
+    '''Convert a sequence of index rows to a dict of Observation instances, by observation_id'''
     observations = {}
     for row in index_rows:
         try:
@@ -189,6 +198,11 @@ def download_and_assetize_pds_products(index_rows):
         except KeyError:
             obs = Observation(row)
             observations[row.observation_id] = obs     
+    return observations
+
+@transaction.commit_on_success
+def download_and_assetize_pds_products(index_rows):
+    observations = index_rows_to_observations(index_rows)
     for observation_id, obs in observations.items():
         for record in (obs.color_record, obs.red_record):
             if record and not os.path.exists(BASEDIR + record.file_name_specification):
@@ -205,11 +219,23 @@ def download_and_assetize_pds_products(index_rows):
                 obs_path = os.path.dirname(BASEDIR + record.file_name_specification)
         print "Creating an asset for %s" % observation_id
         make_asset(observation_id, obs_path, True, class_label="fresh hirise product") 
-       
+
+ def output_download_list(index_rows, outfilename, jobsetname='download new hirise images'):
+    '''Output a list that can be fed to jobs/create_jobset.py to make a download list.'''
+    observations = index_rows_to_observations(index_rows)
+    print "Writing JobSet load file to %s" % outfilename
+    outfile = open(outfilename, 'w')
+    outfile.write(jobsetname + '\n')
+    for observation_id, obs in observations.items():
+        for record in (obs.color_record, obs.red_record):
+            if record and not os.path.exists(BASEDIR + record.file_name_specification):
+                outfile.write("download %s %s\n" % (BASE_URL + record.file_name_specification, BASEDIR + record.file_name_specification)
+    outfile.close()
+    print "Done."
 
 def do_inventory():
     inventory = scan_assets()
-    inventory, missing_products = scan_index(inventory, INDEXLBL, INDEXTAB)
+    inventory, missing_products = compare_to_index(inventory, INDEXLBL, INDEXTAB)
     count = 0
     print "Final inventory pass."
     for obs in Tracker(inventory.values(), progress=True):
@@ -218,5 +244,5 @@ def do_inventory():
     print "%d images missing." % count
     print "%d observations not acquired." % len(missing_products)
     print "Downloading missing observations."
-    download_and_assetize_pds_products(missing_products)
-
+    #download_and_assetize_pds_products(missing_products)
+    return (inventory, missing_products)
