@@ -34,7 +34,11 @@ def ensure_path(filepath):
     dirname = os.path.dirname(filepath)
     if dirname and not os.path.exists(dirname):
         print "Directory %s does not exist.  Creating" % os.path.dirname(filepath)
-        os.makedirs(os.path.dirname(filepath))
+        try:
+            os.makedirs(os.path.dirname(filepath))
+        except os.error:
+            print "Directory %s already exists.  Curious!" % filepath
+            pass
     
 
 def main():
