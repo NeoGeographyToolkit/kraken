@@ -28,7 +28,7 @@ def _build_mipmap_jobs(jobset, asset_queryset, platefile):
             if job.transaction_id % 2 == 0:
                 break
         job.command = 'moc2plate'
-        job.arguments = json.dumps(MipMapCommand.build_arguments(job, platefile=platefile, file_path=asset.file_path))
+        job.arguments = MipMapCommand.build_arguments(job, platefile=platefile, file_path=asset.file_path)
         job.footprint = asset.footprint
         job.jobset = jobset
         job.save()
