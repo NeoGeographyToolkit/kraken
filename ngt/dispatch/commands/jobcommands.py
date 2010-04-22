@@ -82,7 +82,14 @@ class MipMapCommand(RetryingJobCommand):
         job = super(MipMapCommand, klass).postprocess_job(job)
         if job.status == 'failed':
             job.status = 'failed_nonblocking'
-        return job
+
+ class moc2plateCommand(RetryingJobCommand):
+    name = 'moc2plate'
+
+    @classmethod
+    def build_arguments(klass, job, **kwargs):
+        args = "%s %s -t %d" % (kwargs['file_path'], kwargs['platefile'], job.transaction_id)
+        return args.split(' ')
         
 class hirise2plateCommand(RetryingJobCommand):
     name = 'hirise2plate'
