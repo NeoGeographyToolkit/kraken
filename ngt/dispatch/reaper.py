@@ -242,6 +242,7 @@ def init_reaper_commands():
         'snapshot': '/big/software/visionworkbench/bin/snapshot',
         'start_snapshot': '/big/software/visionworkbench/bin/snapshot',
         'end_snapshot': '/big/software/visionworkbench/bin/snapshot',
+        'moc2plate': os.path.join(COMMAND_PATH, 'moc2plate.py'),
         'hirise2plate': os.path.join(COMMAND_PATH, 'hirise2plate.py'),
         'download': os.path.join(COMMAND_PATH, 'download.py'),
     }
@@ -249,6 +250,7 @@ def init_reaper_commands():
         print "Running in no-op mode."
         Reaper.commands.update({
         'mipmap': '/big/scratch/logargs.py image2plate',
+        'moc2plate': '/big/scratch/logargs.py moc2plate',
         'hirise2plate': '/big/scratch/logargs.py hirise2plate',
         'snapshot': '/big/scratch/logargs.py snapshot',
         'start_snapshot': '/big/scratch/logargs.py start_snapshot',
