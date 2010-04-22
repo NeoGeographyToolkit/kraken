@@ -83,7 +83,7 @@ class MipMapCommand(RetryingJobCommand):
         if job.status == 'failed':
             job.status = 'failed_nonblocking'
 
- class moc2plateCommand(RetryingJobCommand):
+class moc2plateCommand(RetryingJobCommand):
     name = 'moc2plate'
 
     @classmethod
