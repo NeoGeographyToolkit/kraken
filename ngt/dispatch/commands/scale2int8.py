@@ -56,7 +56,7 @@ def stretch(infile, outfile, minval, maxval):
     args = (
         'stretch',
         'from='+infile,
-        'to='+outfile+'+8bit+1:255',
+        'to='+outfile+'+8bit+0:255',
         'pairs=%f:1 %f:255' % (minval, maxval),
         'null=0',
         'lis=1',

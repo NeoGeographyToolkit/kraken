@@ -55,6 +55,7 @@ if __name__ == '__main__':
 
 
 
+
 """
 def make_cube(source_img_path, dest_cube_path):
     assert os.path.exists(source_img_path)
