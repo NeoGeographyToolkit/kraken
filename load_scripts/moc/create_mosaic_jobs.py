@@ -11,7 +11,7 @@ from ngt.jobs.models import JobSet, Job
 from ngt.assets.models import Asset
 from ngt.utils.tracker import Tracker
 from ngt.django_extras.db.sequence import Sequence
-from ngt.dispatch.commands.jobcommands import MipMapCommand, StartSnapshot, EndSnapshot
+from ngt.dispatch.commands.jobcommands import moc2plateCommand, StartSnapshot, EndSnapshot
 from load_scripts.snapshot.create_jobs import create_snapshot_jobs
 
 
@@ -35,7 +35,7 @@ def _build_mipmap_jobs(jobset, asset_queryset, platefile):
         job.assets.add(asset)
         
 @transaction.commit_on_success
-def create_mipmap_jobs(n_jobs=None, basemap=True, platefile=PLATEFILE):
+def create_mipmap_jobs(n_jobs=None, basemap=False, platefile=PLATEFILE):
     # where n_jobs is the number of jobs to generate.  Default (None) builds jobs for all assets in the queryset.
     transaction_id_sequence.setval(1) # reset the transaction_id sequence
     assets = Asset.objects.filter(has_errors=False, class_label='MOC SDP')[:n_jobs]
