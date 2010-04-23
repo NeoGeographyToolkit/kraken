@@ -210,7 +210,6 @@ def stretch2int8(infile, outfile):
         'his=255',
         'hrs=255',
     )
-    isis_run(args, message="Rescaling to int8.")
     try:
         retcode = isis_run(args, message="Converting to int8: %s --> %s" % (infile,outfile))
     finally:
