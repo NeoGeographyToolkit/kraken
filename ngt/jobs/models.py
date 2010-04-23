@@ -50,11 +50,15 @@ class Job(models.Model):
         
         def __set__(self, instance, value):
             setattr(instance, self.enum_field_name, getattr(self.enum_class, value.upper()))
+    #
+    ###
 
     class ArgumentDescriptor(object):
         '''
         This descriptor emulates the old arguments property.
+        Arguments were once stored as a JSON list of strings, rather than a property on a JSON serialized dict.
         It accepts and return a list of strings, but uses the context dict for storage.
+        TODO: At some point this needs to be refactored so that individual Job subtypes can carry their own argument templates and use arbitrary context members.
         '''
         def __init__(self, jsonfield_name):
             self.fieldname = jsonfield_name
@@ -73,15 +77,13 @@ class Job(models.Model):
         def __set__(self, instance, value):
             if type(value) != list:
                 raise ValueError("ListDescriptor requires a list value.")
-            if type(getattr(instance, self.fieldname)) == type(None):
-                setattr(instance, self.fieldname, dict()) # default to a dict-style representation if the storage field is unset
-            if type(getattr(instance, self.fieldname)) == list:
-                setattr(instance, self.fieldname, value)
-            elif type(getattr(instance, self.fieldname)) == dict:
-                getattr(instance, self.fieldname)['arguments'] = value
-            
-    #
-    ###
+
+            # Default to a dict-style representation if the storage field is unset
+            # Will overwrite an existing list representation if present
+            if type(getattr(instance, self.fieldname)) in (type(None), list):
+                setattr(instance, self.fieldname, dict()) 
+            getattr(instance, self.fieldname)['arguments'] = value
+
     
     uuid = models.CharField(max_length=32, null=True)
     jobset = models.ForeignKey('JobSet', related_name="jobs")
@@ -210,7 +212,8 @@ class JobSet(models.Model):
 
 
     ####
-    # Convenience Methods for jobset wrangling.
+    # Convenience Methods for manual jobset wrangling.
+    # Please do not use these in any critical scripts, as the interfaces are subject to change at any time.
     ####
     def status(self):
         qry = "SELECT status_int, count(*) FROM jobs_job WHERE jobset_id = %d GROUP BY status_int" % self.id
