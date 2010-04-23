@@ -124,8 +124,8 @@ def calibrate(incube, outcube):
     crosstrack_summing = get_crosstrack_summing(outcube)
     print "CrosstrackSumming: %d" % crosstrack_summing
     if crosstrack_summing == 1:
-        mocnoise_cube = 'mocnoise_' + outcube
-        evenodd_cube = 'evenodd_' + outcube
+        mocnoise_cube = outcube + '.mn.cub'
+        evenodd_cube = outcube + '.eo.cub'
         isis_run(('mocnoise50', 'from='+outcube, 'to='+mocnoise_cube), message="Denoising.")
         isis_run(('mocevenodd', 'from='+mocnoise_cube, 'to='+evenodd_cube), message="Fixing even/odd problem.")
         unlink_if_exists(outcube)
