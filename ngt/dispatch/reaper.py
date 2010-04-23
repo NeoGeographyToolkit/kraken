@@ -96,6 +96,8 @@ class Reaper(object):
                         end_time = datetime.utcnow()
                         if resultcode == 0:
                             state = 'complete'
+                        elif resultcode == 129:
+                            state = 'failed_nonblocking'
                         else:
                             state = 'failed'
                         self.logger.info("Job %s: %s" % (job.uuid[:8], state) )

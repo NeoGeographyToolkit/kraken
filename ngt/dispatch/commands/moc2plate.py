@@ -3,6 +3,7 @@ import sys, os, os.path
 import subprocess
 from subprocess import Popen, PIPE
 import shlex
+import traceback
 
 DEFAULT_TMP_DIR = '/scratch/tmp'
 
@@ -232,26 +233,30 @@ def moc2plate(mocfile, platefile):
     '''
     Process a MOC image from its raw form into a platefile.
     '''
-    assert os.path.exists(mocfile)
-    print "Commencing moc2plate: %s --> %s" % (mocfile, platefile)
+    try:
+        assert os.path.exists(mocfile)
+        print "Commencing moc2plate: %s --> %s" % (mocfile, platefile)
 
-    # intermediate filenames
-    imgname = os.path.splitext(os.path.basename(mocfile))[0]
-    original_cube =  os.path.join(options.tmpdir, imgname+'.cub')
-    nonull_cube = os.path.join(options.tmpdir, 'nonull_'+imgname+'.cub')
-    calibrated_cube = os.path.join(options.tmpdir, 'calibrated_'+imgname+'.cub')
-    projected_cube = os.path.join(options.tmpdir, 'projected_'+imgname+'.cub')
-    stretched_cube = os.path.join(options.tmpdir, 'stretched_'+imgname+'.cub')
+        # intermediate filenames
+        imgname = os.path.splitext(os.path.basename(mocfile))[0]
+        original_cube =  os.path.join(options.tmpdir, imgname+'.cub')
+        nonull_cube = os.path.join(options.tmpdir, 'nonull_'+imgname+'.cub')
+        calibrated_cube = os.path.join(options.tmpdir, 'calibrated_'+imgname+'.cub')
+        projected_cube = os.path.join(options.tmpdir, 'projected_'+imgname+'.cub')
+        stretched_cube = os.path.join(options.tmpdir, 'stretched_'+imgname+'.cub')
 
-    # ISIS INGESTION
-    moc2isis(mocfile, original_cube)
-    spiceinit(os.path.join(options.tmpdir, original_cube))
+        # ISIS INGESTION
+        moc2isis(mocfile, original_cube)
+        spiceinit(os.path.join(options.tmpdir, original_cube))
 
-    # PREPROCESS
-    null2lrs(original_cube, nonull_cube)
-    calibrate(nonull_cube, calibrated_cube)
-    map_project(calibrated_cube, projected_cube)
-    stretch2int8(projected_cube, stretched_cube)
+        # PREPROCESS
+        null2lrs(original_cube, nonull_cube)
+        calibrate(nonull_cube, calibrated_cube)
+        map_project(calibrated_cube, projected_cube)
+        stretch2int8(projected_cube, stretched_cube)
+    except:
+        traceback.print_exc()
+        return 129 # special status code 129 indicates non-blocking failure
     
     # MipMap & add to platefile
     if options.write_to_plate and not options.dry_run:
@@ -262,6 +267,7 @@ def moc2plate(mocfile, platefile):
     else:
         print "DRY RUN.  %s would be added to %s" % (stretched_cube, platefile)
     print "moc2plate completed."
+    return 0
 
 def main():
     global options
