@@ -132,6 +132,12 @@ def calibrate(incube, outcube):
         unlink_if_exists(mocnoise_cube)
         os.rename(evenodd_cube, outcube)
 
+def lineeq(incube, outcube):
+    try:
+        isis_run(('lineeq', 'from='+incube, 'to='+outcube), message="Running lineeq.")
+    finally:
+        unlink_if_exists(incube)
+
 def get_max_camera_latitude(cubefile):
     p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'camrange', 'from='+cubefile ], stdout=PIPE)
     stats = p.communicate()[0]
@@ -241,6 +247,7 @@ def moc2plate(mocfile, platefile):
         original_cube =  os.path.join(options.tmpdir, imgname+'.cub')
         nonull_cube = os.path.join(options.tmpdir, 'nonull_'+imgname+'.cub')
         calibrated_cube = os.path.join(options.tmpdir, 'calibrated_'+imgname+'.cub')
+        lineeq_cube = os.path.join(options.tmpdir, 'lineeq_'+imgname+'.cub')
         projected_cube = os.path.join(options.tmpdir, 'projected_'+imgname+'.cub')
         stretched_cube = os.path.join(options.tmpdir, 'stretched_'+imgname+'.cub')
 
@@ -251,7 +258,8 @@ def moc2plate(mocfile, platefile):
         # PREPROCESS
         null2lrs(original_cube, nonull_cube)
         calibrate(nonull_cube, calibrated_cube)
-        map_project(calibrated_cube, projected_cube)
+        lineeq(calibrated_cube, lineeq_cube)
+        map_project(lineeq_cube, projected_cube)
         stretch2int8(projected_cube, stretched_cube)
     except:
         traceback.print_exc()
