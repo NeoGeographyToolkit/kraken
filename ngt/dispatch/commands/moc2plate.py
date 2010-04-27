@@ -101,6 +101,25 @@ def null2lrs(incube, outcube):
     finally:
         unlink_if_exists(incube)
 
+def fail_high_emission_angles(file):
+    print "Checking Emission Angle...",
+    p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'camstats', 'from='+file, 'linc=100', 'sinc=100', 'attach=true' ], stdout=PIPE)
+    stats = p.communicate()[0]
+    tokens = stats.split('\n')
+    for t in tokens:
+        subtokens = t.split('=')
+        if (len(subtokens) > 1):
+            param = subtokens[0].strip()
+            if (param == 'EmissionAverage'):
+                emission_angle = float(subtokens[1].strip())
+                print "%.3f" % emission_angle
+                if emission_angle >= 20:
+                    raise Exception("Emission angle too high (%.3f)" % emission_angle)
+                else:
+                    return 0
+    else:
+        raise Exception("Failed to get the emission angle.")
+
 def get_crosstrack_summing(file):
     p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'catlab', 'from='+file ], stdout=PIPE)
     stats = p.communicate()[0]
@@ -254,6 +273,8 @@ def moc2plate(mocfile, platefile):
         # ISIS INGESTION
         moc2isis(mocfile, original_cube)
         spiceinit(os.path.join(options.tmpdir, original_cube))
+
+        fail_high_emission_angles(original_cube)
 
         # PREPROCESS
         null2lrs(original_cube, nonull_cube)
