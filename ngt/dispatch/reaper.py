@@ -247,6 +247,9 @@ def init_reaper_commands():
         'moc2plate': os.path.join(COMMAND_PATH, 'moc2plate.py'),
         'hirise2plate': os.path.join(COMMAND_PATH, 'hirise2plate.py'),
         'download': os.path.join(COMMAND_PATH, 'download.py'),
+        
+        # LMMP
+        'orthoproject': '/big/software/stereopipeline/scripts/isis.sh /big/software/stereopipeline/bin/orthoproject',
     }
     if options.noop:
         print "Running in no-op mode."
