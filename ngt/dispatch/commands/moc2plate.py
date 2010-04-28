@@ -6,6 +6,7 @@ import shlex
 import traceback
 
 DEFAULT_TMP_DIR = '/scratch/tmp'
+VALIDITY_THRESHOLD = 0.2
 
 if os.path.dirname(__file__).strip():
     COMMAND_PATH = os.path.abspath(os.path.dirname(__file__))
@@ -88,11 +89,35 @@ def spiceinit(cubefile):
     ]
     retcode = isis_run(args, message="SPICE init.")
 
+def get_percent_valid(file):
+    p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'stats', 'from='+file ], stdout=PIPE)
+    stats = p.communicate()[0]
+    tokens = stats.split('\n')
+    total = None
+    valid = None
+    for t in tokens:
+        subtokens = t.split('=')
+        if (len(subtokens) > 1):
+            param = subtokens[0].strip()
+            if (param == "TotalPixels"):
+                total = int(subtokens[1].strip())
+            if (param == "ValidPixels"):
+                valid = int(subtokens[1].strip())
+        if (total is not None) and (valid is not None):
+            break
+    else:
+        raise("Problem getting total and valid pixel counts from ISIS stats.")
+
+    validity = float(valid) / float(total)
+    print "valid pixel ratio: %.3f" % validity
+    return validity   
+
 def null2lrs(incube, outcube):
     ''' Map all the null pixel values to the low-saturation point (LRS) special value '''
     args = [
         'stretch',
         'null=lrs',
+        'hrs=255', # doing this to work around an apparent bug in lineeq
         'from=' + incube,
         'to=' + outcube,
     ]
@@ -274,6 +299,9 @@ def moc2plate(mocfile, platefile):
         moc2isis(mocfile, original_cube)
         spiceinit(os.path.join(options.tmpdir, original_cube))
 
+        # Reject useless images
+        if get_percent_valid(original_cube) < VALIDITY_THRESHOLD:
+            raise Exception("Too many invalid pixels in %s" % original_cube)
         fail_high_emission_angles(original_cube)
 
         # PREPROCESS
