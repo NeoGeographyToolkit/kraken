@@ -14,6 +14,7 @@ def make_jobs(jobset, commandfile):
     print "Creating Jobs..."
     i = 0
     for line in commandfile:
+        line = line.strip()
         args = line.split(' ')
         job = Job()
         job.command = args.pop(0)
