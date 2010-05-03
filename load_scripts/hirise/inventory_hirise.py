@@ -201,7 +201,8 @@ def index_rows_to_observations(index_rows):
     return observations
 
 @transaction.commit_on_success
-def download_and_assetize_pds_products(index_rows):
+def download_pds_products(index_rows):
+    ''' Download a set of products given a sequence of PDS index Row instances '''
     observations = index_rows_to_observations(index_rows)
     for observation_id, obs in observations.items():
         for record in (obs.color_record, obs.red_record):
@@ -212,11 +213,19 @@ def download_and_assetize_pds_products(index_rows):
                     print "Download failed.  Unlinking."
                     unlink_if_exists(BASEDIR + record.file_name_specification)
                     raise
+
+@transaction.commit_on_success
+def assetize_pds_products(index_rows):
+    ''' Create HiRISE asset records, givin a sequence if PDS Row instances '''
+    observations = index_rows_to_observations(index_rows)
+    for observation_id, obs in observations.items():
+
+        # double check to make sure files exist
         for record in (obs.color_record, obs.red_record):
-            # double check to make sure files exist
             if record: 
                 assert os.path.exists(BASEDIR + record.file_name_specification)
                 obs_path = os.path.dirname(BASEDIR + record.file_name_specification)
+
         print "Creating an asset for %s" % observation_id
         make_asset(observation_id, obs_path, True, class_label="fresh hirise product") 
 
@@ -235,14 +244,12 @@ def output_download_list(index_rows, outfilename, jobsetname='download new hiris
 
 def do_inventory():
     inventory = scan_assets()
-    inventory, missing_products = compare_to_index(inventory, INDEXLBL, INDEXTAB)
+    inventory, missing_product_rows = compare_to_index(inventory, INDEXLBL, INDEXTAB)
     count = 0
     print "Final inventory pass."
     for obs in Tracker(inventory.values(), progress=True):
         if obs.red_image_missing or obs.color_image_missing:
             count += 1
     print "%d images missing." % count
-    print "%d observations not acquired." % len(missing_products)
-    #print "Downloading missing observations."
-    #download_and_assetize_pds_products(missing_products)
-    return (inventory, missing_products)
+    print "%d observations not acquired." % len(missing_product_rows)
+    return (inventory, missing_product_rows)  # missing_product_rows can be fed to download_pds_products & assetize_pds_products
