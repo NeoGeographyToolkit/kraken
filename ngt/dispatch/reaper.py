@@ -45,10 +45,10 @@ class Reaper(object):
         self.is_registered = None
         
         self.JOB_POLL_INTERVAL = job_poll_interval
-        self.CONTROL_QUEUE_NAME = "control.reaper.%s" % self.reaper_id
+        self.CONTROL_QUEUE_NAME = "rpc.reaper.%s" % self.reaper_id
         self.REPLY_QUEUE_NAME = "reply.reaper.%s" % self.reaper_id # queue for RPC responses
         self.logger = logging.getLogger('reaper.%s' % self.reaper_id)
-        self.logger.setLevel(logging.DEBUG)
+        #self.logger.setLevel(logging.DEBUG)
         
 
         # Accept control commands via the control exchange:
@@ -123,10 +123,10 @@ class Reaper(object):
     ####
     
     def _rpc_status(self, msg):
-        return protocols.pack(protobuf.ReaperStatusResponse, {'status': 'UP'})
+        return protocols.pack(protobuf.ReaperStatusResponse, {'status': 'OK'})
     
     def _rpc_shutdown(self, msg):
-        response = protocols.pack(protobuf.ReaperStatusResponse, {'status': 'shutting down'})
+        response = protocols.pack(protobuf.ReaperStatusResponse, {'status': 'shutdown'})
         self.shutdown(delay=1)
         return response
     
@@ -137,7 +137,7 @@ class Reaper(object):
     
     def control_command_handler(self, msg, command_map=CONTROL_COMMAND_MAP):
         """ Unpack a message and process commands 
-            Speaks the command protocol.
+            Speaks the RpcRequest protocol.
         """
         self.logger.debug("command_handler got a message.")
         request = protocols.unpack(protobuf.RpcRequestWrapper, msg.body)
@@ -280,5 +280,6 @@ if __name__ == '__main__':
     logging.getLogger('amqprpc').setLevel(loglevel)
     init_reaper_commands()
     r = Reaper(job_poll_interval=options.poll_interval)
+    r.logger.setLevel(loglevel)
     r.launch()
 
