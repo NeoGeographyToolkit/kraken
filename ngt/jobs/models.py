@@ -14,10 +14,37 @@ from ngt.django_extras.fields import JSONField
 import logging
 logger = logging.getLogger('job_models')
 
+class JobManager(models.Manager):
+    def status_filter(self, arg):
+        '''
+        Filter a queryset by status value or list of status values.
+        Statuses may by specified by either string or integer value.
+        '''
+        if isinstance(arg, (tuple, list, set)): 
+            # filter for whole list
+            statuses = set()
+            for item in arg:
+                if type(item) == str:
+                    item = getattr(Job.StatusEnum, item.upper())
+                if type(item) != int:
+                    raise ValueError("Expected a list of ints or strings but got a %r" % type(item))
+                statuses.add(item)
+            return self.filter(status_enum__in=statuses)
+        else:
+            if type(arg) == str:
+                arg = getattr(Job.StatusEnum, arg.upper())
+            if type(arg) != int:
+                raise ValueError("Expected a string or int but got a %r" % type(arg))
+            return self.filter(status_enum=arg)
+
 class Job(models.Model):
+
+    objects = JobManager()
 
     ###
     # Status Enumeration
+    # TODO: This, EnumDescriptor, and the status_filter manager method ought to be generalized and made into a pluggable module
+    ###
     class StatusEnum(object):
         NEW = 0
         REQUEUE = 1
@@ -85,7 +112,7 @@ class Job(models.Model):
             getattr(instance, self.fieldname)['arguments'] = value
 
     
-    uuid = models.CharField(max_length=32, null=True)
+    uuid = models.CharField(max_length=32, null=True) # TODO: Factor out Job uuids.  They are unnessecary.
     jobset = models.ForeignKey('JobSet', related_name="jobs")
     transaction_id = models.IntegerField(null=True)
     command = models.CharField(max_length=64)
@@ -95,14 +122,13 @@ class Job(models.Model):
     #status = models.CharField(max_length=32, default='new')
     status_enum = models.IntegerField(db_column='status_int', default=0)
     status = EnumDescriptor('status_enum', StatusEnum)
-    processor = models.CharField(max_length=32, null=True, default=None)
+    processor = models.CharField(max_length=32, null=True, default=None) # the UUID of the reaper processing this job
     assets = models.ManyToManyField('assets.Asset', related_name='jobs')
     output = models.TextField(null=True)
 
     time_started = models.DateTimeField(null=True, default=None)
     time_ended = models.DateTimeField(null=True, default=None)
     pid = models.IntegerField(null=True)
-    #ended = models.BooleanField(default=False)
     
     dependencies = models.ManyToManyField('Job', symmetrical=False)
     
@@ -114,9 +140,7 @@ class Job(models.Model):
     
         
 
-    def _generate_uuid(self):
-        '''Returns a unique job ID that is the MD5 hash of the local
-        hostname, the local time of day, and the command & arguments for this job.'''
+    def _generate_uuid(self):       # TODO: elminate Job UUIDs
         return uuid.uuid1().hex
     
     def __unicode__(self):

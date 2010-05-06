@@ -21,6 +21,8 @@ d_logger = logging.getLogger('dispatch_debug')
 #logging.getLogger().setLevel(logging.DEBUG)
 #logging.getLogger('protocol').setLevel(logging.DEBUG)
 
+REAPER_SWEEP_INTERVAL = 5 * 60 # Time in seconds between reaper garbage collection sweeps
+REAPER_SWEEP_MAX_TIMEOUTS = 1 # Number of times to try pinging a reaper upon sweep before giving up.
 
 
 mb = MessageBus()
@@ -143,6 +145,7 @@ def _register_reaper(request):
             r.hostname = request.hostname
         r.deleted = False
         r.expired = False
+        r.timeouts = 0
         r.save()
     except Reaper.DoesNotExist:
         r = Reaper(uuid=request.reaper_uuid, type=request.reaper_type)
@@ -309,12 +312,12 @@ def reaper_does_not_exist(reaper_uuid):
    logger.warning("Dispatch received a status message from unregistered reaper %s.  Reaper record will be created." % request['reaper_id'])
    register_reaper(protocols.pack(protobuf.ReaperRegistrationRequest, {'reaper_uuid':reaper_uuid, 'reaper_type':'generic'}))
 
-def verify_reaper_id(job_uuid, reported_uuid, recorded_uuid):
+def verify_reaper_id(job_uuid, reported_reaper_uuid, recorded_reaper_uuid):
     ''' Warn if a status message comes back from a reaper other than the one we expect for a given job. '''
     try:
-        assert reported_uuid == recorded_uuid
+        assert reported_reaper_uuid == recorded_reaper_uuid
     except AssertionError:
-        tup = (job_uuid[:8], reported_uuid[:8], recorded_uuid[:8])
+        tup = (job_uuid[:8], reported_reaper_uuid[:8], recorded_reaper_uuid[:8])
         logger.warning("Job %s expected to be handled by Reaper %s, but a status message came from reaper %s.  Probably not good." % tup )
 
 def _job_started(request):
@@ -388,13 +391,14 @@ def _job_ended(request):
     job = postprocess_job(job)
     job.save()
     try:
-        reaper = Reaper.objects.get(uuid=job.processor)
+        reaper = Reaper.objects.filter(deleted=False, expired=False).get(uuid=job.processor)
         reaper.jobcount += 1
         reaper.current_job_id = None
         reaper.save()
     except Reaper.DoesNotExist:
-        # <shrug> Log a warning
-        logger.warning("A job ended that was assigned to an unregistered reaper %s.  Probably not good." % request.reaper_id)
+        # <shrug> Log a warning.  Re-register.
+        logger.warning("A job ended that was assigned to an unregistered reaper %s.  Probably not good. Reaper will be reregistered." % request.reaper_id)
+        register_reaper(protocols.pack(protobuf.ReaperRegistrationRequest, {'uuid': job.processor}))
         
         
     if request.state == 'complete' and job.creates_new_asset:
@@ -424,7 +428,7 @@ def job_ended(msgbytes):
 
 def command_handler(msg):
     """ Unpack a message and process commands 
-        Speaks the command protocol.
+        Speaks the RpcRequest protocol.
     """
     global command_request_count
     command_request_count += 1
@@ -446,14 +450,14 @@ def command_handler(msg):
             traceback.print_tb(sys.exc_info()[2]) # traceback
             response.payload = ''
             response.error = True
-            response.error_string = str(e)
+            response.error_string = str(e) or ''
         t1 = datetime.now()
         logger.info("COMMAND %s finished in %s." % (request.method, str(t1-t0)))
     else:
         logger.error("Invalid Command: %s" % request.method)
-        response.payload = None
+        response.payload = ''
         response.error = True
-        response.error_text = "Invalid Command: %s" % request.method
+        response.error_string = "Invalid Command: %s" % request.method
 
     #mb.basic_ack(msg.delivery_tag)
     response_bytes = protocols.pack(protobuf.RpcResponseWrapper, response)
@@ -476,7 +480,43 @@ def _shutdown(*args):
 def shutdown():
     _shutdown()
 
+###
+# Reaper Status monitoring
+###
 
+def requeue_reaper_jobs(reaper):
+    Job.objects.filter(processor=reaper.uuid).status_filter('processing').update(status_enum=Job.StatusEnum.REQUEUE)
+
+def sweep_reapers():
+    '''
+    Iterate over jobs that are currently processing to get a list of active reaper UUIDS,
+    then ping all of the active reapers to make sure they're still alive.
+    If a reaper fails to respond repeatedly, soft delete it and requeue its jobs.
+    '''
+    logger.info("Reaper sweep!")
+    reaper_uuids = set()   
+    for jobset in JobSet.objects.filter(active=True):
+        for job in jobset.jobs.status_filter('processing'):
+            reaper_uuids.add(job.processor)
+    for uuid in reaper_uuids:
+        service = ReaperService(uuid)
+        status = service.get_status()
+        if not status:
+            # presumably the status request timed out
+            try:
+                reaper = Reaper.objects.get(uuid=uuid)
+                logger.error("Reaper %s on host %s timed out." % (uuid, reaper.hostname))
+                reaper.timeouts += 1
+                if reaper.timeouts >= REAPER_SWEEP_MAX_TIMEOUTS:
+                    requeue_reaper_jobs(reaper)
+                    reaper.soft_delete()
+            except Reaper.DoesNotExist:
+                logger.error("sweep_reapers encountered an unregistered reaper (uuid: %s)" % uuid)
+            
+
+###
+# Setup
+###    
     
 def init():
     logger.debug("dispatch daemon initializing")
@@ -517,10 +557,12 @@ def init():
     
 def do_report(dt):
     global job_buffer, thread_database, enqueued_job_count, command_request_count
-    report = "%f commands/sec\t %f jobs/sec\t %d in job queue\t%d in db queue" % (command_request_count / dt, enqueued_job_count / dt, job_buffer.qsize(), thread_database.task_queue.qsize())
+    metrics = (command_request_count / dt, enqueued_job_count / dt, job_buffer.qsize(), thread_database.task_queue.qsize())
+    if any(metrics):
+        report = "%f commands/sec\t %f jobs/sec\t %d in job queue\t%d in db queue" % metrics
+        print report
     command_request_count = 0
     enqueued_job_count = 0
-    print report
     
 
 
@@ -543,15 +585,22 @@ if __name__ == '__main__':
     print "READY."
     try:
         t0 = time.time()
+        reapersweep_t0 = t0
         while True:
+            if not mb.consumption_thread.is_alive():
+                logger.error("Consumtion thread died.  Shutting down dispatch.")
+                shutdown()
+
             dt = time.time() - t0
             if dt > 1: #one second
                 do_report(dt)
                 t0 = time.time()
-            if not mb.consumption_thread.is_alive():
-                logger.error("Consumtion thread died.  Shutting down dispatch.")
-                shutdown()
             time.sleep(0.01)
+
+            if time.time() - reapersweep_t0 > REAPER_SWEEP_INTERVAL:
+                sweep_reapers()
+                reapersweep_t0 = time.time()
+
     except KeyboardInterrupt:
         logger.info("Got a keyboard interrupt.  Shutting down dispatch.")
         shutdown()
