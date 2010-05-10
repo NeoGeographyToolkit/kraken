@@ -15,7 +15,6 @@ from amqplib.client_0_8.basic_message import Message
 from messaging.amq_config import connection_params, which
 from messaging.messagebus import MessageBus, ConsumptionThread
 from threading import Event
-#import signal
 
 import logging
 #logging.basicConfig(stream=sys.stdout, level=logging.INFO)
@@ -100,6 +99,12 @@ class Reaper(object):
                             state = 'failed_nonblocking'
                         else:
                             state = 'failed'
+
+                        if options.max_output_capture >= 0 and len(output) > options.max_output_capture:
+                            halfmax = options.max_output_capture / 2
+                            fill = "\n\n***** OUTPUT TO LONG.  %d CHARACTERS TRUNCATED BY REAPER *****\n\n" % (len(output) - options.max_output_capture)
+                            output = output[:halfmax] + fill + output[-halfmax:]
+
                         self.logger.info("Job %s: %s" % (job.uuid[:8], state) )
                         self.dispatch.report_job_end(job, state, end_time, output)
                     else:
@@ -269,6 +274,7 @@ if __name__ == '__main__':
     parser.add_option('--debug', dest='debug', action='store_true', help="Print debug statements")
     parser.add_option('--noop', dest='noop', action='store_true', default=False, help='Only pretent to run mipmap and snapshot jobs.')
     parser.add_option('-i','--poll-interval', action='store', type='float', dest='poll_interval', default=10)
+    parser.add_option('--max-output-capture', action='store', type='int', dest='max_output_capture', default=100000, help='Specify the maximum number of characters to capture from job output (100,000 by default).  Overflow will be truncated from the middle.  To never truncate, set this to -1')  
     (options, args) = parser.parse_args()
     del optparse
     if options.debug:
