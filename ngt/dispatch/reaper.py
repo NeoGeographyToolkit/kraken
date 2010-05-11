@@ -15,7 +15,6 @@ from amqplib.client_0_8.basic_message import Message
 from messaging.amq_config import connection_params, which
 from messaging.messagebus import MessageBus, ConsumptionThread
 from threading import Event
-#import signal
 
 import logging
 #logging.basicConfig(stream=sys.stdout, level=logging.INFO)
@@ -79,21 +78,33 @@ class Reaper(object):
                         self.logger.debug("ARGS: %s" % str(args))
                         self.logger.info("Executing %s" % ' '.join(args))
                         start_time = datetime.utcnow()
-                        p = Popen(args, stdout=PIPE, stderr=STDOUT)
-                        self.dispatch.report_job_start(self.reaper_id, job, p.pid, start_time) # note that "job" here is a Protobuf object
-                        output=""
-                        while True:
-                            line = p.stdout.readline()
-                            if line == '' and p.poll() != None:
-                                break
-                            output += line
-                            sys.stdout.write(line)
-                        resultcode = p.wait()
+                        try:
+                            output=""
+                            p = Popen(args, stdout=PIPE, stderr=STDOUT)
+                            self.dispatch.report_job_start(self.reaper_id, job, p.pid, start_time) # note that "job" here is a Protobuf object
+                            while True:
+                                line = p.stdout.readline()
+                                if line == '' and p.poll() != None:
+                                    break
+                                output += line
+                                sys.stdout.write(line)
+                            resultcode = p.wait()
+                        except OSError as oserr:
+                            resultcode = -1
+                            output += "OSError: %s" % oserr.strerror
                         end_time = datetime.utcnow()
                         if resultcode == 0:
                             state = 'complete'
+                        elif resultcode == 129:
+                            state = 'failed_nonblocking'
                         else:
                             state = 'failed'
+
+                        if options.max_output_capture >= 0 and len(output) > options.max_output_capture:
+                            halfmax = options.max_output_capture / 2
+                            fill = "\n\n***** OUTPUT TO LONG.  %d CHARACTERS TRUNCATED BY REAPER *****\n\n" % (len(output) - options.max_output_capture)
+                            output = output[:halfmax] + fill + output[-halfmax:]
+
                         self.logger.info("Job %s: %s" % (job.uuid[:8], state) )
                         self.dispatch.report_job_end(job, state, end_time, output)
                     else:
@@ -200,6 +211,7 @@ class Reaper(object):
             self.logger.info("Registering and launching message handlers...")
             #signal.signal(signal.SIGINT, self._sig_shutdown)   
             
+            # Launch Control Loop
             self.logger.debug("\tcontrol will consume from %s" % self.CONTROL_QUEUE_NAME)
             self.control_listener.set_callback(queue=self.CONTROL_QUEUE_NAME, no_ack=False, callback=self.control_command_handler)
 
@@ -237,12 +249,18 @@ def init_reaper_commands():
         'snapshot': '/big/software/visionworkbench/bin/snapshot',
         'start_snapshot': '/big/software/visionworkbench/bin/snapshot',
         'end_snapshot': '/big/software/visionworkbench/bin/snapshot',
+        'moc2plate': os.path.join(COMMAND_PATH, 'moc2plate.py'),
         'hirise2plate': os.path.join(COMMAND_PATH, 'hirise2plate.py'),
+        'download': os.path.join(COMMAND_PATH, 'download.py'),
+        
+        # LMMP
+        'orthoproject': '/big/software/stereopipeline/scripts/isis.sh /big/software/stereopipeline/bin/orthoproject',
     }
     if options.noop:
         print "Running in no-op mode."
         Reaper.commands.update({
         'mipmap': '/big/scratch/logargs.py image2plate',
+        'moc2plate': '/big/scratch/logargs.py moc2plate',
         'hirise2plate': '/big/scratch/logargs.py hirise2plate',
         'snapshot': '/big/scratch/logargs.py snapshot',
         'start_snapshot': '/big/scratch/logargs.py start_snapshot',
@@ -256,6 +274,7 @@ if __name__ == '__main__':
     parser.add_option('--debug', dest='debug', action='store_true', help="Print debug statements")
     parser.add_option('--noop', dest='noop', action='store_true', default=False, help='Only pretent to run mipmap and snapshot jobs.')
     parser.add_option('-i','--poll-interval', action='store', type='float', dest='poll_interval', default=10)
+    parser.add_option('--max-output-capture', action='store', type='int', dest='max_output_capture', default=100000, help='Specify the maximum number of characters to capture from job output (100,000 by default).  Overflow will be truncated from the middle.  To never truncate, set this to -1')  
     (options, args) = parser.parse_args()
     del optparse
     if options.debug:

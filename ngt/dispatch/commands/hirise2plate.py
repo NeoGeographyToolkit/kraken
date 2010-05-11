@@ -5,24 +5,39 @@ import sys, os, os.path
 import re
 import math
 import subprocess, shlex
-from subprocess import Popen, PIPE
+
+try:
+    from termcolor import colored
+except ImportError:
+    def colored(value, *unused_args, **unused_kw):
+        return value
+
 
 DEFAULT_TMP_DIR = '/scratch/tmp'
-KDU_EXPAND_THREADS = 2
+KDU_EXPAND_THREADS = 4
 
-VWBIN_DIR = '/big/software/visionworkbench/bin'
+VWBIN_DIR = '/home/mbroxton/projects/visionworkbench/build/bin'
+#VWBIN_DIR = '/big/software/visionworkbench/bin'
 if VWBIN_DIR not in os.environ['PATH']:
     os.putenv('PATH', VWBIN_DIR + ':' + os.environ['PATH'])
 
 def which(command):
-    return Popen(('which', command), stdout=PIPE).stdout.read().strip()
+    return subprocess.Popen(('which', command), stdout=subprocess.PIPE).stdout.read().strip()
     
 externals = {}
-for command in ('gdal_translate','kdu_expand','hirise2tif','image2plate'):
+for command in ('kdu_expand','hirise2tif','image2plate'):
     externals[command] = which(command)
     if not externals[command]:
         raise Exception("Could not find %s in $PATH." % command)
 
+def unlink_if_exists(filepath):
+    try:
+        os.unlink(filepath)
+    except OSError as err:
+        if err.errno == 2: # file doesn't exist
+            pass  # ignore ignore the error
+        else:
+            raise err
 
 class Observation(object):
     ''' Carries the four relevant file paths for a single observation. '''
@@ -70,7 +85,10 @@ class Label(object):
     max_lat_re = re.compile(r' *MAXIMUM_LATITUDE *= *([0-9.-]*)')
     east_lon_re = re.compile(r' *EASTERNMOST_LONGITUDE *= *([0-9.-]*)')
     west_lon_re = re.compile(r' *WESTERNMOST_LONGITUDE *= *([0-9.-]*)')
-   
+    min_stretch1_re = re.compile(r' *MRO:MINIMUM_STRETCH *= *([0-9]*)')
+    max_stretch1_re = re.compile(r' *MRO:MAXIMUM_STRETCH *= *([0-9]*)')
+    min_stretch3_re = re.compile(r' *MRO:MINIMUM_STRETCH *= *\(*([0-9]*), ([0-9]*), ([0-9]*)\)*')
+    max_stretch3_re = re.compile(r' *MRO:MAXIMUM_STRETCH *= *\(*([0-9]*), ([0-9]*), ([0-9]*)\)*')
 
     def __init__(self,label_file):
         self.file = label_file
@@ -102,11 +120,26 @@ class Label(object):
             if m: self.east_lon = float(m.group(1))
             m = self.west_lon_re.match( line )
             if m: self.west_lon = float(m.group(1))
+            m = self.min_stretch1_re.match( line )
+            if m and len(m.group(1)): self.min_stretch = [ int(m.group(1)) ]
+            m = self.max_stretch1_re.match( line )
+            if m and len(m.group(1)): self.max_stretch = [ int(m.group(1)) ]
+            m = self.min_stretch3_re.match( line )
+            if m: self.min_stretch = [ int(m.group(1)), int(m.group(2)), int(m.group(3)) ]
+            m = self.max_stretch3_re.match( line )
+            if m: self.max_stretch = [ int(m.group(1)), int(m.group(2)), int(m.group(3)) ]
             
-            
-def execute(cmdstr):
+def execute(cmdstr, display=True, pretend=None):
     ''' Execute the specified command and return its exit status. '''
-    return subprocess.call(shlex.split(cmdstr), stderr=subprocess.STDOUT)
+    if pretend is None or options.dry_run:
+        pretend = options.dry_run
+    if display:
+        print colored('Running command: %s\n' % (cmdstr,), 'blue', attrs=['bold'])
+
+    if pretend:
+        return 0
+    else:
+        return subprocess.call(shlex.split(cmdstr), stderr=subprocess.STDOUT)
 
 def generate_tif(jp2_path, label_path):
     
@@ -114,12 +147,19 @@ def generate_tif(jp2_path, label_path):
     projcs = 'PROJCS["%s",%s,PROJECTION["%s"],PARAMETER["latitude_of_origin",%f],PARAMETER["central_meridian",0],PARAMETER["scale_factor",1],PARAMETER["false_easting",0],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]]]'
     geogcs = 'GEOGCS["Geographic_Coordinate_System",DATUM["unknown",SPHEROID["unnamed",%f,0]],PRIMEM["Prime_Meridian",0],UNIT["degree",0.0174532925199433]]'
 
+    print 'Parsing PDS Label information...'
     info = Label(label_path)
 
+    # Extract stretch parameters
+    print '\t--> Min stretch: ' + str(info.min_stretch)
+    print '\t--> Max stretch: ' + str(info.max_stretch)
+    stretch = (info.min_stretch, info.max_stretch)
+    
     jp2 = jp2_path
+    print jp2
     (root, ext) = os.path.splitext(os.path.basename(jp2_path))
-    tif = os.path.join(options.tmpdir, root + '.tif')
-    kdu_tif = os.path.join(options.tmpdir, root + '.kdu.tif')
+    # tif = os.path.join(options.tmpdir, root + '.tif')
+    # kdu_tif = os.path.join(options.tmpdir, root + '.kdu.tif')
 
     '''
     if os.path.exists(tif):
@@ -134,19 +174,25 @@ def generate_tif(jp2_path, label_path):
         execute(cmd)
     '''
     
-    cmd = '%s -fprec 16L -num_threads %d -i %s -o %s' % (externals['kdu_expand'], KDU_EXPAND_THREADS, jp2, kdu_tif) # oversample to 16 bits
-    print cmd
-    exit_status = execute(cmd)
-    if exit_status != 0:
-        raise Exception("kdu_expand failed!")
+    #cmd = '%s -fprec 16L -num_threads %d -i %s -o %s' % (externals['kdu_expand'],
+#                                                         KDU_EXPAND_THREADS,
+#                                                         jp2, kdu_tif) # oversample to 16 bits
+    #print cmd
+    #exit_status = 0 #execute(cmd)
+    #if exit_status != 0:
+    #    unlink_if_exists(kdu_tif)
+    #    raise Exception("kdu_expand failed!")
 
+    # Extract georeferencing parameters
     if info.proj_type == 'POLAR STEREOGRAPHIC':
         if info.center_lat == 90:
-            srs = projcs % ('North_Polar_Stereographic',(geogcs%(info.radius,)),'Polar_Stereographic',info.center_lat)
+            srs = projcs % ('North_Polar_Stereographic',(geogcs%(info.radius,)),
+                            'Polar_Stereographic',info.center_lat)
         elif info.center_lat == -90:
-            srs = projcs % ('South_Polar_Stereographic',(geogcs%(info.radius,)),'Polar_Stereographic',info.center_lat)
+            srs = projcs % ('South_Polar_Stereographic',(geogcs%(info.radius,)),
+                            'Polar_Stereographic',info.center_lat)
         else:
-            raise ValuError('Unsupported center latitude in polar stereographic projection')
+            raise ValueError('Unsupported center latitude in polar stereographic projection')
         scalex = info.scale
         scaley = info.scale
     elif info.proj_type == 'EQUIRECTANGULAR':
@@ -161,25 +207,12 @@ def generate_tif(jp2_path, label_path):
     lrx = -scalex * info.sample_offset + scalex * info.cols + info.center_lon
     lry = scaley * info.line_offset - scaley * info.rows
 
-    #cmd = '%s -of GTiff -co TILED=YES -co BIGTIFF=YES -co COMPRESS=LZW -a_srs %s -a_ullr %f %f %f %f %s %s' % (externals['gdal_translate'],srs.replace('"','\\"'),ulx,uly,lrx,lry,kdu_tif,tif)
-    cmd = '%s -of GTiff --config GDAL_CACHEMAX 512 -co TILED=YES -co BIGTIFF=YES -co COMPRESS=NONE -a_srs %s -a_ullr %f %f %f %f %s %s' % (externals['gdal_translate'],srs.replace('"','\\"'),ulx,uly,lrx,lry,kdu_tif,tif)
-    print cmd
-    exit_status = execute(cmd)
-    if exit_status != 0:
-        raise Exception("gdal_translate failed!")
-    if options.delete_files:
-        os.unlink(kdu_tif)
-    return tif
-    
-def make_intermediates(obs):
-    red_tif = generate_tif(obs.red_image, obs.red_label)
-    if obs.color_image:
-        assert obs.color_label
-        color_tif = generate_tif(obs.color_image, obs.color_label)
-    else:
-        color_tif = ''
-    return (red_tif, color_tif)
+    wkt = srs.replace('"','\\"')
+    ullr = [ulx,uly,lrx,lry]
 
+    # Return final results
+    return (jp2, stretch, wkt, ullr)
+    
 def make_geotiff(obs, alpha=True):
     if alpha:
         tif = os.path.join(options.tmpdir, obs.obsid + '.alpha.tif')
@@ -190,40 +223,80 @@ def make_geotiff(obs, alpha=True):
         print '(Using existing ' + tif + ')'
         return
     '''
-    (red_tif, color_tif) = make_intermediates(obs)
-    cmd = '%s %s %s -o %s' % (externals['hirise2tif'],red_tif,color_tif,tif)
+
+    # Make intermediates using kdu_expand
+    (red_jp2, red_stretch, red_wkt, red_ullr) = generate_tif(obs.red_image, obs.red_label)
+    if obs.color_image:
+        assert obs.color_label
+        (color_jp2, color_stretch, color_wkt, color_ullr) = generate_tif(obs.color_image,
+                                                                         obs.color_label)
+
+    # Build the hirise2tif command line (it's long!!)
+    if (obs.color_image): 
+        cmd = '%s %s %s --stats \"%d,%d;%d,%d;%d,%d;%d,%d\" --wkt-gray \"%s\" --wkt-color \"%s\" --ullr-gray %0.9f,%0.9f,%0.9f,%0.7f --ullr-color %0.9f,%0.9f,%0.9f,%0.9f -o %s' % (externals['hirise2tif'],
+                                                                                                                                                                                red_jp2,color_jp2,
+                                                                                                                                                                                red_stretch[0][0],
+                                                                                                                                                                                red_stretch[1][0],
+                                                                                                                                                                                color_stretch[0][0],
+                                                                                                                                                                                color_stretch[1][0],
+                                                                                                                                                                                color_stretch[0][1],
+                                                                                                                                                                                color_stretch[1][1],
+                                                                                                                                                                                color_stretch[0][2],
+                                                                                                                                                                                color_stretch[1][2],
+                                                                                                                                                                                red_wkt, color_wkt,
+                                                                                                                                                                                red_ullr[0], red_ullr[1],
+                                                                                                                                                                                red_ullr[2], red_ullr[3],
+                                                                                                                                                                                color_ullr[0], color_ullr[1],
+                                                                                                                                                                                color_ullr[2], color_ullr[3],
+                                                                                                                                                                                tif)
+    else: 
+        cmd = '%s %s --stats %d,%d;%d,%d;%d,%d;%d,%d --wkt-gray \"%s\" --ullr-gray %0.9f,%0.9f,%0.9f,%0.7f -o %s' % (externals['hirise2tif'],
+                                                                                                                     red_jp2,
+                                                                                                                     red_stretch[0][0],
+                                                                                                                     red_stretch[1][0],
+                                                                                                                     0,0,0,0,0,0,
+                                                                                                                     red_wkt,
+                                                                                                                     red_ullr[0], red_ullr[1],
+                                                                                                                     red_ullr[2], red_ullr[3],
+                                                                                                                     tif)
+
+
     if alpha:
         cmd = cmd + ' --alpha'
-    print cmd
-    exit_status = execute(cmd)
-    if exit_status != 0:
-        raise Exception("hirise2tif failed!")
-    if options.delete_files:
-        os.unlink(red_tif)
-    if color_tif: os.unlink(color_tif)
+    try:
+        exit_status = execute(cmd)
+        if exit_status != 0:
+            unlink_if_exists(tif)
+            raise Exception("hirise2tif failed!")
+    finally:
+        pass
+#        if options.delete_files:
+#            unlink_if_exists(red_tif)
+#        if color_tif and options.delete_files:
+#            unlink_if_exists(color_tif)
     return tif
 
 def image2plate(imagefile, platefile):
     cmd = [externals['image2plate']]
     if options.transaction_id:
         cmd += ('-t', str(options.transaction_id))
-    cmd += ('-o', platefile, imagefile)
+    cmd += ('--file-type auto -o', platefile, imagefile)
     cmd = ' '.join(cmd)
-    exit_status = 0
-    print cmd
-    if options.write_to_plate:
-        exit_status = execute(cmd)
+
+    exit_status = execute(cmd, pretend=not options.write_to_plate)
     if exit_status != 0:
         raise Exception("image2plate failed!")
     
 if __name__ == '__main__':
+
     global options
     parser = optparse.OptionParser()
-    parser.add_option('--tmp', action='store', dest='tmpdir', help="Where to write intermediate images (default: /tmp)")
+    parser.add_option('--tmp', action='store', dest='tmpdir', help="Where to write intermediate images (default: %s)" % DEFAULT_TMP_DIR)
     parser.add_option('-t', '--transaction-id', action='store', dest='transaction_id', type='int')
     parser.add_option('--preserve', '-p', dest='delete_files', action='store_false', help="Don't delete the intermediate files.")
-    parser.add_option('--noplate', dest='write_to_plate', action='store_false', help="Don't really run image2plate.  Just pretend and print the command arguments.")
-    parser.set_defaults(tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True)
+    parser.add_option('--noplate', dest='write_to_plate', action='store_false', help="Like --dry-run, except run everything but image2plate")
+    parser.add_option('--dry-run', dest='dry_run', action='store_true', help='Print the commands to be run without actually running them')
+    parser.set_defaults(tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True, dry_run=False)
     parser.set_usage("Usage: %prog [options] observation_path platefile")
     try:
         (options, args) = parser.parse_args()
@@ -234,8 +307,10 @@ if __name__ == '__main__':
     
     obs = Observation(source_path)
     geotiff = make_geotiff(obs)
-    image2plate(geotiff, platefile)
-    if options.delete_files:
-        os.unlink(geotiff)
+    try:
+        image2plate(geotiff, platefile)
+    finally:
+        if options.delete_files:
+            unlink_if_exists(geotiff)
     print "Mipmap successful!"
     sys.exit(0)

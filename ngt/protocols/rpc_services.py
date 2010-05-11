@@ -266,11 +266,10 @@ class AmqpService(object):
         pass
         
     def __init__(self, 
-        #pb_service_class=None,
-        amqp_channel=None,
+        amqp_channel=None,              # If None, a new connection & channel will be created.
         exchange='Control_Exchange',
-        request_routing_key=None,
-        reply_queue=None,
+        request_routing_key=None,       # Required
+        reply_queue=None,               # Required
         timeout_ms=10000,
         max_retries=3):
         
@@ -284,7 +283,7 @@ class AmqpService(object):
             else:
                 raise AmqpService.ParameterMissing("%s is a required parameter." % param)
                 
-        self.rpc_channel = RpcChannel(self.exchange, self.reply_queue, 'dispatch', max_retries=max_retries, timeout_ms=timeout_ms)
+        self.rpc_channel = RpcChannel(self.exchange, self.reply_queue, request_routing_key, max_retries=max_retries, timeout_ms=timeout_ms)
         #self.rpc_service = service_stub_class(self.rpc_channel)
         self.amqp_rpc_controller = AmqpRpcController()
         

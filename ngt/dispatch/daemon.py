@@ -46,10 +46,11 @@ command_map = {
 }
 
 
-JOB_FETCH_LIMIT = 30   
-REFRESH_TRIGGER_SIZE = 3
+JOB_FETCH_LIMIT = 50   
+REFRESH_TRIGGER_SIZE = 5
 
 class NoopLock(object):
+    ''' A dummy implementation of the Lock interface that does nothing. '''
     def acquire(self): pass
     def release(self): pass
 #dblock = threading.RLock()
@@ -194,7 +195,7 @@ def check_readiness(job):
         return True
     
 def preprocess_job(job):
-    ''' Anything that needs to get done before the job is dispatched '''
+    ''' Anything that needs to get done before the job is enqueued '''
     if job.command in jobcommand_map:
         return jobcommand_map[job.command].preprocess_job(job)
     else:
@@ -221,12 +222,15 @@ class JobBuffer(UniquePriorityQueue):
         logger.debug("Refreshing the job buffer.")
         dblock.acquire()
         t0 = time.time()
+        fetch_count = 0
         rejected_count = 0
         for jobset in JobSet.objects.filter(active=True).order_by('priority'):
+            if fetch_count > 0: break # quit fetching if one of the jobsets has usable jobs.
             jobs = jobset.jobs.filter(status_enum__in=statuses_to_fetch).order_by('transaction_id','id')[:JOB_FETCH_LIMIT]
             for job in jobs:
                 if check_readiness(job):
-                    job.status_enum = Job.StatusEnum.DISPATCHED
+                    fetch_count += 1
+                    job.status_enum = Job.StatusEnum.ENQUEUED
                     job.save()
                     self.put((jobset.priority, job))
                 else:
@@ -253,7 +257,7 @@ class JobBuffer(UniquePriorityQueue):
 
     
 def get_next_job(msgbytes):
-    global dispatched_job_count
+    global enqueued_job_count
     t0 = time.time()
     logger.debug("Looking for the next job.")
     request = protocols.unpack(protobuf.ReaperJobRequest, msgbytes)
@@ -277,7 +281,7 @@ def get_next_job(msgbytes):
         'args' : job.arguments or '[]',
         }
     logger.info("Sending job %s to reaper %s (%s)" % (job.uuid[:8], request.reaper_uuid[:8], str(time.time() - t0)))
-    job.status = "dispatched"
+    job.status = "enqueued"
     job.processor = request.reaper_uuid
     #dblock.acquire()
     #job.save()
@@ -289,7 +293,7 @@ def get_next_job(msgbytes):
         from django.db import connection
         from pprint import pprint
         pprint([q for q in connection.queries if float(q['time']) > 0.001])
-    dispatched_job_count += 1
+    enqueued_job_count += 1
     d_logger.debug("Dispatching %s" % response['uuid'][:8])
     return protocols.pack(protobuf.ReaperJobResponse, response)
     
@@ -326,7 +330,7 @@ def _job_started(request):
         raise
     verify_reaper_id(request.job_id, request.reaper_id, job.processor)
     
-    # assert job.status == 'dispatched'
+    # assert job.status == 'enqueued'
     job.time_started = request.start_time.replace('T',' ') # django DateTimeField should be able to parse it this way. (pyiso8601 would be the alternative).
     job.pid = request.pid
     job.status = request.state or 'processing'
@@ -383,7 +387,6 @@ def _job_ended(request):
     job.output = request.output
     job = postprocess_job(job)
     job.save()
-    # TODO: get reaper and increment job count
     try:
         reaper = Reaper.objects.get(uuid=job.processor)
         reaper.jobcount += 1
@@ -477,13 +480,13 @@ def shutdown():
     
 def init():
     logger.debug("dispatch daemon initializing")
-    global command_ctag, status_ctag, thread_consume_loop, thread_database, shutdown_event, job_buffer, dispatched_job_count, command_request_count
+    global command_ctag, status_ctag, thread_consume_loop, thread_database, shutdown_event, job_buffer, enqueued_job_count, command_request_count
     shutdown_event = threading.Event()
     #logging.getLogger('messagebus').setLevel(logging.DEBUG)
     
-    logger.info("Resetting previously dispatched jobs.")
+    logger.info("Resetting previously enqueued jobs.")
     for js in JobSet.objects.filter(active=True):
-            js.jobs.filter(status_enum=Job.StatusEnum.DISPATCHED).update(status_enum=Job.StatusEnum.REQUEUE)
+            js.jobs.filter(status_enum=Job.StatusEnum.ENQUEUED).update(status_enum=Job.StatusEnum.REQUEUE)
 
     if options.requeue_lost_jobs:
         logger.info("Resetting previously processing jobs.")
@@ -492,7 +495,7 @@ def init():
     
     atexit.register(shutdown)
     
-    dispatched_job_count = 0
+    enqueued_job_count = 0
     command_request_count = 0
     thread_database = TaskQueueThread(name="thread_database")
     thread_database.start()
@@ -513,10 +516,10 @@ def init():
     mb.start_consuming()
     
 def do_report(dt):
-    global job_buffer, thread_database, dispatched_job_count, command_request_count
-    report = "%f commands/sec\t %f jobs/sec\t %d in job queue\t%d in db queue" % (command_request_count / dt, dispatched_job_count / dt, job_buffer.qsize(), thread_database.task_queue.qsize())
+    global job_buffer, thread_database, enqueued_job_count, command_request_count
+    report = "%f commands/sec\t %f jobs/sec\t %d in job queue\t%d in db queue" % (command_request_count / dt, enqueued_job_count / dt, job_buffer.qsize(), thread_database.task_queue.qsize())
     command_request_count = 0
-    dispatched_job_count = 0
+    enqueued_job_count = 0
     print report
     
 
@@ -529,7 +532,7 @@ if __name__ == '__main__':
     parser.add_option('--verbose', '--info', dest='loglevel', action='store_const', const=logging.INFO, help='Set log level to INFO.')
     parser.add_option('-v', '--debug', dest='loglevel', action='store_const', const=logging.DEBUG, help='Set log level to DEBUG.')
     parser.add_option('--queries', dest='show_queries', action='store_true', help='Print out the slow queries (django.db.connection.queries)')
-    parser.add_option('--lost-jobs', dest='requeue_lost_jobs', action='store_true', help="Requeue jobs marooned with a 'dispatched' or 'processing' status'.")
+    parser.add_option('--lost-jobs', dest='requeue_lost_jobs', action='store_true', help="Requeue jobs marooned with a 'enqueued' or 'processing' status'.")
     parser.add_option('--report-interval', '-i', action='store', type='int', dest='report_interval', help="Report interval in seconds.")
     parser.set_defaults(loglevel=logging.WARNING, report_interval=1)
     (options, args) = parser.parse_args()
