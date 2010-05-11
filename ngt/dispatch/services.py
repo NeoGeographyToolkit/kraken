@@ -9,18 +9,20 @@ d_logger = logging.getLogger('reaper.debug')
 
 class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_Stub):
     
-    '''
-     AmqpService.__init__:
-     def __init__(self, 
-        pb_service_class=None,
-        amqp_channel=None,
-        exchange='Control_Exchange',
-        request_routing_key=None,
-        reply_queue=None,
-        timeout_ms=5000,
-        max_retries=3):
-    '''
     
+    #### IMPLEMENTOR REFERENCE ####
+    # AmqpService constructor (* denotes a required argument):
+    # def __init__(self, 
+    #    pb_service_class=None,
+    #    amqp_channel=None,
+    #    exchange='Control_Exchange',
+    #  * request_routing_key=None,
+    #  * reply_queue=None,
+    #    timeout_ms=5000,
+    #    max_retries=3):
+    # 
+    ####
+
     def __init__(self, *args, **kwargs):
         kwargs['request_routing_key'] = 'dispatch'
         #kwargs['timeout_ms'] = -1 # never timout
@@ -78,7 +80,7 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
             return True
             
     def report_job_end(self, job, state, end_time, output):
-        # note that "job" here is a Protobuf object
+        # note that "job" here is a Protobuf object (not a Job instance)
         assert end_time
         request = protobuf.ReaperJobEndRequest()
         request.job_id = job.uuid
@@ -125,3 +127,30 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
             return True
         except:
             return False
+
+class ReaperService(rpc_services.AmqpService, protobuf.ReaperCommandService_Stub):
+    
+    
+    #### IMPLEMENTOR REFERENCE ####
+    # AmqpService constructor (* denotes a required argument):
+    # def __init__(self, 
+    #    pb_service_class=None,
+    #    amqp_channel=None,
+    #    exchange='Control_Exchange',
+    #  * request_routing_key=None,
+    #  * reply_queue=None,
+    #    timeout_ms=5000,
+    #    max_retries=3):
+    # 
+    ####
+
+    def __init__(self, *args, **kwargs):
+        kwargs['request_routing_key'] = 'dispatch'
+        #kwargs['timeout_ms'] = -1 # never timout
+        kwargs['max_retries'] = -1 # retry infinitely
+        super(ReaperService, self).__init__(*args, **kwargs)
+        self.logger = logging.getLogger('DispatchService')
+
+    def get_status(self):
+        pass
+    # etc...

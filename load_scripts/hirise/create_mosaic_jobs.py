@@ -12,12 +12,17 @@ from ngt.assets.models import Asset
 from ngt.utils.tracker import Tracker
 from ngt.django_extras.db.sequence import Sequence
 from ngt.dispatch.commands.jobcommands import MipMapCommand, hirise2plateCommand, StartSnapshot, EndSnapshot
-from load_scripts.snapshot.create_jobs import create_snapshot_jobs
+from load_scripts.snapshot.create_jobs import create_snapshot_jobs as _create_snapshot_jobs
 
-PLATEFILE = 'pf://wwt10one/index/hirise_v1.plate'
+PLATEFILE = 'pf://wwt10one/index/hirise_v5.plate'
 transaction_id_sequence = Sequence('seq_transaction_id')
+
+def create_snapshot_jobs(*args, **kwargs):
+    if 'platefile' not in kwargs:
+        kwargs['platefile'] = PLATEFILE
+    return _create_snapshot_jobs(*args, **kwargs)
         
-def _build_jobs(command_class, jobset, asset_queryset):
+def _build_jobs(command_class, jobset, asset_queryset, platefile):
     for asset in Tracker(iter=asset_queryset, target=asset_queryset.count(), progress=True):
         job = Job()
         while True:  # Get the next even transaction ID
@@ -25,14 +30,14 @@ def _build_jobs(command_class, jobset, asset_queryset):
             if job.transaction_id % 2 == 0:
                 break
         job.command = command_class.name
-        job.arguments = json.dumps(command_class.build_arguments(job, platefile=PLATEFILE, file_path=asset.file_path))
+        job.arguments = command_class.build_arguments(job, platefile=platefile, file_path=asset.file_path)
         job.footprint = asset.footprint # TODO: Generate footprints from label metadata.
         job.jobset = jobset
         job.save()
         job.assets.add(asset)
         
 @transaction.commit_on_success
-def create_mipmap_jobs(n_jobs=None, basemap=False):
+def create_mipmap_jobs(n_jobs=None, basemap=False, platefile=PLATEFILE):
     # where n_jobs is the number of jobs to generate.  Default (None) builds jobs for all assets in the queryset.
     transaction_id_sequence.setval(1) # reset the transaction_id sequence
     assets = Asset.objects.filter(class_label='hirise product', md5_check=True)[:n_jobs]
@@ -42,7 +47,7 @@ def create_mipmap_jobs(n_jobs=None, basemap=False):
     jobset.priority = 3
     jobset.save()
     if basemap:
-        _build_jobs(MipMapCommand, jobset, Asset.objects.filter(class_label='color basemap'))
-    _build_jobs(hirise2plateCommand, jobset, assets)
+        _build_jobs(MipMapCommand, jobset, Asset.objects.filter(class_label='color basemap'), platefile)
+    _build_jobs(hirise2plateCommand, jobset, assets, platefile)
     return jobset
 

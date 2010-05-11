@@ -84,9 +84,9 @@ def verify(path):
         return False
             
     
-def make_asset(product_id, path, md5_check):
+def make_asset(product_id, path, md5_check, class_label='hirise product'):
     asset = Asset()
-    asset.class_label = 'hirise product'
+    asset.class_label = class_label
     asset.instrument_name = 'HiRISE'
     asset.product_id = product_id
     asset.md5_check = md5_check

@@ -75,6 +75,21 @@ class MipMapCommand(RetryingJobCommand):
     def build_arguments(klass, job, **kwargs):
         args = "-t %s %s -o %s" % (job.transaction_id, kwargs['file_path'], kwargs['platefile'])
         return args.split(' ')
+
+    @classmethod
+    def postprocess_job(klass, job):
+        ''' All MipMap failures will be made nonblocking. '''
+        job = super(MipMapCommand, klass).postprocess_job(job)
+        if job.status == 'failed':
+            job.status = 'failed_nonblocking'
+
+class moc2plateCommand(RetryingJobCommand):
+    name = 'moc2plate'
+
+    @classmethod
+    def build_arguments(klass, job, **kwargs):
+        args = "%s %s -t %d" % (kwargs['file_path'], kwargs['platefile'], job.transaction_id)
+        return args.split(' ')
         
 class hirise2plateCommand(RetryingJobCommand):
     name = 'hirise2plate'
@@ -123,17 +138,32 @@ class StartSnapshot(JobCommand):
     def _generate_partitions(klass, level):
         '''
         Give all the  partitions of a 2**level tilespace.
-        Divide the space into 16x16 regions
+        Divide the space into 32x32 regions
         '''
         print '\n\n****** Generating Partitions!!!!! ******\n\n'
-        tiles = 8 # actually there are tiles**2 tiles
-        if 2**level <= tiles:
+        sqrt_regions = 32 # number of regions to divide each side by (i.e. there will be sqrt_regions**2 regions)
+        if 2**level <= sqrt_regions:
             yield(0, 0, 2**level, 2**level)
         else:
-            side = 2**level / tiles
-            for i in range(tiles):
-                for j in range(tiles):
-                    yield (i*side, j*side, (i+1)*side, (j+1)*side)
+            tiles_per_side = 2**level / sqrt_regions
+            for i in range(sqrt_regions):
+                for j in range(sqrt_regions):
+                    yield (i*tiles_per_side, j*tiles_per_side, (i+1)*tiles_per_side, (j+1)*tiles_per_side)
+                    
+#    @classmethod
+#    def _generate_partitions(klass, level):
+#        ''' Regionates based on max number of tiles. '''
+#        max_region_size = 1024 # largest region size in tiles.  This better be a squared integer or I am going to be 
+#        max_region_side = math.sqrt(max_region_size)
+#        assert int(max_region_side) == max_region_side
+#        max_region_side = int(max_region_side)
+#        if 2**level <= max_region_side:
+#            yield(0, 0, 2**level, 2**level)
+#        else:
+#            sqrt_number_of_regions = 2**level / max_region_side
+#            for i in range(sqrt_number_of_regions):
+#                for j in range(sqrt_number_of_regions):
+#                    yield (i*max_region_side, j*max_region_side, (i+1)*max_region_side, (j+1)*max_region_side) 
                     
     @classmethod
     def _get_maxlevel(klass, output):
@@ -179,7 +209,7 @@ class StartSnapshot(JobCommand):
                     level = level,
                     transaction_range = job_transaction_range,
                     platefile = platefile,
-                ))
+                )
                 snapjob.save()
                 endjob.dependencies.add(snapjob)
                 
