@@ -11,6 +11,8 @@ logger = logging.getLogger('amqprpc')
 logger.setLevel(logging.INFO)
 logger.debug("Testing logger.")
 
+DEFAULT_RPC_EXCHANGE = 'Control_Exchange'
+
 #class SanityError(Exception):
 #    ''' Raise this when things that should never happen happen. '''
 #    pass
@@ -143,7 +145,6 @@ class RpcChannel(object):
       
       self.sync_sequence_number = 0
       
-      #TODO: Setup exchange & queue
       self.messagebus.exchange_declare(exchange, 'direct')
       #self.messagebus.queue_delete(queue=response_queue) # clear it in case there are backed up messages (EDIT: it *should* autodelete)
       self.messagebus.queue_declare(queue=response_queue, auto_delete=True)
@@ -182,6 +183,8 @@ class RpcChannel(object):
             
             # raise RPCFailure("Too many retries")
             return None # Still not too sure about this whole return None on failure business
+        if retries > 0:
+            logger.info("Retrying (%d)." % retries)
     
         logger.debug("About to publish to exchange '%s' with key '%s'" % (self.exchange, self.request_routing_key))
         self.messagebus.basic_publish(amqp.Message(wrapped_request_bytes),
@@ -210,7 +213,6 @@ class RpcChannel(object):
             if timeout_flag:
                 logger.warning("RPC method '%s' timed out," % method_descriptor.name)
                 retries += 1
-                logger.warning("Retrying (%d)." % retries)
                 break # from the sync loop out to retry loop.  resets timer
 
             logger.info("Got a response in %s secs" % str(time.time() - t0))
@@ -256,7 +258,7 @@ class RpcChannel(object):
 
 class AmqpService(object):
     '''
-    A wrapper class that takes care of the business of initialization:
+    Takes care of the business of initialization:
         - Creates an RpcChannel with the given parameters
         - Instantiates a protobuf service of the given class
         - Delegates further attribute access to the Service instance.
@@ -267,7 +269,7 @@ class AmqpService(object):
         
     def __init__(self, 
         amqp_channel=None,              # If None, a new connection & channel will be created.
-        exchange='Control_Exchange',
+        exchange=DEFAULT_RPC_EXCHANGE,
         request_routing_key=None,       # Required
         reply_queue=None,               # Required
         timeout_ms=10000,
@@ -283,10 +285,13 @@ class AmqpService(object):
             else:
                 raise AmqpService.ParameterMissing("%s is a required parameter." % param)
                 
-        self.rpc_channel = RpcChannel(self.exchange, self.reply_queue, request_routing_key, max_retries=max_retries, timeout_ms=timeout_ms)
-        #self.rpc_service = service_stub_class(self.rpc_channel)
+        self.rpc_channel = RpcChannel(self.exchange, self.reply_queue, self.request_routing_key, max_retries=max_retries, timeout_ms=timeout_ms)
         self.amqp_rpc_controller = AmqpRpcController()
         
+    @property
+    def timed_out(self):
+        return self.amqp_rpc_controller.TimedOut()
+
     def _rpc_failure(self):
         '''Should be called when RPC calls fail (i.e. return value == None)'''
         if self.amqp_rpc_controller.TimedOut():

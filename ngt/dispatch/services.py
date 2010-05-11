@@ -144,13 +144,26 @@ class ReaperService(rpc_services.AmqpService, protobuf.ReaperCommandService_Stub
     # 
     ####
 
-    def __init__(self, *args, **kwargs):
-        kwargs['request_routing_key'] = 'dispatch'
+    def __init__(self, reaper_uuid, *args, **kwargs):
+        kwargs['request_routing_key'] = "rpc.reaper.%s" % reaper_uuid
         #kwargs['timeout_ms'] = -1 # never timout
-        kwargs['max_retries'] = -1 # retry infinitely
+        kwargs['max_retries'] = 1 
         super(ReaperService, self).__init__(*args, **kwargs)
         self.logger = logging.getLogger('DispatchService')
 
     def get_status(self):
+        request = protobuf.ReaperStatusRequest()
+        response = self.GetStatus(self.amqp_rpc_controller, request, None)
+        if not response:
+            return None
+        else:
+            return response.status
+
+    def shutdown(self, done_callback=None):
+        request = protobuf.ReaperShutdownRequest()
+        response = self.Shutdown(self.amqp_rpc_controller, request, done_callback)
+        if not response:
+            return None
+        else:
+            return response.status
         pass
-    # etc...
