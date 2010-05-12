@@ -58,22 +58,22 @@ class NoopLock(object):
 #dblock = threading.RLock()
 dblock = NoopLock()
 
-def create_jobcommand_map():
-    ''' Create a map of command names to JobCommand subclasses from the jobcommand module '''
-    jobcommand_map = {}
-    # [type(getattr(jobcommands,o)) == type and issubclass(getattr(jobcommands,o), jobcommands.JobCommand) for o in dir(jobcommands)]
-    for name in dir(jobcommands):
-        obj = getattr(jobcommands, name)
-        if type(obj) == type and issubclass(obj, jobcommands.JobCommand):
-            if obj.name in jobcommand_map:
-                raise ValueError("Duplicate jobcommand name: %s" % obj.name)
-            jobcommand_map[obj.name] = obj
-    return jobcommand_map
-jobcommand_map = create_jobcommand_map()
-logger.debug("jobcommand_map initialized: %s" % str(jobcommand_map))
-logger.debug("Valid jobcommands:")
-for k in jobcommand_map.keys():
-    logger.debug(k)
+#def create_jobcommand_map():
+#    ''' Create a map of command names to JobCommand subclasses from the jobcommand module '''
+#    jobcommand_map = {}
+#    # [type(getattr(jobcommands,o)) == type and issubclass(getattr(jobcommands,o), jobcommands.JobCommand) for o in dir(jobcommands)]
+#    for name in dir(jobcommands):
+#        obj = getattr(jobcommands, name)
+#        if type(obj) == type and issubclass(obj, jobcommands.JobCommand):
+#            if obj.name in jobcommand_map:
+#                raise ValueError("Duplicate jobcommand name: %s" % obj.name)
+#            jobcommand_map[obj.name] = obj
+#    return jobcommand_map
+#jobcommand_map = create_jobcommand_map()
+#logger.debug("jobcommand_map initialized: %s" % str(jobcommand_map))
+#logger.debug("Valid jobcommands:")
+#for k in jobcommand_map.keys():
+#    logger.debug(k)
     
 ####
 # Signal handlers for on-the-fly debugging
