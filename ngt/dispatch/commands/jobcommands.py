@@ -23,57 +23,57 @@ def minmax(iter):
 class JobCommand(object):
     """ Base Class and prototype """
     
-    name = None
+    commandname = None
     number_of_args = 0
     
-    @classmethod
-    def check_readiness(klass, job):
+    def __init__(self, job):
+        self.job = job
+        
+    def __getattr__(self, name): # Deletgate any method / attributes not found to the Job model instance
+        return object.__getattribute__(self.job, name)
+    
+    def check_readiness(self):
         ''' Return True if the system is ready to process this job, False otherwise. '''
-        logger.debug("%s:%s is ready to run." % (klass.name, job.uuid[:8]))
+        logger.debug("%s:%s is ready to run." % (self.commandname, self.job.uuid[:8]))
         return True
     
-    @classmethod
-    def preprocess_job(klass, job):
-        return job
+    def preprocess_job(self):
+        return self.job
     
-    @classmethod
-    def postprocess_job(klass, job):
-        return job
+    def postprocess_job(self):
+        return self.job
         
-    @classmethod
-    def build_arguments(klass, job, **kwargs):
-        if job.assets.all():
-            return [job.assets.all()[0].file_path]
+    def build_arguments(self, **kwargs):
+        if self.job.assets.all():
+            return [self.job.assets.all()[0].file_path]
         else:
             return []
             
 class RetryingJobCommand(JobCommand):
-    name='_retry_abc'
+    commandname='_retry_abc'
     failures = {}
     max_failures = 3
     
-    @classmethod
     @transaction.commit_on_success
-    def postprocess_job(klass, job):
-        if job.status == 'failed':
-            if job.id in klass.failures:
-                klass.failures[job.id] += 1
+    def postprocess_job(self):
+        if self.job.status == 'failed':
+            if self.job.id in klass.failures:
+                klass.failures[self.job.id] += 1
             else:
-                klass.failures[job.id] = 1
-            if klass.failures[job.id] <= klass.max_failures:
-                logger.debug("Job %d failed.  Requeueing." % job.id)
-                job.status = 'requeue'
+                klass.failures[self.job.id] = 1
+            if klass.failures[self.job.id] <= klass.max_failures:
+                logger.debug("Job %d failed.  Requeueing." % self.job.id)
+                self.job.status = 'requeue'
             else:
-                logger.debug("Job %d failed.  Max number of requeues exceeded." % job.id)
-        return job
+                logger.debug("Job %d failed.  Max number of requeues exceeded." % self.job.id)
+        return self.job
             
         
 class MipMapCommand(RetryingJobCommand):
-    name = 'mipmap'
+    commandname = 'mipmap'
 
-    @classmethod
-    def build_arguments(klass, job, **kwargs):
-        args = "-t %s %s -o %s" % (job.transaction_id, kwargs['file_path'], kwargs['platefile'])
+    def build_arguments(self, **kwargs):
+        args = "-t %s %s -o %s" % (self.job.transaction_id, kwargs['file_path'], kwargs['platefile'])
         return args.split(' ')
 
     @classmethod
@@ -92,18 +92,16 @@ class moc2plateCommand(RetryingJobCommand):
         return args.split(' ')
         
 class hirise2plateCommand(RetryingJobCommand):
-    name = 'hirise2plate'
+    commandname = 'hirise2plate'
 
-    @classmethod
-    def build_arguments(klass, job, **kwargs):
-        args = "%s %s -t %d" % (kwargs['file_path'], kwargs['platefile'], job.transaction_id)
+    def build_arguments(self, **kwargs):
+        args = "%s %s -t %d" % (kwargs['file_path'], kwargs['platefile'], self.job.transaction_id)
         return args.split(' ')
         
 class Snapshot(RetryingJobCommand):
-    name = 'snapshot'
+    commandname = 'snapshot'
     
-    @classmethod
-    def build_arguments(klass, job, **kwargs):
+    def build_arguments(self, **kwargs):
         ### kwargs expected:
         # region (4-tuple)
         # level (integer)
@@ -113,17 +111,16 @@ class Snapshot(RetryingJobCommand):
     
         regionstr = '%d,%d:%d,%d' % kwargs['region'] # expects a 4-tuple
         return [
-            '-t', str(job.transaction_id),
+            '-t', str(self.job.transaction_id),
             '--region', '%s@%d' % (regionstr, kwargs['level']),
             '--transaction-range', '%d:%d' % kwargs['transaction_range'],
             kwargs['platefile']
         ]
 
 class StartSnapshot(JobCommand):
-    name = 'start_snapshot'
+    commandname = 'start_snapshot'
     
-    @classmethod
-    def build_arguments(klass, job, **kwargs):
+    def build_arguments(self, **kwargs):
         ### kwargs expected:
         # transaction_range (2-tuple)
         # platefile (string)
@@ -131,11 +128,10 @@ class StartSnapshot(JobCommand):
         
         t_range = kwargs['transaction_range'] # expect a 2-tuple
         description = "Snapshot of transactions %d --> %d" % t_range
-        args = ['--start', '"%s"' % description, '-t', str(job.transaction_id), kwargs['platefile']]
+        args = ['--start', '"%s"' % description, '-t', str(self.job.transaction_id), kwargs['platefile']]
         return args
 
-    @classmethod
-    def _generate_partitions(klass, level):
+    def _generate_partitions(self, level):
         '''
         Give all the  partitions of a 2**level tilespace.
         Divide the space into 32x32 regions
@@ -165,8 +161,7 @@ class StartSnapshot(JobCommand):
 #                for j in range(sqrt_number_of_regions):
 #                    yield (i*max_region_side, j*max_region_side, (i+1)*max_region_side, (j+1)*max_region_side) 
                     
-    @classmethod
-    def _get_maxlevel(klass, output):
+    def _get_maxlevel(self, output):
         pat = re.compile('Plate has (\d+) levels')
         match = pat.search(output)
         assert match
@@ -174,37 +169,36 @@ class StartSnapshot(JobCommand):
 
             
     
-    @classmethod
     @transaction.commit_on_success
-    def postprocess_job(klass, job):
+    def postprocess_job(self):
         # get platefile from job arguments
         pfpattern = re.compile('pf:')
-        args = shlex.split(str(job.command_string))
+        args = shlex.split(str(self.job.command_string))
         platefile = filter(pfpattern.match, args)[0]
 
         # parse pyramid depth (max level) from job output
-        maxlevel = klass._get_maxlevel(job.output)
+        maxlevel = self._get_maxlevel(self.job.output)
         # get corresponding end_snapshot job
-        endjob = job.jobset.jobs.get(command='end_snapshot', transaction_id=job.transaction_id)
+        endjob = self.job.jobset.jobs.get(command='end_snapshot', transaction_id=self.job.transaction_id)
         #snapjobset = JobSet.objects.filter('snapshots').latest('pk')
-        snapjobset = job.jobset
+        snapjobset = self.job.jobset
         # spawn regular snapshot jobs.  add as dependencies to end_snapshot job
         #transids = [d.transaction_id for d in job.dependencies.all()]
         #job_transaction_range = (min(transids), max(transids))
         logger.info("start_snapshot executed.  Generating snapshot jobs")
-        job_transaction_range = minmax(d.transaction_id for d in job.dependencies.all())
+        job_transaction_range = minmax(d.transaction_id for d in self.job.dependencies.all())
         jcount = 0
         for level in range(maxlevel):
-            for region in klass._generate_partitions(level):
+            for region in self._generate_partitions(level):
                 logger.debug("Generating snapshot job for region %s" % str(region))
                 #print "Generating snapshot job for region " + str(region) + " at " + str(level)
                 snapjob = Job(
                     command = 'snapshot',
-                    transaction_id = job.transaction_id,
+                    transaction_id = self.job.transaction_id,
                     jobset = snapjobset,
                 )
                 snapjob.arguments = Snapshot.build_arguments(
-                    job,
+                    self.job,
                     region = region,
                     level = level,
                     transaction_range = job_transaction_range,
@@ -213,34 +207,31 @@ class StartSnapshot(JobCommand):
                 snapjob.save()
                 endjob.dependencies.add(snapjob)
                 
-        return job
+        return self.job
         
     
         
 class EndSnapshot(JobCommand):
-    name = 'end_snapshot'
+    commandname = 'end_snapshot'
     
-    @classmethod
-    def build_arguments(klass, job, **kwargs):
-        args = ['--finish', '-t', str(job.transaction_id), kwargs['platefile']]
+    def build_arguments(self, **kwargs):
+        args = ['--finish', '-t', str(self.job.transaction_id), kwargs['platefile']]
         return args
         
     
 
 class MosaicJobCommand(JobCommand): 
-    name = 'mosaic'
+    commandname = 'mosaic'
     number_of_args = 2
     current_footprints = {}
     
     messagebus = MessageBus()
     messagebus.exchange_declare('ngt.platefile.index','direct')
 
-    @classmethod
-    def check_readiness(klass, job):
-        if job.assets.all()[0].footprint:
-            import pdb; pdb.set_trace()
-            footprint = job.assets.all()[0].footprint.prepared
-            for other_footprint in klass.current_footprints.values():
+    def check_readiness(self):
+        if self.job.assets.all()[0].footprint:
+            footprint = self.job.assets.all()[0].footprint.prepared
+            for other_footprint in self.current_footprints.values():
                 if other_footprint.touches(footprint):
                     return False
             else:
@@ -248,14 +239,12 @@ class MosaicJobCommand(JobCommand):
         else:
             return True
 
-    @classmethod
-    def preprocess_job(klass, job):
-        if job.assets.all()[0].footprint:
-            klass.current_footprints[job.uuid] = job.assets.all()[0].footprint.prepared
-        return job
+    def preprocess_job(self):
+        if self.job.assets.all()[0].footprint:
+            self.current_footprints[self.job.uuid] = self.job.assets.all()[0].footprint.prepared
+        return self.job
 
-    @classmethod
-    def get_plate_info(klass, output):
+    def _get_plate_info(self, output):
         m = re.search('Transaction ID: (\d+)', output)
         if m:
             transaction_id = int(m.groups()[0])
@@ -268,12 +257,11 @@ class MosaicJobCommand(JobCommand):
             platefile_id = None
         return transaction_id, platefile_id
 
-    @classmethod
-    def postprocess_job(klass, job):
-        if job.uuid in klass.current_footprints:
-            del klass.current_footprints[job.uuid]
-        if job.status == 'failed':
-            transaction_id, platefile_id = klass.get_plate_info(job.output)
+    def postprocess_job(self):
+        if self.job.uuid in self.current_footprints:
+            del self.current_footprints[self.job.uuid]
+        if self.job.status == 'failed':
+            transaction_id, platefile_id = self._get_plate_info(self.job.output)
             if transaction_id and platefile_id:
                 idx_transaction_failed = {
                     'platefile_id': platefile_id,
@@ -286,9 +274,9 @@ class MosaicJobCommand(JobCommand):
                     'payload': protocols.pack(protobuf.IndexTransactionFailed, idx_transaction_failed),
                 }
                 msg = Message(protocols.pack(protobuf.BroxtonRequestWrapper, request))
-                klass.messagebus.basic_publish(msg, exchange='ngt.platefile.index_0', routing_key='index')
+                self.messagebus.basic_publish(msg, exchange='ngt.platefile.index_0', routing_key='index')
         
-        return job
+        return self.job
         
         
 ####
@@ -296,40 +284,36 @@ class MosaicJobCommand(JobCommand):
 ####
 
 class Test(RetryingJobCommand):
-    name = 'test'
+    commandname = 'test'
 
 class Fjord(JobCommand):
     ''' Fjord jobs are only ready 90% of the time and take forever to get going. '''
-    name = 'test_fjord'
+    commandname = 'test_fjord'
     
-    @classmethod
-    def postprocess_job(klass, job):
+    def postprocess_job(self):
         print "Fjord ran."
-        return job
+        return self.job
         
-    @classmethod
-    def preprocess_job(klass, job):
+    def preprocess_job(self):
         import time
         time.sleep(1)
-        return job
+        return self.job
         
-    @classmethod
-    def check_readiness(klass, job):
+    def check_readiness(self):
         ''' Be ready 10% of the time. '''
         import random
         if random.randint(0,9) == 0:
-            logger.debug("%s:%s is ready to run." % (klass.name, job.uuid[:8]))
+            logger.debug("%s:%s is ready to run." % (klass.name, self.job.uuid[:8]))
             return True
         else:
-            logger.debug("%s:%s is not ready to run yet." % (klass.name, job.uuid[:8]))
+            logger.debug("%s:%s is not ready to run yet." % (klass.name, self.job.uuid[:8]))
             return False
         
         
 class Bjorn(JobCommand):
     '''Bjorn jobs depend on Fjord jobs.'''
-    name = 'test_bjorn'
+    commandname = 'test_bjorn'
     
-    @classmethod
-    def postprocess_job(klass, job):
+    def postprocess_job(self):
         print "Bjorn ran."
-        return job
+        return self.job

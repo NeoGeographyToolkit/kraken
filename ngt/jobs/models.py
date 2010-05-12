@@ -8,8 +8,7 @@ from django.db import transaction
 import os, time, hashlib, datetime
 import uuid
 #import json
-from ngt.django_extras.fields import JSONField
-#from ngt.assets.models import Asset, DATA_ROOT
+from django_extras.fields import JSONField
 
 import logging
 logger = logging.getLogger('job_models')
@@ -149,6 +148,10 @@ class Job(models.Model):
             return "<Job: %s %s>" % (self.command, self.uuid)
         else:
             return "<Job: new>"
+    
+    def wrapped(self):
+        jobcommand_class = jobcommand_map[self.command]
+        return jobcommand_class(self)
 
     @property
     def command_string(self):
@@ -296,10 +299,29 @@ class JobSet(models.Model):
 def active_jobsets():
     jobsets = JobSet.objects.filter(active=True)
     return jobsets
+
 def status():
     jobsets = active_jobsets()
     from pprint import pprint
     pprint( dict( [(js, js.status()) for js in jobsets] ) )
 
+
 from ngt.assets.models import Asset, DATA_ROOT # putting this here helps avoid circular imports
 
+from ngt.dispatch.commands import jobcommands
+def create_jobcommand_map():
+    ''' Create a map of command names to JobCommand subclasses from the jobcommand module '''
+    jobcommand_map = {}
+    # [type(getattr(jobcommands,o)) == type and issubclass(getattr(jobcommands,o), jobcommands.JobCommand) for o in dir(jobcommands)]
+    for name in dir(jobcommands):
+        obj = getattr(jobcommands, name)
+        if type(obj) == type and issubclass(obj, jobcommands.JobCommand):
+            if obj.commandname in jobcommand_map:
+                raise ValueError("Duplicate jobcommand name: %s" % obj.name)
+            jobcommand_map[obj.commandname] = obj
+    return jobcommand_map
+jobcommand_map = create_jobcommand_map()
+logger.debug("jobcommand_map initialized: %s" % str(jobcommand_map))
+logger.debug("Valid jobcommands:")
+for k in jobcommand_map.keys():
+    logger.debug(k)
