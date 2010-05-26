@@ -1,0 +1,492 @@
+PDS_VERSION_ID = PDS3
+RECORD_TYPE = FIXED_LENGTH
+RECORD_BYTES = 818
+FILE_RECORDS = 26608
+^RDR_INDEX_TABLE = "RDRINDEX.TAB"
+OBJECT = RDR_INDEX_TABLE
+    INDEX_TYPE = SINGLE
+    INTERCHANGE_FORMAT = ASCII
+    ROWS = 26608
+    ROW_BYTES = 818
+    COLUMNS = 54
+    OBJECT = COLUMN
+        NAME = VOLUME_ID
+        DATA_TYPE = CHARACTER
+        START_BYTE = 2
+        BYTES = 10
+        FORMAT = "A10"
+        DESCRIPTION = "Volume identification"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = FILE_NAME_SPECIFICATION
+        DATA_TYPE = CHARACTER
+        START_BYTE = 15
+        BYTES = 67
+        FORMAT = "A67"
+        DESCRIPTION = "Path and file name of HiRISE RDR product"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = INSTRUMENT_HOST_ID
+        DATA_TYPE = CHARACTER
+        START_BYTE = 85
+        BYTES = 3
+        FORMAT = "A3"
+        DESCRIPTION = "Spacecraft hosting the HiRISE instrument, 
+                   always MRO"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = INSTRUMENT_ID
+        DATA_TYPE = CHARACTER
+        START_BYTE = 91
+        BYTES = 6
+        FORMAT = "A6"
+        DESCRIPTION = "Instrument that acquired the observaiton, 
+                   always HIRISE"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = OBSERVATION_ID
+        DATA_TYPE = CHARACTER
+        START_BYTE = 100
+        BYTES = 15
+        FORMAT = "A15"
+        DESCRIPTION = "Unique identification associated with
+                    an observation. Up to 28 EDR products can be 
+                    associated with an observation."
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = PRODUCT_ID
+        DATA_TYPE = CHARACTER
+        START_BYTE = 118
+        BYTES = 21
+        FORMAT = "A21"
+        DESCRIPTION = "Unique identification associated with the product"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = PRODUCT_VERSION_ID
+        DATA_TYPE = CHARACTER
+        START_BYTE = 142
+        BYTES = 3
+        FORMAT = "A3"
+        DESCRIPTION = "Version number of this product"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = TARGET_NAME
+        DATA_TYPE = CHARACTER
+        START_BYTE = 148
+        BYTES = 32
+        FORMAT = "A32"
+        DESCRIPTION = "Target Name of the observation"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = ORBIT_NUMBER
+        DATA_TYPE = ASCII_INTEGER
+        START_BYTE = 182
+        BYTES = 6
+        FORMAT = "I6"
+        DESCRIPTION = "Orbit number from start of mission"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = MISSION_PHASE_NAME
+        DATA_TYPE = CHARACTER
+        START_BYTE = 190
+        BYTES = 30
+        FORMAT = "A30"
+        DESCRIPTION = "Mission Phase at time of observation, such
+                  as Primary Science Phase"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = RATIONALE_DESC
+        DATA_TYPE = CHARACTER
+        START_BYTE = 223
+        BYTES = 75
+        FORMAT = "A75"
+        DESCRIPTION = "Informational note about the observation"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = OBSERVATION_START_TIME
+        DATA_TYPE = TIME
+        START_BYTE = 301
+        BYTES = 24
+        FORMAT = "A24"
+        DESCRIPTION = "UTC time when HiRISE started the 
+                   imaging sequence"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = OBSERVATION_START_COUNT
+        DATA_TYPE = CHARACTER
+        START_BYTE = 328
+        BYTES = 15
+        FORMAT = "A15"
+        DESCRIPTION = "Spacecraft clock count when HiRISE started 
+                   the imaging sequence"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = START_TIME
+        DATA_TYPE = TIME
+        START_BYTE = 346
+        BYTES = 24
+        FORMAT = "A24"
+        DESCRIPTION = "UTC time when first image line of target was 
+                    acquired"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = SPACECRAFT_CLOCK_START_COUNT
+        DATA_TYPE = CHARACTER
+        START_BYTE = 373
+        BYTES = 15
+        FORMAT = "A15"
+        DESCRIPTION = "Spacecraft clock count when first image line of 
+                   target was acquired"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = STOP_TIME
+        DATA_TYPE = TIME
+        START_BYTE = 391
+        BYTES = 24
+        FORMAT = "A24"
+        DESCRIPTION = "UTC time when last image line of target was
+                   acquired"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = SPACECRAFT_CLOCK_STOP_COUNT
+        DATA_TYPE = CHARACTER
+        START_BYTE = 418
+        BYTES = 15
+        FORMAT = "A15"
+        DESCRIPTION = "Spacecraft clock count when last image line of 
+                   target was acquired"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = IMAGE_LINES
+        DATA_TYPE = ASCII_INTEGER
+        START_BYTE = 435
+        BYTES = 6
+        FORMAT = "I6"
+        DESCRIPTION = "Number of image lines"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = LINE_SAMPLES
+        DATA_TYPE = ASCII_INTEGER
+        START_BYTE = 442
+        BYTES = 6
+        FORMAT = "I6"
+        DESCRIPTION = "Number of line samples"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = EMISSION_ANGLE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 449
+        BYTES = 8
+        FORMAT = "F8.5"
+        DESCRIPTION = "The emission angle at the center of the 
+                   observation"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = INCIDENCE_ANGLE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 458
+        BYTES = 7
+        FORMAT = "F7.4"
+        DESCRIPTION = "The incidence angle at the center of the 
+                   observation"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = PHASE_ANGLE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 466
+        BYTES = 8
+        FORMAT = "F7.4"
+        DESCRIPTION = "The phase angle at the center of the observation"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = SPACECRAFT_ALTITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 475
+        BYTES = 8
+        FORMAT = "F8.3"
+        DESCRIPTION = "The areodetic altitude of the center of the 
+                   observation in kilometers. This field represents the
+                   center altitude for the observation on the MRO 
+                   ellipsoid reference."
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = TARGET_CENTER_DISTANCE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 484
+        BYTES = 7
+        FORMAT = "F7.2"
+        DESCRIPTION = "The distance from the spacecraft to the target 
+                   body's center in kilometers"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = SLANT_DISTANCE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 492
+        BYTES = 8
+        FORMAT = "F8.3"
+        DESCRIPTION = "The distance from the spacecraft to the 
+                   intersection of the view vector with the target 
+                   body in kilometers"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = NORTH_AZIMUTH
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 501
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "The angle in degrees clockwise from the reference 
+                   axis of the observation (a line from the center to 
+                   the right edge of the observation) to the direction 
+                   to the north pole of the target body."
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = SUB_SOLAR_AZIMUTH
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 512
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "The angel in degrees clockwise from the reference 
+                   axis of the observation (a line from the center to 
+                   the right edge of the observation) to the direction 
+                   to the sub-solar point on the target body."
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = SUB_SOLAR_LATITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 523
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "The planetocentric latitude of the sub-solar point 
+                   in degrees"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = SUB_SOLAR_LONGITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 534
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "The east longitude of the sub-solar point in 
+                   degrees"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = SUB_SPACECRAFT_LATITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 545
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "The planetocentric latitude of the sub-spacecraft 
+                   point in degrees"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = SUB_SPACECRAFT_LONGITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 556
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "The planetocentric longitude of the sub-spacecraft 
+                   point in degrees"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = SOLAR_DISTANCE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 567
+        BYTES = 10
+        FORMAT = "F10.5"
+        DESCRIPTION = "The distance from the center of the image on the 
+                   target body to the center of the Sun in AU"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = SOLAR_LONGITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 578
+        BYTES = 10
+        FORMAT = "F10.3"
+        DESCRIPTION = "The solar longitude ('L sub S') at the time of 
+                   image acquisition in the degrees from the Martian 
+                   vernal equinox"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = LOCAL_TIME
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 589
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "Local Solar Time in decimal hours from midnight at 
+                   the center of the observation"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = STEREO_FLAG
+        DATA_TYPE = CHARACTER
+        START_BYTE = 601
+        BYTES = 3
+        FORMAT = "A3"
+        DESCRIPTION = "Indicates whether this product was intended to be 
+                   part of a stereo pair. (YES or NO)."
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = MINIMUM_LATITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 606
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "Minimum latitude of the projected image"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = MAXIMUM_LATITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 617
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "Maximum latitude of the projected image"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = MINIMUM_LONGITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 628
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "Minimum longitude of the projected image."
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = MAXIMUM_LONGITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 639
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "Maximum longitude of projected image"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = MAP_SCALE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 650
+        BYTES = 5
+        FORMAT = "F5.2"
+        DESCRIPTION = "Map scale in meters per pixel"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = MAP_RESOLUTION
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 656
+        BYTES = 10
+        FORMAT = "F10.3"
+        DESCRIPTION = "Map resolution in pixels per degree"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = MAP_PROJECTION_TYPE
+        DATA_TYPE = CHARACTER
+        START_BYTE = 668
+        BYTES = 19
+        FORMAT = "A19"
+        DESCRIPTION = "EQUIRECTANGULAR or POLAR STEREOGRAPHIC"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = PROJECTION_CENTER_LATITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 689
+        BYTES = 5
+        FORMAT = "F5.1"
+        DESCRIPTION = "Center latitude of the map projection. This does 
+                   not necessarily equal the center latitude of the 
+                   image."
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = PROJECTION_CENTER_LONGITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 695
+        BYTES = 8
+        FORMAT = "F8.3"
+        DESCRIPTION = "Center longitude of the map projection.  This does 
+                   not necessarily equal the center longitude of the 
+                   image."
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = LINE_PROJECTION_OFFSET
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 704
+        BYTES = 12
+        FORMAT = "F12.1"
+        DESCRIPTION = "The line_projection_offset element provides the 
+                   line offset value of the map projection origin 
+                   position from the line and sample 1,1 (line and 
+                   sample 1,1 is considered the upper left corner of 
+                   the digital array)."
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = SAMPLE_PROJECTION_OFFSET
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 717
+        BYTES = 12
+        FORMAT = "F12.1"
+        DESCRIPTION = "The sample_projection_offset element provides the 
+                   sample offset value of the map projection origin 
+                   position from line and sample 1,1 (line and sample 
+                   1,1 is considered the upper left corner of the 
+                   digital array). Note: that the positive direction 
+                   is to the right and down."
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = CORNER1_LATITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 730
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "Latitude of corner 1 of the projected image"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = CORNER1_LONGITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 741
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "Longitude of corner 1 of the projected image"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = CORNER2_LATITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 752
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "Latitude of corner 2 of the projected image"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = CORNER2_LONGITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 763
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "Longitude of corner 2 of the projected image"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = CORNER3_LATITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 774
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "Latitude of corner 3 of the projected image"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = CORNER3_LONGITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 785
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "Longitude of corner 3 of the projected image"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = CORNER4_LATITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 796
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "Latitude of corner 4 of the projected image"
+    END_OBJECT
+    OBJECT = COLUMN
+        NAME = CORNER4_LONGITUDE
+        DATA_TYPE = ASCII_REAL
+        START_BYTE = 807
+        BYTES = 10
+        FORMAT = "F10.4"
+        DESCRIPTION = "Longitude of corner 4 of the projected image"
+    END_OBJECT
+END_OBJECT
+END
