@@ -1,12 +1,16 @@
-from inventory_hirise import scan_assets, scan_index
+from inventory_hirise import scan_assets, compare_to_index
 import csv, sys
+import os.path
 from django.contrib.gis.geos import LinearRing
+
+thisdir = os.path.dirname(__file__)
 
 CENTERPOINT_FILE = '/big/sourcedata/mars/hirise/metadata/HiRISE_coords.csv'
 THEME_FILE = '/big/sourcedata/mars/hirise/metadata/HiRISE_themes.csv'
+SPOTLIGHT_ID_FILE = os.path.join(thisdir, 'metadata/merged_featured_products.txt')
 
-DEFAULT_OUTPUT_CENTERPOINT_FILE = 'hirise_meta.csv'
-DEFAULT_OUTPUT_THEME_FILE = 'hirise_themes.csv'
+DEFAULT_OUTPUT_CENTERPOINT_FILE = os.path.join(thisdir, 'metadata/output', 'hirise_meta.csv')
+DEFAULT_OUTPUT_THEME_FILE = os.path.join(thisdir, 'metadata/output', 'hirise_themes.csv')
 
 
 def centroid(index_row):
@@ -22,7 +26,7 @@ def centroid(index_row):
 
 def check_angles():
     inventory = scan_assets()
-    inventory, missing = scan_index(inventory)
+    inventory, missing = compare_to_index(inventory)
         
     iter = inventory.values()
     for i in range(20):
@@ -61,6 +65,14 @@ def reduce_themefile(theme_filename, inventory=None):
             yield (observation_id, theme, precedence)
     return flatten(themes)
 
+def read_spotlight_ids(infile):
+    ids = []
+    f = open(infile, 'r')
+    for line in f:
+        ids.append(line.strip())
+    f.close()
+    return ids
+
 def output_themes(output_file, inventory=None, theme_filename=THEME_FILE):
     themes = reduce_themefile(theme_filename, inventory=inventory)
     outfile = open(output_file, 'w')
@@ -73,11 +85,12 @@ def output_themes(output_file, inventory=None, theme_filename=THEME_FILE):
 
 def scan_and_output_metadata(meta_filename=DEFAULT_OUTPUT_CENTERPOINT_FILE, theme_filename=DEFAULT_OUTPUT_THEME_FILE):
     inventory = scan_assets()
-    inventory, missing = scan_index(inventory)
-    output_metadata(meta_filename, inventory)
+    inventory, missing = compare_to_index(inventory)
+    spotlit_ids = read_spotlight_ids(SPOTLIGHT_ID_FILE)
+    output_metadata(meta_filename, inventory, spotlit_products=spotlit_ids)
     output_themes(theme_filename, inventory=inventory)
     
-def output_metadata(filename, inventory):
+def output_metadata(filename, inventory, spotlit_products=[]):
     centerpoints = get_centerpoints(CENTERPOINT_FILE)
     print "Outputting to %s" % filename
     outfile = open(filename, 'w')
@@ -89,8 +102,9 @@ def output_metadata(filename, inventory):
         'url',
         'description',
         'image_lines',
+        'spotlight'
     ))
-    outfile.write(header_line + "\n")
+    outfile.write(header_line + "\n")
     for observation_id, observation in inventory.items():
         if observation.red_record:
             record = observation.red_record
@@ -109,5 +123,6 @@ def output_metadata(filename, inventory):
             centerpoint[1],
             "http://hirise.lpl.arizona.edu/" + record.observation_id,
             record.rationale_desc,
-            record.image_lines
+            record.image_lines,
+            't' if record.observation_id in spotlit_products else 'f',
         ))

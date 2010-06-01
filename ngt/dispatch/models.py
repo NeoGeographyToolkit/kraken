@@ -1,5 +1,6 @@
 from django.db import models
-from ngt.jobs.models import Job
+from django.db import transaction
+from ngt.jobs.models import Job, JobSet
 
 # Let's see if we can do this without modelling Nodes...
 #class Node(models.Model):
@@ -48,3 +49,29 @@ class Reaper(models.Model):
     def soft_delete(self):
         self.deleted = True
         self.save()
+
+####
+# Utilities for manual maintenence
+###
+@transaction.commit_on_success
+def requeue_host_jobs(hostname):
+    '''
+    For use in the event of a processing node failure.
+    find all the jobs that were being processed by a given hosthame and requeue them.
+    '''
+    reaperids = [r.uuid for r in Reaper.objects.filter(deleted=False, expired=False, hostname=hostname)]
+    print "%d reapers are registered on %s" % (len(reaperids), hostname)
+    active_jobsets = JobSet.objects.filter(active=True).values_list('id', flat=True)
+    processing_jobs = Job.objects.filter(jobset__id__in=active_jobsets, status_enum=Job.StatusEnum.PROCESSING)
+    hostjobs = [j for j in processing_jobs if j.processor in reaperids]
+    print "%d jobs were processing on host %s." % (len(hostjobs), hostname) 
+    print "Last Job started at %s" % str(max(j.time_started for j in hostjobs))
+    print "Type 'okeydoke' to requeue."
+    input = raw_input()
+    if input == 'okeydoke':
+        for job in hostjobs:
+            job.status = 'requeue'
+            job.save()
+        print "Done."
+    else:
+        print "ABORT!"
