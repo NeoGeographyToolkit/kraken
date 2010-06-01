@@ -317,7 +317,7 @@ def create_jobcommand_map():
         obj = getattr(jobcommands, name)
         if type(obj) == type and issubclass(obj, jobcommands.JobCommand):
             if obj.commandname in jobcommand_map:
-                raise ValueError("Duplicate jobcommand name: %s" % obj.name)
+                raise ValueError("Duplicate jobcommand name: %s" % obj.commandname)
             jobcommand_map[obj.commandname] = obj
     return jobcommand_map
 jobcommand_map = create_jobcommand_map()

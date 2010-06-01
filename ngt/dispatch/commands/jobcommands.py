@@ -24,7 +24,7 @@ class JobCommand(object):
     """ 
         Base Class and prototype 
         JobCommand subclasses wrap around a Job model instance and provide job-type specific functionality.
-        JobCommand instances delegate attribute gets to their bound Job instance.
+        JobCommand instances delegate attribute access to their bound Job instance.
     """
     
     commandname = None
@@ -35,6 +35,12 @@ class JobCommand(object):
         
     def __getattr__(self, name): # Deletgate any method / attributes not found to the Job model instance
         return object.__getattribute__(self.job, name)
+
+    def __setattr__(self, name, value): # Delegate attribute setting to the Job model instance if that attribute is defined there.
+        if 'job' in self.__dict__ and hasattr(self.job, name):
+            setattr(self.job, name, value)
+        else:
+            object.__setattr__(self, name, value)
     
     def check_readiness(self):
         ''' Return True if the system is ready to process this job, False otherwise. '''
@@ -87,7 +93,7 @@ class MipMapCommand(RetryingJobCommand):
             self.job.status = 'failed_nonblocking'
 
 class moc2plateCommand(RetryingJobCommand):
-    name = 'moc2plate'
+    commandname = 'moc2plate'
 
     def build_arguments(self, **kwargs):
         args = "%s %s -t %d" % (kwargs['file_path'], kwargs['platefile'], self.job.transaction_id)
