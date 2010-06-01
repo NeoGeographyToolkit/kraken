@@ -30,7 +30,7 @@ def _build_mipmap_jobs(jobset, asset_queryset, count=None):
             if job.transaction_id % 2 == 0:
                 break
         job.command = 'mipmap'
-        job.arguments = json.dumps(MipMapCommand.build_arguments(job, platefile=PLATEFILE, file_path=asset.file_path))
+        job.arguments = json.dumps(job.wrapped().build_arguments(platefile=PLATEFILE, file_path=asset.file_path))
         job.footprint = asset.footprint
         job.jobset = jobset
         job.save()
