@@ -30,7 +30,7 @@ def _build_jobs(command_class, jobset, asset_queryset, platefile):
             if job.transaction_id % 2 == 0:
                 break
         job.command = command_class.name
-        job.arguments = command_class.build_arguments(job, platefile=platefile, file_path=asset.file_path)
+        job.arguments = job.wrapped().build_arguments(platefile=platefile, file_path=asset.file_path)
         job.footprint = asset.footprint # TODO: Generate footprints from label metadata.
         job.jobset = jobset
         job.save()

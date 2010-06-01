@@ -12,7 +12,7 @@ def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_j
         command = 'start_snapshot',
         jobset = snapshot_jobset
     )
-    startjob.arguments = StartSnapshot.build_arguments(
+    startjob.arguments = startjob.wrapped().build_arguments(
         startjob, 
         transaction_range = transaction_range,
         platefile = platefile
@@ -23,7 +23,7 @@ def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_j
         command = 'end_snapshot',
         jobset = snapshot_jobset
     )
-    endjob.arguments = EndSnapshot.build_arguments(endjob, platefile=platefile)
+    endjob.arguments = endjob.wrapped().build_arguments(endjob, platefile=platefile)
     startjob.save()
     endjob.save()
     # add dependencies

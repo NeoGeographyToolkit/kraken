@@ -21,7 +21,11 @@ def minmax(iter):
     return (min, max)
 
 class JobCommand(object):
-    """ Base Class and prototype """
+    """ 
+        Base Class and prototype 
+        JobCommand subclasses wrap around a Job model instance and provide job-type specific functionality.
+        JobCommand instances delegate attribute gets to their bound Job instance.
+    """
     
     commandname = None
     number_of_args = 0
@@ -76,19 +80,17 @@ class MipMapCommand(RetryingJobCommand):
         args = "-t %s %s -o %s" % (self.job.transaction_id, kwargs['file_path'], kwargs['platefile'])
         return args.split(' ')
 
-    @classmethod
-    def postprocess_job(klass, job):
+    def postprocess_job(self):
         ''' All MipMap failures will be made nonblocking. '''
-        job = super(MipMapCommand, klass).postprocess_job(job)
-        if job.status == 'failed':
-            job.status = 'failed_nonblocking'
+        self.job = super(MipMapCommand, klass).postprocess_job(self.job)
+        if self.job.status == 'failed':
+            self.job.status = 'failed_nonblocking'
 
 class moc2plateCommand(RetryingJobCommand):
     name = 'moc2plate'
 
-    @classmethod
-    def build_arguments(klass, job, **kwargs):
-        args = "%s %s -t %d" % (kwargs['file_path'], kwargs['platefile'], job.transaction_id)
+    def build_arguments(self, **kwargs):
+        args = "%s %s -t %d" % (kwargs['file_path'], kwargs['platefile'], self.job.transaction_id)
         return args.split(' ')
         
 class hirise2plateCommand(RetryingJobCommand):
@@ -146,21 +148,6 @@ class StartSnapshot(JobCommand):
                 for j in range(sqrt_regions):
                     yield (i*tiles_per_side, j*tiles_per_side, (i+1)*tiles_per_side, (j+1)*tiles_per_side)
                     
-#    @classmethod
-#    def _generate_partitions(klass, level):
-#        ''' Regionates based on max number of tiles. '''
-#        max_region_size = 1024 # largest region size in tiles.  This better be a squared integer or I am going to be 
-#        max_region_side = math.sqrt(max_region_size)
-#        assert int(max_region_side) == max_region_side
-#        max_region_side = int(max_region_side)
-#        if 2**level <= max_region_side:
-#            yield(0, 0, 2**level, 2**level)
-#        else:
-#            sqrt_number_of_regions = 2**level / max_region_side
-#            for i in range(sqrt_number_of_regions):
-#                for j in range(sqrt_number_of_regions):
-#                    yield (i*max_region_side, j*max_region_side, (i+1)*max_region_side, (j+1)*max_region_side) 
-                    
     def _get_maxlevel(self, output):
         pat = re.compile('Plate has (\d+) levels')
         match = pat.search(output)
@@ -197,8 +184,7 @@ class StartSnapshot(JobCommand):
                     transaction_id = self.job.transaction_id,
                     jobset = snapjobset,
                 )
-                snapjob.arguments = Snapshot.build_arguments(
-                    self.job,
+                snapjob.arguments = snapjob.wrapped().build_arguments(
                     region = region,
                     level = level,
                     transaction_range = job_transaction_range,
