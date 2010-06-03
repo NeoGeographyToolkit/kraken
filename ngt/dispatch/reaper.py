@@ -255,6 +255,7 @@ def init_reaper_commands():
         
         # LMMP
         'orthoproject': '/big/software/stereopipeline/scripts/isis.sh /big/software/stereopipeline/bin/orthoproject',
+        'phosolve_prep': os.path.join(COMMAND_PATH, 'phosolve_prep.py'),
     }
     if options.noop:
         print "Running in no-op mode."
