@@ -1,4 +1,4 @@
-#!usr/bin/env python
+#!/usr/bin/env python
 
 import glob, sys, os.path
 import optparse
@@ -11,12 +11,12 @@ setup_environ(settings)
 from ngt.jobs.models import Job, JobSet
 from django.db import transaction
 
-DEFAULT_PLATEFILE = 'pf://ptk/apollo_15_drg.ptk'
+DEFAULT_PLATEFILE = 'pf://wwt10one/ptk/apollo_15_drg.ptk'
 
 @transaction.commit_on_success
 def main(options, imagedir):
 
-    shdw_files = glob.glob(os.path.join(imagedir, '*shdw.tif')
+    shdw_files = glob.glob(os.path.join(imagedir, '*shdw.tif'))
     if len(shdw_files) < 1:
         exit("No shadow files found")
 
@@ -27,14 +27,21 @@ def main(options, imagedir):
     jobset.save()
     for file in shdw_files: 
         job = Job(command="phodrg2plate")
-        job.arguments = (DEFAULT_PLATEFILE, os.path.join(filedir, file))
+        job.arguments = [DEFAULT_PLATEFILE, os.path.join(imagedir, file)]
         job.jobset = jobset
         job.save()
+    
+    print "Created %s" % str(jobset)
+    if options.activate:
+        jobset.active = True
+        jobset.save()
+        print "Activated."
         
 if __name__ == '__main__':
     parser = optparse.OptionParser()
-    parser.add_option('--platefile', , '-p', dest='platefile')
-    parser.set_defaults(platefile=DEFAULT_PLATEFILE)
+    parser.add_option('--platefile', '-p', dest='platefile')
+    parser.add_option('--activate', dest='activate', action='store_true')
+    parser.set_defaults(platefile=DEFAULT_PLATEFILE, activate=False)
     (options, args) = parser.parse_args()
     if len(args) < 1:
         sys.exit("USAGE: create_phodrg2plate_jobs imagedir")
