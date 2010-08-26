@@ -238,6 +238,8 @@ class Reaper(object):
         #self.shutdown()
             
 def init_reaper_commands():
+    STEREO_BIN_PATH='/big/software/stereopipeline/bin'
+    VW_BIN_PATH='/big/software/visionworkbench/bin'
     Reaper.commands = {
         'test': '../messaging/fake_command.py',
         'test_fjord': '../messaging/fake_command.py',
@@ -255,6 +257,11 @@ def init_reaper_commands():
         
         # LMMP
         'orthoproject': '/big/software/stereopipeline/scripts/isis.sh /big/software/stereopipeline/bin/orthoproject',
+        'phosolve_prep': os.path.join(COMMAND_PATH, 'phosolve_prep.py'),
+        'phodrg2plate': os.path.join(STEREO_BIN_PATH, 'phodrg2plate'),
+        'pho_mipmap': os.path.join(STEREO_BIN_PATH, 'mipmap'),
+        'phoittime': os.path.join(STEREO_BIN_PATH, 'phoittime'),
+        'phitalbedo': os.path.join(STEREO_BIN_PATH, 'phitalbedo'),
     }
     if options.noop:
         print "Running in no-op mode."
