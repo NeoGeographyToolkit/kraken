@@ -344,7 +344,7 @@ def _job_started(request):
     """
     ####
     # Reaper current job tracking is disabled because it is of dubious usefulness 
-    # and makes it harder to reset certain JobSets that require Job deletion.
+    # and because it makes it harder to reset certain JobSets that require Job deletion.
     ####
     
     try:
