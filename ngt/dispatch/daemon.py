@@ -58,22 +58,6 @@ class NoopLock(object):
 #dblock = threading.RLock()
 dblock = NoopLock()
 
-#def create_jobcommand_map():
-#    ''' Create a map of command names to JobCommand subclasses from the jobcommand module '''
-#    jobcommand_map = {}
-#    # [type(getattr(jobcommands,o)) == type and issubclass(getattr(jobcommands,o), jobcommands.JobCommand) for o in dir(jobcommands)]
-#    for name in dir(jobcommands):
-#        obj = getattr(jobcommands, name)
-#        if type(obj) == type and issubclass(obj, jobcommands.JobCommand):
-#            if obj.name in jobcommand_map:
-#                raise ValueError("Duplicate jobcommand name: %s" % obj.name)
-#            jobcommand_map[obj.name] = obj
-#    return jobcommand_map
-#jobcommand_map = create_jobcommand_map()
-#logger.debug("jobcommand_map initialized: %s" % str(jobcommand_map))
-#logger.debug("Valid jobcommands:")
-#for k in jobcommand_map.keys():
-#    logger.debug(k)
     
 ####
 # Signal handlers for on-the-fly debugging
@@ -192,25 +176,15 @@ def check_readiness(job):
     if not job.dependencies_met():
         logger.debug("Job %s(%s) has unmet dependencies." % (job.uuid[:8], job.command)) 
         return False
-    if job.command in jobcommand_map:
-        return jobcommand_map[job.command].check_readiness(job)
-    else:
-        return True
+    return job.wrapped().check_readiness()
     
 def preprocess_job(job):
     ''' Anything that needs to get done before the job is enqueued '''
-    if job.command in jobcommand_map:
-        return jobcommand_map[job.command].preprocess_job(job)
-    else:
-        return job
+    return job.wrapped().preprocess()
 
 def postprocess_job(job):
     ''' Anything that needs to get done after the job is completed '''
-    if job.command in jobcommand_map:
-        return jobcommand_map[job.command].postprocess_job(job)
-    else:
-        logger.debug("Skipping postprocessing because the job's command is not in jobcommand_map.")
-        return job
+    return job.wrapped().postprocess()
 
 
 class JobBuffer(UniquePriorityQueue):
