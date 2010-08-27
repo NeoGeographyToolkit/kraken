@@ -150,8 +150,11 @@ class Job(models.Model):
             return "<Job: new>"
     
     def wrapped(self):
-        jobcommand_class = jobcommand_map[self.command]
-        return jobcommand_class(self)
+        if self.command in jobcommand_map:
+            jobcommand_class = jobcommand_map[self.command]
+            return jobcommand_class(self)
+        else:
+            raise Exception("No JobCommand subclass found for command %s" % self.command)
 
     @property
     def command_string(self):

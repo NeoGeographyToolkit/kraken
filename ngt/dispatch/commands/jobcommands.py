@@ -47,10 +47,10 @@ class JobCommand(object):
         logger.debug("%s:%s is ready to run." % (self.commandname, self.job.uuid[:8]))
         return True
     
-    def preprocess_job(self):
+    def preprocess(self):
         return self.job
     
-    def postprocess_job(self):
+    def postprocess(self):
         return self.job
         
     def build_arguments(self, **kwargs):
@@ -65,7 +65,7 @@ class RetryingJobCommand(JobCommand):
     max_failures = 3
     
     @transaction.commit_on_success
-    def postprocess_job(self):
+    def postprocess(self):
         if self.job.status == 'failed':
             if self.job.id in klass.failures:
                 klass.failures[self.job.id] += 1
@@ -86,9 +86,9 @@ class MipMapCommand(RetryingJobCommand):
         args = "-t %s %s -o %s" % (self.job.transaction_id, kwargs['file_path'], kwargs['platefile'])
         return args.split(' ')
 
-    def postprocess_job(self):
+    def postprocess(self):
         ''' All MipMap failures will be made nonblocking. '''
-        self.job = super(MipMapCommand, klass).postprocess_job(self.job)
+        self.job = super(MipMapCommand, klass).postprocess(self.job)
         if self.job.status == 'failed':
             self.job.status = 'failed_nonblocking'
 
@@ -163,7 +163,7 @@ class StartSnapshot(JobCommand):
             
     
     @transaction.commit_on_success
-    def postprocess_job(self):
+    def postprocess(self):
         # get platefile from job arguments
         pfpattern = re.compile('pf:')
         args = shlex.split(str(self.job.command_string))
@@ -231,7 +231,7 @@ class MosaicJobCommand(JobCommand):
         else:
             return True
 
-    def preprocess_job(self):
+    def preprocess(self):
         if self.job.assets.all()[0].footprint:
             self.current_footprints[self.job.uuid] = self.job.assets.all()[0].footprint.prepared
         return self.job
@@ -249,7 +249,7 @@ class MosaicJobCommand(JobCommand):
             platefile_id = None
         return transaction_id, platefile_id
 
-    def postprocess_job(self):
+    def postprocess(self):
         if self.job.uuid in self.current_footprints:
             del self.current_footprints[self.job.uuid]
         if self.job.status == 'failed':
@@ -282,11 +282,11 @@ class Fjord(JobCommand):
     ''' Fjord jobs are only ready 90% of the time and take forever to get going. '''
     commandname = 'test_fjord'
     
-    def postprocess_job(self):
+    def postprocess(self):
         print "Fjord ran."
         return self.job
         
-    def preprocess_job(self):
+    def preprocess(self):
         import time
         time.sleep(1)
         return self.job
@@ -306,6 +306,6 @@ class Bjorn(JobCommand):
     '''Bjorn jobs depend on Fjord jobs.'''
     commandname = 'test_bjorn'
     
-    def postprocess_job(self):
+    def postprocess(self):
         print "Bjorn ran."
         return self.job
