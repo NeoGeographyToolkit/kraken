@@ -278,12 +278,12 @@ class MosaicJobCommand(JobCommand):
 class Test(RetryingJobCommand):
     commandname = 'test'
 
-class Fjord(JobCommand):
-    ''' Fjord jobs are only ready 90% of the time and take forever to get going. '''
-    commandname = 'test_fjord'
+class Horse(JobCommand):
+    ''' Horse jobs are only ready 90% of the time and take forever to get going. '''
+    commandname = 'test_horse'
     
     def postprocess(self):
-        print "Fjord ran."
+        print "Horse ran."
         return self.job
         
     def preprocess(self):
@@ -302,10 +302,10 @@ class Fjord(JobCommand):
             return False
         
         
-class Bjorn(JobCommand):
-    '''Bjorn jobs depend on Fjord jobs.'''
-    commandname = 'test_bjorn'
+class Cart(JobCommand):
+    '''Cart jobs depend on Horse jobs.'''
+    commandname = 'test_cart'
     
     def postprocess(self):
-        print "Bjorn ran."
+        print "Cart ran."
         return self.job
