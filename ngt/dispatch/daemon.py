@@ -255,7 +255,7 @@ def get_next_job(msgbytes):
         'job_available' : True,
         'uuid' : job.uuid,
         'command' : job.command,
-        'args' : job.arguments or '[]',
+        'args' : job.arguments or [],
         }
     logger.info("Sending job %s to reaper %s (%s)" % (job.uuid[:8], request.reaper_uuid[:8], str(time.time() - t0)))
     job.status = "enqueued"

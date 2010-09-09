@@ -8,7 +8,7 @@ from django.db import transaction
 import os, time, hashlib, datetime
 import uuid
 #import json
-from django_extras.fields import JSONField
+from ngt.django_extras.fields import JSONField
 
 import logging
 logger = logging.getLogger('job_models')
