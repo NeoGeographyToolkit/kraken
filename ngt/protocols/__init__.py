@@ -31,7 +31,8 @@ def pack(msgclass, data):
         field_descriptor = msg.DESCRIPTOR.fields_by_name[k]
         logger.debug("Packing %s (%s)" % (k, field_descriptor.label) )
         if field_descriptor.label == field_descriptor.LABEL_REPEATED:
-            assert hasattr(v, '__iter__')
+            if not hasattr(v, '__iter__'):
+                raise AssertionError("VALUE FOR REPEATED FIELD %s IS NOT AN ITERATOR: %s" % (field_descriptor.name, str(v)))
             field = getattr(msg, k)
             for i in v:
                 field.append(i)

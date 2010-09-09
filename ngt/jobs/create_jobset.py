@@ -1,8 +1,11 @@
 #!/usr/bin/env python2.6
-import sys
+import sys, os
 import optparse
 
-sys.path.insert(0, '../..')
+dirname = os.path.dirname(__file__)
+sys.path.insert(0, os.path.join(dirname, '../..'))
+sys.path.insert(0, os.path.join(dirname, '..'))
+
 from django.core.management import setup_environ
 from ngt import settings
 setup_environ(settings)

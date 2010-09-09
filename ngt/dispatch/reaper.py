@@ -20,12 +20,6 @@ import logging
 #logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 #logging.getLogger('messagebus').setLevel(logging.DEBUG)
 
-if os.path.dirname(__file__).strip():
-    COMMAND_PATH = os.path.join(os.path.dirname(__file__), 'commands')
-else:
-    COMMAND_PATH = './commands' 
-print "command path is %s" % COMMAND_PATH
-
 RPC_RETRIES = 3 # number of times to retry on RPC timeouts
 
 class Reaper(object):
@@ -238,12 +232,19 @@ class Reaper(object):
         #self.shutdown()
             
 def init_reaper_commands():
+    if os.path.dirname(__file__).strip():
+        COMMAND_PATH = os.path.join(os.path.dirname(__file__), 'commands')
+    else:
+        COMMAND_PATH = './commands' 
+    print "command path is %s" % COMMAND_PATH
+
     STEREO_BIN_PATH='/big/software/stereopipeline/bin'
     VW_BIN_PATH='/big/software/visionworkbench/bin'
+    TEST_COMMAND = os.path.join(COMMAND_PATH, '../../messaging', 'fake_command.py')
     Reaper.commands = {
-        'test': '../messaging/fake_command.py',
-        'test_fjord': '../messaging/fake_command.py',
-        'test_bjorn': '../messaging/fake_command.py',
+        'test': TEST_COMMAND,
+        'test_horse': TEST_COMMAND,
+        'test_cart': TEST_COMMAND,
         'moc-stage': os.path.join(COMMAND_PATH, 'moc_stage.py'), # convert and map-project MOC images
         'scale2int8': os.path.join(COMMAND_PATH, 'scale2int8.py'), 
         'mosaic': '/big/software/visionworkbench/bin/image2plate',

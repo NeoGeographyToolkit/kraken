@@ -67,11 +67,11 @@ class RetryingJobCommand(JobCommand):
     @transaction.commit_on_success
     def postprocess(self):
         if self.job.status == 'failed':
-            if self.job.id in klass.failures:
-                klass.failures[self.job.id] += 1
+            if self.job.id in self.__class__.failures:
+                self.__class__.failures[self.job.id] += 1
             else:
-                klass.failures[self.job.id] = 1
-            if klass.failures[self.job.id] <= klass.max_failures:
+                self.__class__.failures[self.job.id] = 1
+            if self.__class__.failures[self.job.id] <= self.__class__.max_failures:
                 logger.debug("Job %d failed.  Requeueing." % self.job.id)
                 self.job.status = 'requeue'
             else:
@@ -88,7 +88,7 @@ class MipMapCommand(RetryingJobCommand):
 
     def postprocess(self):
         ''' All MipMap failures will be made nonblocking. '''
-        self.job = super(MipMapCommand, klass).postprocess(self.job)
+        self.job = super(MipMapCommand, self).postprocess(self.job)
         if self.job.status == 'failed':
             self.job.status = 'failed_nonblocking'
 
@@ -295,10 +295,10 @@ class Horse(JobCommand):
         ''' Be ready 10% of the time. '''
         import random
         if random.randint(0,9) == 0:
-            logger.debug("%s:%s is ready to run." % (klass.name, self.job.uuid[:8]))
+            logger.debug("%s:%s is ready to run." % (self.commandname, self.job.uuid[:8]))
             return True
         else:
-            logger.debug("%s:%s is not ready to run yet." % (klass.name, self.job.uuid[:8]))
+            logger.debug("%s:%s is not ready to run yet." % (self.commandname, self.job.uuid[:8]))
             return False
         
         
