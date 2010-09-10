@@ -150,11 +150,21 @@ class Job(models.Model):
             return "<Job: new>"
     
     def wrapped(self):
-        if self.command in jobcommand_map:
-            jobcommand_class = jobcommand_map[self.command]
-            return jobcommand_class(self)
-        else:
-            raise Exception("No JobCommand subclass found for command %s" % self.command)
+        '''
+            Returns an instance of the JobCommand subclass appropriate to this Job.
+            The JobCommand subclasses define behavior specific to a class of jobs, such as pre/post processing behaviors.
+            Kraken uses the "command" property of the job to match the appropriate JobCommand subclass.
+
+            The first time you call wrapped() on a particualr job, it will instantiate the JobCommand, then cache it as a private property of the job.
+            Subsequent calls to this method will retrieve that cached copy, to avoid object creation overhead.
+        '''
+        if not getattr(self, '_jobcommand', None):
+            if self.command in jobcommand_map:
+                jobcommand_class = jobcommand_map[self.command]
+                self._jobcommand = jobcommand_class(self)
+            else:
+                raise Exception("No JobCommand subclass found for command %s" % self.command)
+        return self._jobcommand
 
     @property
     def command_string(self):
