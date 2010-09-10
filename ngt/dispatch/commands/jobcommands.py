@@ -283,12 +283,13 @@ class Horse(JobCommand):
     commandname = 'test_horse'
     
     def postprocess(self):
-        print "Horse ran."
+        logger.info( "Horse %d ran." % self.id )
         return self.job
         
     def preprocess(self):
         import time
         time.sleep(1)
+        logger.info( "About to run Horse %d." % self.id )
         return self.job
         
     def check_readiness(self):
