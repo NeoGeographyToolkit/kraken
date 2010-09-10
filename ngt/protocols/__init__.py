@@ -24,20 +24,16 @@ def pack(msgclass, data):
     """
     msg = msgclass()
     for k, v in data.items():
-        try:
-            assert hasattr(msg, k)
-        except:
-            raise AttributeError("%s doesn't have an attribute named %s." % (str(msgclass), k))
+        assert hasattr(msg, k), "Message with class %s doesn't have an attribute named %s." % (str(msgclass), k)
         field_descriptor = msg.DESCRIPTOR.fields_by_name[k]
         logger.debug("Packing %s (%s)" % (k, field_descriptor.label) )
         if field_descriptor.label == field_descriptor.LABEL_REPEATED:
-            if not hasattr(v, '__iter__'):
-                raise AssertionError("VALUE FOR REPEATED FIELD %s IS NOT AN ITERATOR: %s" % (field_descriptor.name, str(v)))
+            assert hasattr(v, '__iter__'), "VALUE FOR REPEATED FIELD %s IS NOT AN ITERATOR: %s" % (field_descriptor.name, str(v))
             field = getattr(msg, k)
             for i in v:
                 field.append(i)
         else:
-            assert field_descriptor.label in [field_descriptor.LABEL_OPTIONAL, field_descriptor.LABEL_REQUIRED]
+            assert field_descriptor.label in [field_descriptor.LABEL_OPTIONAL, field_descriptor.LABEL_REQUIRED], "Field descriptor type not in (REPEATED, OPTIONAL, REQUIRED)."
             setattr(msg, k, v)
     assert msg.IsInitialized
     logger.debug("PACK %s --> %s" % (str(data), str(msg.SerializeToString())[:80]))
