@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import optparse
 sys.path.insert(0, '..')
 from ngt.dispatch.services import DispatchService
-#logging.getLogger('amqprpc').setLevel(logging.INFO)
+logging.getLogger('amqprpc').setLevel(logging.WARNING)
 
 print "init"
 
