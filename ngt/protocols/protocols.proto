@@ -47,6 +47,7 @@ message IndexTransactionFailed {
 message ReaperRegistrationRequest{
     required string reaper_uuid = 1;
     optional string reaper_type = 2 [default = "generic"];
+    optional string hostname = 3;
 }
 
 message ReaperUnregistrationRequest{
@@ -93,12 +94,6 @@ service DispatchCommandService{
 // #####
 // # Reaper Control Service
 // #####
-
-message ReaperCommandRequest{
-    optional string reaper_uuid = 1;  // id of the entity meant to execute the command.
-    optional string command = 2;
-    repeated string args = 3;
-}
 
 message ReaperStatusRequest {
     //required string reaper_uuid = 1;

@@ -16,11 +16,11 @@ class Tracker(object):
     Tracks the progress of a given iterator.
     """
     def __init__(self, 
-        name="TRACKER", 
-        report_every=1, 
-        target=None, 
         iter=None, 
+        report_every=1,
+        target=None, 
         progress=False,
+        name="TRACKER", 
         output_to=sys.stderr
     ):
 
@@ -29,7 +29,9 @@ class Tracker(object):
         self.name = name
         self.iter = iter.__iter__() if iter != None else None
         if not target and iter and hasattr(iter, '__len__'):
-            self.target = len(iter)
+            self.target = len(iter) or None
+        elif not target and iter and hasattr(iter, 'count') and callable(iter.count):
+            self.target = iter.count() or None # django querysets use count() instead of __len__
         else:
             self.target = target
         self.progress = progress
@@ -43,9 +45,9 @@ class Tracker(object):
     def _report_spew(self):
         if self.target:
             remaining = (datetime.now() - self.starttime) / self.count * (self.target - self.count)
-            self.output_stream.write( "%s: %d of %d done. (%s remaining)\n" % (self.name, self.count, self.target, str(remaining)) )
+            self.output_stream.write( "\r%s: %d of %d done. (%s remaining)\n" % (self.name, self.count, self.target, str(remaining)) )
         else:
-            self.output_stream.write( "%s: %d done. (%s)\n" % (self.name, self.count, str(datetime.now() - self.starttime) ) )
+            self.output_stream.write( "\r%s: %d done. (%s)\n" % (self.name, self.count, str(datetime.now() - self.starttime) ) )
             
     def _report_bar(self):
         scale = 80
@@ -76,13 +78,25 @@ class Tracker(object):
     def __iter__(self):
         return self
         
-        
+class Progress(Tracker):
+    ''' 
+        A progress bar that's basically just an alias for Tracker
+        Initialize with Tracker(iterator), then just iterate over it.
+    '''
+
+    def __init__(self, *args, **kwargs):
+        kwargs['progress'] = True
+        Tracker.__init__(self, *args, **kwargs)       
 
 def test():
-    "Just a quick fuctional test."
+    "Just a quick functional test."
     import time
     t=Tracker(target=1000, iter=range(1000), progress=True)
     for i in t:
+        time.sleep(0.005)
+    
+    p = Progress(range(1000))
+    for i in p:
         time.sleep(0.005)
 
 

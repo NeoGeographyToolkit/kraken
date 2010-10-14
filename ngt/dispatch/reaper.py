@@ -15,55 +15,33 @@ from amqplib.client_0_8.basic_message import Message
 from messaging.amq_config import connection_params, which
 from messaging.messagebus import MessageBus, ConsumptionThread
 from threading import Event
-#import signal
 
 import logging
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+#logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 #logging.getLogger('messagebus').setLevel(logging.DEBUG)
-
-if os.path.dirname(__file__).strip():
-    COMMAND_PATH = os.path.join(os.path.dirname(__file__), 'commands')
-else:
-    COMMAND_PATH = './commands' 
-print "command path is %s" % COMMAND_PATH
 
 RPC_RETRIES = 3 # number of times to retry on RPC timeouts
 
 class Reaper(object):
 
-    commands = {
-        'test': '../messaging/fake_command.py',
-        'test_fjord': '../messaging/fake_command.py',
-        'test_bjorn': '../messaging/fake_command.py',
-        'moc-stage': os.path.join(COMMAND_PATH, 'moc_stage.py'), # convert and map-project MOC images
-        'scale2int8': os.path.join(COMMAND_PATH, 'scale2int8.py'), 
-        'mosaic': '/big/software/visionworkbench/bin/image2plate',
-        'mipmap': '/big/software/visionworkbench/bin/image2plate',
-        'snapshot': '/big/software/visionworkbench/bin/snapshot',
-        'start_snapshot': '/big/software/visionworkbench/bin/snapshot',
-        'end_snapshot': '/big/software/visionworkbench/bin/snapshot',
-#        'mipmap': '/big/scratch/logargs.py image2plate',
-#        'snapshot': '/big/scratch/logargs.py snapshot',
-#        'start_snapshot': '/big/scratch/logargs.py start_snapshot',
-#        'end_snapshot': '/big/scratch/logargs.py end_snapshot',
-    }
-    JOB_POLL_INTERVAL = 1 #seconds
-
+    JOB_POLL_INTERVAL = 10 #seconds
 
     REAPER_TYPE = 'generic'
     CONTROL_EXCHANGE_NAME = 'Control_Exchange'
+    commands = {}
 
 
-    def __init__(self):
+    def __init__(self, job_poll_interval = 10):
         self.reaper_id = uuid.uuid1().hex
         self.messagebus = MessageBus()
         self.chan = self.messagebus.channel
         self.is_registered = None
         
-        self.CONTROL_QUEUE_NAME = "control.reaper.%s" % self.reaper_id
+        self.JOB_POLL_INTERVAL = job_poll_interval
+        self.CONTROL_QUEUE_NAME = "rpc.reaper.%s" % self.reaper_id
         self.REPLY_QUEUE_NAME = "reply.reaper.%s" % self.reaper_id # queue for RPC responses
         self.logger = logging.getLogger('reaper.%s' % self.reaper_id)
-        self.logger.setLevel(logging.DEBUG)
+        #self.logger.setLevel(logging.DEBUG)
         
 
         # Accept control commands via the control exchange:
@@ -83,43 +61,59 @@ class Reaper(object):
      
     def job_request_loop(self):
         job = None
-        while True:
-            if self.shutdown_event.is_set():
-                break
+        while not self.shutdown_event.is_set():
             if self.is_registered:
                 self.logger.debug("Requesting job.")
                 job = self.dispatch.get_a_job(self.reaper_id)
                 self.logger.debug("Job request returned.")
-            if job:
-                if job.command in self.commands:  # only commands allowed by the configuration will be executed
-                    args = self.commands[job.command].split(' ')  + list(job.args or [])
-                    self.logger.debug("ARGS: %s" % str(args))
-                    self.logger.info("Executing %s" % ' '.join(args))
-                    start_time = datetime.utcnow()
-                    p = Popen(args, stdout=PIPE, stderr=STDOUT)
-                    self.dispatch.report_job_start(self.reaper_id, job, p.pid, start_time) # note that "job" here is a Protobuf object
-                    output=""
-                    while True:
-                        line = p.stdout.readline()
-                        if line == '' and p.poll() != None:
-                            break
-                        output += line
-                        sys.stdout.write(line)
-                    resultcode = p.wait()
-                    end_time = datetime.utcnow()
-                    if resultcode == 0:
-                        state = 'complete'
+                if job:
+                    if job.command in self.commands:  # only commands allowed by the configuration will be executed
+                        args = self.commands[job.command].split(' ')  + list(job.args or [])
+                        self.logger.debug("ARGS: %s" % str(args))
+                        self.logger.info("Executing %s" % ' '.join(args))
+                        start_time = datetime.utcnow()
+                        try:
+                            output=""
+                            p = Popen(args, stdout=PIPE, stderr=STDOUT)
+                            self.dispatch.report_job_start(self.reaper_id, job, p.pid, start_time) # note that "job" here is a Protobuf object
+                            while True:
+                                line = p.stdout.readline()
+                                if line == '' and p.poll() != None:
+                                    break
+                                output += line
+                                sys.stdout.write(line)
+                            resultcode = p.wait()
+                        except OSError as oserr:
+                            resultcode = -1
+                            output += "OSError: %s" % oserr.strerror
+                        end_time = datetime.utcnow()
+                        if resultcode == 0:
+                            state = 'complete'
+                        elif resultcode == 129:
+                            state = 'failed_nonblocking'
+                        else:
+                            state = 'failed'
+
+                        if options.max_output_capture >= 0 and len(output) > options.max_output_capture:
+                            halfmax = options.max_output_capture / 2
+                            fill = "\n\n***** OUTPUT TO LONG.  %d CHARACTERS TRUNCATED BY REAPER *****\n\n" % (len(output) - options.max_output_capture)
+                            output = output[:halfmax] + fill + output[-halfmax:]
+
+                        self.logger.info("Job %s: %s" % (job.uuid[:8], state) )
+                        self.dispatch.report_job_end(job, state, end_time, output)
                     else:
-                        state = 'failed'
-                    self.logger.info("Job %s: %s" % (job.uuid[:8], state) )
-                    self.dispatch.report_job_end(job, state, end_time, output)
+                        end_time = datetime.utcnow()
+                        self.logger.error("Command: '%s' not found in amq_config's list of valid commands." % job.command)
+                        self.dispatch.report_job_end(job, 'failed', end_time, "Command: '%s' not found in the list of valid commands for reaper %s" % (job.command, self.reaper_id))
                 else:
-                    end_time = datetime.utcnow()
-                    self.logger.error("Command: '%s' not found in amq_config's list of valid commands." % job.command)
-                    self.dispatch.report_job_end(job, 'failed', end_time, "Command: '%s' not found in the list of valid commands for reaper %s" % (job.command, self.reaper_id))
+                    self.logger.info("No jobs available.")
+                    time.sleep(self.JOB_POLL_INTERVAL)
+                self.logger.debug("Reached end of job loop.")
+                
             else:
-                time.sleep(self.JOB_POLL_INTERVAL)
-            self.logger.debug("Reached end of job loop.")
+                # not registered yet
+                self.logger.debug("Waiting for registration.")
+                sleep(0.1)
     
     
     ####
@@ -128,10 +122,10 @@ class Reaper(object):
     ####
     
     def _rpc_status(self, msg):
-        return protocols.pack(protobuf.ReaperStatusResponse, {'status': 'UP'})
+        return protocols.pack(protobuf.ReaperStatusResponse, {'status': 'OK'})
     
     def _rpc_shutdown(self, msg):
-        response = protocols.pack(protobuf.ReaperStatusResponse, {'status': 'shutting down'})
+        response = protocols.pack(protobuf.ReaperStatusResponse, {'status': 'shutdown'})
         self.shutdown(delay=1)
         return response
     
@@ -142,7 +136,7 @@ class Reaper(object):
     
     def control_command_handler(self, msg, command_map=CONTROL_COMMAND_MAP):
         """ Unpack a message and process commands 
-            Speaks the command protocol.
+            Speaks the RpcRequest protocol.
         """
         self.logger.debug("command_handler got a message.")
         request = protocols.unpack(protobuf.RpcRequestWrapper, msg.body)
@@ -172,8 +166,11 @@ class Reaper(object):
         self.logger.debug("Sent response to a control command (%s)" % request.method)
 
     def register_with_dispatch(self):
+        import socket
+        hostname = socket.gethostname()
+        del socket
         
-        if self.dispatch.register_reaper(self.reaper_id, self.REAPER_TYPE):
+        if self.dispatch.register_reaper(self.reaper_id, self.REAPER_TYPE, hostname=hostname):
             self.logger.info("Registration successful")
             self.is_registered = True
         else:
@@ -194,14 +191,11 @@ class Reaper(object):
             if self.is_registered:
                 self.logger.info("Unregistering with dispatch.")
                 self.unregister_with_dispatch()
+            self.logger.debug("Waiting for job loop to end.")
+            #self.job_loop.exit()
             self.job_loop.join()
-            del self.amqp_rpc_controller
             del self.dispatch
-            del self.dispatch_rpc_channel
-            self.chan.queue_delete(queue=self.CONTROL_QUEUE_NAME, if_unused=False, if_empty=False)
-            self.chan.queue_delete(queue=self.REPLY_QUEUE_NAME)
-            self.chan.connection.close()
-            self.chan.close()
+
 #    def _sig_shutdown(self, signum, frame):
 #        self.logger.info("Got signal. Shutting down.")
 #        self.shutdown()
@@ -211,6 +205,7 @@ class Reaper(object):
             self.logger.info("Registering and launching message handlers...")
             #signal.signal(signal.SIGINT, self._sig_shutdown)   
             
+            # Launch Control Loop
             self.logger.debug("\tcontrol will consume from %s" % self.CONTROL_QUEUE_NAME)
             self.control_listener.set_callback(queue=self.CONTROL_QUEUE_NAME, no_ack=False, callback=self.control_command_handler)
 
@@ -236,7 +231,74 @@ class Reaper(object):
             self.shutdown()
         #self.shutdown()
             
+def init_reaper_commands():
+    if os.path.dirname(__file__).strip():
+        COMMAND_PATH = os.path.join(os.path.dirname(__file__), 'commands')
+    else:
+        COMMAND_PATH = './commands' 
+    print "command path is %s" % COMMAND_PATH
+
+    STEREO_BIN_PATH='/big/software/stereopipeline/bin'
+    VW_BIN_PATH='/big/software/visionworkbench/bin'
+    TEST_COMMAND = os.path.join(COMMAND_PATH, '../../messaging', 'fake_command.py')
+    Reaper.commands = {
+        'test': TEST_COMMAND,
+        'test_horse': TEST_COMMAND,
+        'test_cart': TEST_COMMAND,
+        'moc-stage': os.path.join(COMMAND_PATH, 'moc_stage.py'), # convert and map-project MOC images
+        'scale2int8': os.path.join(COMMAND_PATH, 'scale2int8.py'), 
+        'mosaic': '/big/software/visionworkbench/bin/image2plate',
+        'mipmap': '/big/software/visionworkbench/bin/image2plate',
+        'snapshot': '/big/software/visionworkbench/bin/snapshot',
+        'start_snapshot': '/big/software/visionworkbench/bin/snapshot',
+        'end_snapshot': '/big/software/visionworkbench/bin/snapshot',
+        'moc2plate': os.path.join(COMMAND_PATH, 'moc2plate.py'),
+        'hirise2plate': os.path.join(COMMAND_PATH, 'hirise2plate.py'),
+        'download': os.path.join(COMMAND_PATH, 'download.py'),
+        
+        # LMMP
+        'orthoproject': '/big/software/stereopipeline/scripts/isis.sh /big/software/stereopipeline/bin/orthoproject',
+        'phosolve_prep': os.path.join(COMMAND_PATH, 'phosolve_prep.py'),
+        'phodrg2plate': os.path.join(STEREO_BIN_PATH, 'phodrg2plate'),
+        'pho_mipmap': os.path.join(STEREO_BIN_PATH, 'mipmap'),
+        'phoittime': os.path.join(STEREO_BIN_PATH, 'phoittime'),
+        'phitalbedo': os.path.join(STEREO_BIN_PATH, 'phitalbedo'),
+    }
+    if options.noop:
+        # In noop, mode, we log the invocation, with arguments, but don't actually run the commands.
+        print "Running in no-op mode."
+        noop_commands = {}
+        for k in Reaper.commands.keys():
+            noop_commands[k] = '/big/scratch/logargs.py ' + k
+        Reaper.commands = noop_commands
+        #Reaper.commands.update({
+        #'mipmap': '/big/scratch/logargs.py image2plate',
+        #'moc2plate': '/big/scratch/logargs.py moc2plate',
+        #'hirise2plate': '/big/scratch/logargs.py hirise2plate',
+        #'snapshot': '/big/scratch/logargs.py snapshot',
+        #'start_snapshot': '/big/scratch/logargs.py start_snapshot',
+        #'end_snapshot': '/big/scratch/logargs.py end_snapshot',
+        #})
+
 if __name__ == '__main__':
-    r = Reaper()
+    import optparse
+    global options
+    parser = optparse.OptionParser()
+    parser.add_option('--debug', dest='debug', action='store_true', help="Print debug statements")
+    parser.add_option('--noop', dest='noop', action='store_true', default=False, help='Only pretent to run mipmap and snapshot jobs.')
+    parser.add_option('-i','--poll-interval', action='store', type='float', dest='poll_interval', default=10)
+    parser.add_option('--max-output-capture', action='store', type='int', dest='max_output_capture', default=100000, help='Specify the maximum number of characters to capture from job output (100,000 by default).  Overflow will be truncated from the middle.  To never truncate, set this to -1')  
+    (options, args) = parser.parse_args()
+    del optparse
+    if options.debug:
+        loglevel = logging.DEBUG
+    else:
+        loglevel = logging.INFO
+    print "Log level: " + str(loglevel)
+    logging.basicConfig(stream=sys.stdout, level=loglevel)
+    logging.getLogger('amqprpc').setLevel(loglevel)
+    init_reaper_commands()
+    r = Reaper(job_poll_interval=options.poll_interval)
+    r.logger.setLevel(loglevel)
     r.launch()
 

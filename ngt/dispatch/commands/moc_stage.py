@@ -45,12 +45,13 @@ if __name__ == '__main__':
         sys.exit(1)
     elif len(args) > 1:
         #stage_image(sys.argv[1], output_dir=sys.argv[2])
-        retcode = mocproc(args[0], args[1], map=options.map_projection)
+        outfile = args[1]
     else:
         outfile = DEFAULT_OUTPATH + os.path.splitext(os.path.basename(args[0]))[0] + ".cub"
         #stage_image(sys.argv[1], outfile)
-        retcode = mocproc(sys.argv[1], outfile, map=options.map_projection)
+    retcode = mocproc(sys.argv[1], outfile, map=options.map_projection)
     sys.exit(retcode)
+
 
 
 
