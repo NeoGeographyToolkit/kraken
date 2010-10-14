@@ -7,6 +7,8 @@ import traceback
 
 DEFAULT_TMP_DIR = '/scratch/tmp'
 VALIDITY_THRESHOLD = 0.2
+#EMISSION_ANGLE_THRESHOLD = 20
+EMISSION_ANGLE_THRESHOLD = -1 # emission angle filter disabled
 
 if os.path.dirname(__file__).strip():
     COMMAND_PATH = os.path.abspath(os.path.dirname(__file__))
@@ -118,7 +120,7 @@ def null2lrs(incube, outcube):
     args = [
         'stretch',
         'null=lrs',
-        'hrs=%d' % 2**16 - 1, # doing this to work around an apparent bug in lineeq
+        'hrs=%d' % (2**16 - 1), # doing this to work around an apparent bug in lineeq
         'from=' + incube,
         'to=' + outcube,
     ]
@@ -127,7 +129,7 @@ def null2lrs(incube, outcube):
     finally:
         unlink_if_exists(incube)
 
-def fail_high_emission_angles(file):
+def fail_high_emission_angles(file, emission_angle_threshold=20):
     print "Checking Emission Angle...",
     p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'camstats', 'from='+file, 'linc=100', 'sinc=100' ], stdout=PIPE)
     stats = p.communicate()[0]
@@ -139,7 +141,7 @@ def fail_high_emission_angles(file):
             if (param == 'EmissionAverage'):
                 emission_angle = float(subtokens[1].strip())
                 print "%.3f" % emission_angle
-                if emission_angle >= 20:
+                if emission_angle >= emission_angle_threshold:
                     raise Exception("Emission angle too high (%.3f)" % emission_angle)
                 else:
                     return 0
@@ -296,7 +298,8 @@ def ctx2plate(ctxfile, platefile):
         # Reject useless images
         if get_percent_valid(original_cube) < VALIDITY_THRESHOLD:
             raise Exception("Too many invalid pixels in %s" % original_cube)
-        fail_high_emission_angles(original_cube)
+        if EMISSION_ANGLE_THRESHOLD > 0:
+            fail_high_emission_angles(original_cube, emission_angle_threshold=EMISSION_ANGLE_THRESHOLD)
 
         # PREPROCESS
 		# Let's leave null2lrs out, CTX images are 16 bit, so can't just stretch to 255 at this stage.
