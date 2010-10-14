@@ -3,7 +3,7 @@ from amq_config import connection_params
 import threading, time
 import logging
 logger = logging.getLogger('messagebus')
-logger.setLevel(logging.INFO)
+#logger.setLevel(logging.INFO)
 
 DEFAULT_EXCHANGE = 'amq.direct'
 

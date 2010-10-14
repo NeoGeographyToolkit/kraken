@@ -11,9 +11,14 @@ logger = logging.getLogger('amqprpc')
 logger.setLevel(logging.INFO)
 logger.debug("Testing logger.")
 
+DEFAULT_RPC_EXCHANGE = 'Control_Exchange'
+
 #class SanityError(Exception):
 #    ''' Raise this when things that should never happen happen. '''
 #    pass
+
+class RPCFailure(Exception):
+    pass
 
 class AmqpRpcController(_RpcController):
 
@@ -125,18 +130,21 @@ class RpcChannel(object):
     RpcController controller = rpcImpl.Controller()
     MyService service = MyService_Stub(channel)
     service.MyMethod(controller, request, callback)
+    
+    
   """
-  def __init__(self, exchange, response_queue, request_routing_key, max_retries=0, timeout_ms=5000):
+  def __init__(self, exchange, response_queue, request_routing_key, max_retries=3, timeout_ms=5000):
       self.exchange = exchange
       self.response_queue = response_queue
       self.request_routing_key = request_routing_key
       self.messagebus = MessageBus()
-      self.max_retries = max_retries # maximum number of times to retry on RPC timeout
-      self.timeout_ms = timeout_ms
+      self.max_retries = max_retries # maximum number of times to retry on RPC timeout.  -1 indicates infinite retries
+      self.timeout_ms = timeout_ms # Set to -1 for no timeout
+      
+      self.polling_interval = 0.01 # in seconds
       
       self.sync_sequence_number = 0
       
-      #TODO: Setup exchange & queue
       self.messagebus.exchange_declare(exchange, 'direct')
       #self.messagebus.queue_delete(queue=response_queue) # clear it in case there are backed up messages (EDIT: it *should* autodelete)
       self.messagebus.queue_declare(queue=response_queue, auto_delete=True)
@@ -166,8 +174,18 @@ class RpcChannel(object):
     #print ' '.join([hex(ord(c))[2:] for c in request.SerializeToString()])    
     #print ' '.join([hex(ord(c))[2:] for c in request_wrapper])
     
-    try_again = True
-    while try_again:
+    retries = 0
+    while True: # begin retry loop
+        if self.max_retries > -1 and retries > self.max_retries:
+            rpc_controller.SetFailed("Too many retries. (Max was %d)" % self.max_retries)
+            #if done:
+            #    done(None)
+            
+            # raise RPCFailure("Too many retries")
+            return None # Still not too sure about this whole return None on failure business
+        if retries > 0:
+            logger.info("Retrying (%d)." % retries)
+    
         logger.debug("About to publish to exchange '%s' with key '%s'" % (self.exchange, self.request_routing_key))
         self.messagebus.basic_publish(amqp.Message(wrapped_request_bytes),
                         exchange=self.exchange,
@@ -175,57 +193,72 @@ class RpcChannel(object):
         
         # Wait for a response
         logger.debug("Waiting for a response on queue '%s'" % self.response_queue)
-        response = None
-        retries = 0    
         timeout_flag = False
-        t0 = datetime.now()
-        while not response:
-            delta_t = datetime.now() - t0
-            if delta_t.seconds * 1000 + delta_t.microseconds / 1000 > self.timeout_ms:
-                timeout_flag = True
-                break
-            response = self.messagebus.basic_get(self.response_queue, no_ack=True) # returns a message or None
-            time.sleep(0.01)
-        
-        if timeout_flag:
-            logger.debug("RPC method '%s' timed out," % method_descriptor.name)
-            if retries < self.max_retries:
+        sync_ok = False
+        t0 = time.time()
+        # begin sync loop
+        while not sync_ok:
+            # begin response loop
+            response = None
+            while not response: 
+                delta_t = time.time() - t0
+                if self.timeout_ms >= 0 and delta_t * 1000.0 > self.timeout_ms:
+                    timeout_flag = True
+                    break
+                response = self.messagebus.basic_get(self.response_queue, no_ack=True) # returns a message or None
+                if not response: time.sleep(self.polling_interval) # polling interval
+            # end response loop
+            
+            #self.messagebus.basic_ack(response.delivery_tag)
+            if timeout_flag:
+                logger.warning("RPC method '%s' timed out," % method_descriptor.name)
                 retries += 1
-                logger.debug("Retrying (%d)." % retries)
-                continue # out to try_again loop.  resets timer
-            else:
-                try_again = False
-                rpc_controller.SetTimedOut()
-                if done:
-                    done(None)
-                return None
-        else:
-            logger.info("Got a response in %s" % str(datetime.now() - t0))
-            try_again = False
+                break # from the sync loop out to retry loop.  resets timer
+
+            logger.info("Got a response in %s secs" % str(time.time() - t0))
         
             response_wrapper = protocols.unpack(protocols.RpcResponseWrapper, response.body)
-            if response_wrapper.sequence_number and response_wrapper.sequence_number != self.sync_sequence_number:
-                errtext = "Response out of sequence.  Purging the response queue and retrying"
-                logger.error(errtext)
-                self.messagebus.queue_purge(queue=self.response_queue) # clear the response queue and try again
-                try_again = True
-                continue # out to try_again loop.  resets timer
-            if response_wrapper.error:
-                logger.error("RPC response error: %s" % response_wrapper.error_string)
-                rpc_controller.SetFailed(response_wrapper.error)
-                if done:
-                    done(None)
-                    return None
+            if response_wrapper.sequence_number == self.sync_sequence_number:
+                logger.debug("Sync OK!")
+                sync_ok = True
+                break # from the sync loop
+            else:
+                sync_delta = self.sync_sequence_number - response_wrapper.sequence_number
+                logger.warning("Message sync error.  Sync delta: %d" % sync_delta)
+                logger.debug("Expected %d but got %d" % (self.sync_sequence_number, response_wrapper.sequence_number))
+                if sync_delta > 0:
+                    logger.warning("Trying to catch up.")
+                    t0 = time.time() # reset the timeout clock
+                    continue # to "while not sync_ok"
+                elif sync_delta < 0:
+                    logger.error("The message queue is ahead of us!  Purging.")
+                    purged = self.messagebus.queue_purge(queue=self.response_queue) # clear the response queue and try again
+                    logger.error("Purged %d messages from %s" % (purged, self.response_queue))
+                    time.sleep(0.1)
+                    retries += 1
+                    break
+        #end sync loop
+        if timeout_flag:
+            continue # jump to the top of the retry loop
+        if sync_ok:
+            break # from the retry loop
+                       
+    if response_wrapper.error:
+        logger.error("RPC response error: %s" % response_wrapper.error_string)
+        rpc_controller.SetFailed(response_wrapper.error)
+        #if done:
+        #    done(None)
+        raise RPCFailure("RPC response error: %s" % response_wrapper.error_string)
                 
-        response = protocols.unpack(response_class, response_wrapper.payload)
-        logger.debug("Response is: %s" % str(response))
-        if done:
-            done(response)
-        return response
+    response = protocols.unpack(response_class, response_wrapper.payload)
+    logger.debug("Response is: %s" % str(response))
+    if done:
+        done(response)
+    return response
 
 class AmqpService(object):
     '''
-    A wrapper class that takes care of the business of initialization:
+    Takes care of the business of initialization:
         - Creates an RpcChannel with the given parameters
         - Instantiates a protobuf service of the given class
         - Delegates further attribute access to the Service instance.
@@ -235,12 +268,11 @@ class AmqpService(object):
         pass
         
     def __init__(self, 
-        #pb_service_class=None,
-        amqp_channel=None,
-        exchange='Control_Exchange',
-        request_routing_key=None,
-        reply_queue=None,
-        timeout_ms=5000,
+        amqp_channel=None,              # If None, a new connection & channel will be created.
+        exchange=DEFAULT_RPC_EXCHANGE,
+        request_routing_key=None,       # Required
+        reply_queue=None,               # Required
+        timeout_ms=10000,
         max_retries=3):
         
         self.amqp_channel = amqp_channel or MessageBus().channel
@@ -253,19 +285,35 @@ class AmqpService(object):
             else:
                 raise AmqpService.ParameterMissing("%s is a required parameter." % param)
                 
-        self.rpc_channel = RpcChannel(self.exchange, self.reply_queue, 'dispatch', max_retries=3, timeout_ms=timeout_ms)
-        #self.rpc_service = service_stub_class(self.rpc_channel)
+        self.rpc_channel = RpcChannel(self.exchange, self.reply_queue, self.request_routing_key, max_retries=max_retries, timeout_ms=timeout_ms)
         self.amqp_rpc_controller = AmqpRpcController()
         
+    @property
+    def timed_out(self):
+        return self.amqp_rpc_controller.TimedOut()
+
     def _rpc_failure(self):
         '''Should be called when RPC calls fail (i.e. return value == None)'''
         if self.amqp_rpc_controller.TimedOut():
                 self.logger.error("RPC request timed out.")
         elif self.amqp_rpc_controller.Failed():
                 self.logger.error("Error in RPC: " + str(self.amqp_rpc_controller.ErrorText()))
+                if 'Sync problems' in str(self.amqp_rpc_controller.ErrorText()):
+                    raise Exception("Sync error caused RPC Failure!")
         else:
             assert False # If this happens, we're missing a failure state.
         self.amqp_rpc_controller.Reset()
+        
+    def keep_calling(self, rpc_method, request, done=None):
+        ''' Get a request or die trying. '''
+        response = None
+        while not response:
+            try:
+                response = rpc_method(self.amqp_rpc_controller, request, done)
+            except RPCFailure:
+                self._rpc_failure()
+                time.sleep(0.01)
+        return response
    
     # Delegate other attribute access to protobuf rpc_service instance
     #def __getattr__(self, name):

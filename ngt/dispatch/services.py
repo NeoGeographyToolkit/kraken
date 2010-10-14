@@ -1,24 +1,33 @@
 from ngt import protocols
 from ngt.protocols import rpc_services, protobuf
+from ngt.protocols.rpc_services import RPCFailure
 import logging
+
+d_logger = logging.getLogger('reaper.debug')
+#d_logger.addHandler(logging.FileHandler('reaper.log', 'w'))
+#d_logger.setLevel(logging.DEBUG)
 
 class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_Stub):
     
-    '''
-     AmqpService.__init__:
-     def __init__(self, 
-        pb_service_class=None,
-        amqp_channel=None,
-        exchange='Control_Exchange',
-        request_routing_key=None,
-        reply_queue=None,
-        timeout_ms=5000,
-        max_retries=3):
-    '''
     
-    def __init__(self, **kwargs):
+    #### IMPLEMENTOR REFERENCE ####
+    # AmqpService constructor (* denotes a required argument):
+    # def __init__(self, 
+    #    pb_service_class=None,
+    #    amqp_channel=None,
+    #    exchange='Control_Exchange',
+    #  * request_routing_key=None,
+    #  * reply_queue=None,
+    #    timeout_ms=5000,
+    #    max_retries=3):
+    # 
+    ####
+
+    def __init__(self, *args, **kwargs):
         kwargs['request_routing_key'] = 'dispatch'
-        super(DispatchService, self).__init__(**kwargs)
+        #kwargs['timeout_ms'] = -1 # never timout
+        kwargs['max_retries'] = -1 # retry infinitely
+        super(DispatchService, self).__init__(*args, **kwargs)
         self.logger = logging.getLogger('DispatchService')
         
     
@@ -33,16 +42,17 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
         '''
         request = protobuf.ReaperJobRequest()
         request.reaper_uuid = reaper_id
-        self.logger.debug("Requesting job.")
+        self.logger.info("Requesting job.")
         response = self.getJob(self.amqp_rpc_controller, request, None)
-        if not response:
+        if not response:    
             self._rpc_failure()
             return None
         elif not response.job_available:
-            self.logger.debug("No jobs available.")
+            self.logger.info("No jobs available.")
             return None
         else:
-            self.logger.debug("Got a job: %s" % response.uuid[:8])
+            self.logger.info("Got a job: %s" % response.uuid[:8])
+            d_logger.debug("%s dispatched" % response.uuid[:8])
             return response
             
     def report_job_start(self, reaper_id, job, pid, start_time):
@@ -55,10 +65,9 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
         request.start_time = start_time.isoformat()
         request.pid = pid
         
-        response = self.jobStarted(self.amqp_rpc_controller, request, None)
-        if not response:
-            self._rpc_failure()
-            # TODO: cancel the job?  fail the job? sleep and retry?
+        d_logger.debug("Requesting start: %s" % request.job_id [:8])
+        response = self.keep_calling(self.jobStarted, request)
+
         self.logger.debug("ACK response: %d" % response.ack)
         if response.ack == protobuf.AckResponse.NOACK: 
             # this is bad.  something happened on the server side.  probably invalid job_id
@@ -68,10 +77,10 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
             # TODO: cancel the job when this happens... or retry?
         elif response.ack == protobuf.AckResponse.ACK:
             # We're good!
-            pass
+            return True
             
     def report_job_end(self, job, state, end_time, output):
-        # note that "job" here is a Protobuf object
+        # note that "job" here is a Protobuf object (not a Job instance)
         assert end_time
         request = protobuf.ReaperJobEndRequest()
         request.job_id = job.uuid
@@ -79,11 +88,9 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
         request.end_time = end_time.isoformat()
         request.output = output
         
-        
-        response = self.jobEnded(self.amqp_rpc_controller, request, None)
-        if not response:
-            self._rpc_failure()
-            # TODO: cancel the job?  fail the job? sleep and retry?
+        d_logger.debug("Requesting end: %s" % request.job_id[:8])
+        response = self.keep_calling(self.jobEnded, request)
+
         if response.ack == protobuf.AckResponse.NOACK: 
             # this is bad.  something happened on the server side.  probably invalid job_id
             errorstr = "Got Negative ACK trying to report job end. (job uuid: %s)" % job.uuid
@@ -92,12 +99,14 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
             # TODO: cancel the job when this happens... or retry?
         elif response.ack == protobuf.AckResponse.ACK:
             # We're good!
-            pass
+            return True
             
-    def register_reaper(self, reaper_id, reaper_type):
+    def register_reaper(self, reaper_id, reaper_type, hostname=None):
         request = protobuf.ReaperRegistrationRequest()
         request.reaper_uuid = reaper_id
         request.reaper_type = reaper_type
+        if hostname:
+            request.hostname = hostname
         response = self.registerReaper(self.amqp_rpc_controller, request, None)
         try:
             assert response.ack == 0 # ACK
@@ -118,3 +127,43 @@ class DispatchService(rpc_services.AmqpService, protobuf.DispatchCommandService_
             return True
         except:
             return False
+
+class ReaperService(rpc_services.AmqpService, protobuf.ReaperCommandService_Stub):
+    
+    
+    #### IMPLEMENTOR REFERENCE ####
+    # AmqpService constructor (* denotes a required argument):
+    # def __init__(self, 
+    #    pb_service_class=None,
+    #    amqp_channel=None,
+    #    exchange='Control_Exchange',
+    #  * request_routing_key=None,
+    #  * reply_queue=None,
+    #    timeout_ms=5000,
+    #    max_retries=3):
+    # 
+    ####
+
+    def __init__(self, reaper_uuid, *args, **kwargs):
+        kwargs['request_routing_key'] = "rpc.reaper.%s" % reaper_uuid
+        #kwargs['timeout_ms'] = -1 # never timout
+        kwargs['max_retries'] = 1 
+        super(ReaperService, self).__init__(*args, **kwargs)
+        self.logger = logging.getLogger('DispatchService')
+
+    def get_status(self):
+        request = protobuf.ReaperStatusRequest()
+        response = self.GetStatus(self.amqp_rpc_controller, request, None)
+        if not response:
+            return None
+        else:
+            return response.status
+
+    def shutdown(self, done_callback=None):
+        request = protobuf.ReaperShutdownRequest()
+        response = self.Shutdown(self.amqp_rpc_controller, request, done_callback)
+        if not response:
+            return None
+        else:
+            return response.status
+        pass

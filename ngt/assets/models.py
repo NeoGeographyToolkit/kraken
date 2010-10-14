@@ -20,6 +20,7 @@ class Asset(models.Model):
     
     status = models.TextField(max_length=128, null=True)
     md5_check = models.BooleanField(null=True)
+    has_errors = models.BooleanField(default=False)
     class_label = models.TextField(max_length=512, null=True)
     creator_job = models.ForeignKey('jobs.Job', null=True, related_name='output_assets')
 
