@@ -274,10 +274,23 @@ def image2plate(imagefile, platefile):
 
 
 
-def ctx2plate(ctxfile, platefile):
+import urlparse
+import urllib
+def ctx2plate(ctxurl, platefile):
     '''
     Process a CTX image from its raw form into a platefile.
+    Download the file first, if a remote url is given.
     '''
+    
+    parsed = urlparse.urlparse(ctxurl, 'http')
+    using_tmpfile = False
+    if parsed.netloc:
+        # download the file
+        (ctxfile, headers) = urllib.urlretrieve(parsed.geturl())
+        if ctxfile != ctxurl:
+            using_tmpfile = True # this file will be deleted at the end of the script
+    else:
+        ctxfile = parsed.path
     try:
         assert os.path.exists(ctxfile)
         print "Commencing ctx2plate: %s --> %s" % (ctxfile, platefile)
@@ -308,6 +321,10 @@ def ctx2plate(ctxfile, platefile):
         lineeq(calibrated_cube, lineeq_cube)
         map_project(lineeq_cube, projected_cube)
         stretch2int8(projected_cube, stretched_cube)
+
+        #Delete original tmpfile, if it exists
+        if using_tmpfile:
+            unlink_if_exists(ctxfile)
     except:
         traceback.print_exc()
         return 129 # special status code 129 indicates non-blocking failure
@@ -340,9 +357,9 @@ def main():
         parser.print_help()
         sys.exit(1)
     else:
-        (infile, platefile) = args
+        (input_url, platefile) = args
 
-    retcode = ctx2plate(infile, platefile)    
+    retcode = ctx2plate(input_url, platefile)    
     sys.exit(retcode)
 
 if __name__ == '__main__':
