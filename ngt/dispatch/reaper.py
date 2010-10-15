@@ -254,6 +254,7 @@ def init_reaper_commands():
         'end_snapshot': '/big/software/visionworkbench/bin/snapshot',
         'moc2plate': os.path.join(COMMAND_PATH, 'moc2plate.py'),
         'hirise2plate': os.path.join(COMMAND_PATH, 'hirise2plate.py'),
+        'ctx2plate': os.path.join(COMMAND_PATH, 'ctx2plate.py'),
         'download': os.path.join(COMMAND_PATH, 'download.py'),
         
         # LMMP
