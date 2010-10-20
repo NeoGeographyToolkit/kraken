@@ -484,6 +484,8 @@ def sweep_reapers():
                 if reaper.timeouts >= REAPER_SWEEP_MAX_TIMEOUTS:
                     requeue_reaper_jobs(reaper)
                     reaper.soft_delete()
+                else:
+                    reaper.save()
             except Reaper.DoesNotExist:
                 logger.error("sweep_reapers encountered an unregistered reaper (uuid: %s)" % uuid)
             
