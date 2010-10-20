@@ -105,6 +105,9 @@ class hirise2plateCommand(RetryingJobCommand):
     def build_arguments(self, **kwargs):
         args = "%s %s -t %d" % (kwargs['file_path'], kwargs['platefile'], self.job.transaction_id)
         return args.split(' ')
+
+class ctx2plate(JobCommand):
+    commandname = 'ctx2plate'
         
 class Snapshot(RetryingJobCommand):
     commandname = 'snapshot'
