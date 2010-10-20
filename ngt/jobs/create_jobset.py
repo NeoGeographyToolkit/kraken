@@ -51,7 +51,7 @@ def make_jobset(commandfile_name):
 if __name__ == '__main__':
     global options
     parser = optparse.OptionParser()
-    parser.add_option('--activate', action='store_true', dest='activate', help='Activate the jobset after creation')
+    parser.add_option('-a', '--activate', action='store_true', dest='activate', help='Activate the jobset after creation')
     parser.add_option('-p', '--priority', action='store', dest='priority', type='int', help='Dispatch priority for the new JobSet. (default: 3)')
     parser.set_defaults(activate=False, priority=3, command='generic')
     parser.set_usage("""

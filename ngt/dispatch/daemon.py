@@ -9,6 +9,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 import ngt.protocols as protocols
 from ngt.protocols import protobuf, dotdict, rpc_services
 from ngt.utils.containers import UniquePriorityQueue
+from services import ReaperService
 
 from ngt.messaging import messagebus
 from ngt.messaging.messagebus import MessageBus
@@ -488,6 +489,7 @@ def sweep_reapers():
                     reaper.save()
             except Reaper.DoesNotExist:
                 logger.error("sweep_reapers encountered an unregistered reaper (uuid: %s)" % uuid)
+        del service
             
 
 ###
@@ -574,7 +576,7 @@ if __name__ == '__main__':
             time.sleep(0.01)
 
             if time.time() - reapersweep_t0 > REAPER_SWEEP_INTERVAL:
-                sweep_reapers()
+                #sweep_reapers()
                 reapersweep_t0 = time.time()
 
     except KeyboardInterrupt:
