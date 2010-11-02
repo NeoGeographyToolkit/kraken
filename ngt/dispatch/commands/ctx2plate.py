@@ -28,7 +28,7 @@ def which(command):
 # IMAGE2PLATE = which('image2plate')
 IMAGE2PLATE = 'image2plate'
 
-def isis_run(args, message=None, pretend=None, display=None):
+def isis_run(args, message=None, pretend=None, display=True):
     ''' 
         Execute the specified ISIS command and return it's exit status. 
         Use the isis.sh wrapper script to set the correct environment 
@@ -268,11 +268,45 @@ def image2plate(imagefile, platefile):
     cmd += ('--file-type auto -o', platefile, imagefile)
     cmd = ' '.join(cmd)
 
+    print cmd
     exit_status = execute(cmd, pretend=not options.write_to_plate)
     if exit_status != 0:
         raise Exception("image2plate failed!")
 
+def reduce(infile, outfile, percent):
+    scalefactor_inverse = 1/(percent/100.00)
+    scalestr = "%1.6f" % scalefactor_inverse
+    args = (
+        'reduce',
+        'from='+infile,
+        'to='+outfile,
+        'reduction_type=SCALE',
+        'sscale='+scalestr,
+        'lscale='+scalestr,
+    )
+    try:
+        retcode = isis_run(args, message="Scaling to %d percent." % percent)
 
+    finally:
+        unlink_if_exists(infile)
+
+
+def dl_report(nblocks, blocksize, totalsize):
+    sys.stdout.write("\r%d of %d blocks transferred" % (nblocks, totalsize / blocksize))
+    sys.stdout.flush()
+
+def download(parsed, retries=2):
+    print "Downloading: "+parsed.geturl()
+    destfile = os.path.join(options.tmpdir, parsed.path.split('/')[-1])
+    try:
+        (ctxfile, headers) = urllib.urlretrieve(parsed.geturl(), destfile, reporthook=dl_report)
+    except:
+        if retries < 1:
+            raise
+        return download(parsed, retries - 1)
+    print "\n"
+    return ctxfile
+    
 
 import urlparse
 import urllib
@@ -286,7 +320,7 @@ def ctx2plate(ctxurl, platefile):
     using_tmpfile = False
     if parsed.netloc:
         # download the file
-        (ctxfile, headers) = urllib.urlretrieve(parsed.geturl())
+        ctxfile = download(parsed)
         if ctxfile != ctxurl:
             using_tmpfile = True # this file will be deleted at the end of the script
     else:
@@ -298,6 +332,7 @@ def ctx2plate(ctxurl, platefile):
         # intermediate filenames
         imgname = os.path.splitext(os.path.basename(ctxfile))[0]
         original_cube =  os.path.join(options.tmpdir, imgname+'.cub')
+        reduced_cube = os.path.join(options.tmpdir, 'reduced_'+imgname+'.cub')
         nonull_cube = os.path.join(options.tmpdir, 'nonull_'+imgname+'.cub')
         calibrated_cube = os.path.join(options.tmpdir, 'calibrated_'+imgname+'.cub')
         lineeq_cube = os.path.join(options.tmpdir, 'lineeq_'+imgname+'.cub')
@@ -308,15 +343,23 @@ def ctx2plate(ctxurl, platefile):
         ctx2isis(ctxfile, original_cube)
         spiceinit(os.path.join(options.tmpdir, original_cube))
 
+
         # Reject useless images
         if get_percent_valid(original_cube) < VALIDITY_THRESHOLD:
             raise Exception("Too many invalid pixels in %s" % original_cube)
         if EMISSION_ANGLE_THRESHOLD > 0:
             fail_high_emission_angles(original_cube, emission_angle_threshold=EMISSION_ANGLE_THRESHOLD)
 
+        # DOWNSAMPLE
+        if options.downsample < 100:
+            reduce(original_cube, reduced_cube, options.downsample)
+            unlink_if_exists(original_cube)
+        else:
+            reduced_cube = original_cube # skip downsampling
+        
         # PREPROCESS
 		# Let's leave null2lrs out, CTX images are 16 bit, so can't just stretch to 255 at this stage.
-        null2lrs(original_cube, nonull_cube)
+        null2lrs(reduced_cube, nonull_cube)
         calibrate(nonull_cube, calibrated_cube)
         lineeq(calibrated_cube, lineeq_cube)
         map_project(lineeq_cube, projected_cube)
@@ -350,8 +393,9 @@ def main():
     parser.add_option('--preserve', '-p', dest='delete_files', action='store_false', help="Don't delete the intermediate files.")
     parser.add_option('--noplate', dest='write_to_plate', action='store_false', help="Like --dry-run, except run everything but image2plate")
     parser.add_option('--dry-run', dest='dry_run', action='store_true', help='Print the commands to be run without actually running them') # NOTE: --dry-run will always throw errors, because we can't use the isis tools to pull values and stats from intermediate files that don't exist!
+    parser.add_option('--downsample', dest='downsample', action='store', type='int', help="Percentage to downsample (as integer)")
     parser.add_option('-v', '--verbose', dest='verbose', action='store_true', help='More output!')
-    parser.set_defaults(tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True, dry_run=False, verbose=False)
+    parser.set_defaults(tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True, dry_run=False, verbose=False, downsample=100)
     (options, args) = parser.parse_args()
     if len(args) != 2:
         parser.print_help()
