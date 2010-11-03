@@ -172,9 +172,9 @@ def calibrate(incube, outcube):
         unlink_if_exists(ctxcalcube)
         unlink_if_exists(incube)
 
-def lineeq(incube, outcube):
+def cubenorm(incube, outcube):
     try:
-        isis_run(('lineeq', 'from='+incube, 'to='+outcube), message="Running lineeq.")
+        isis_run(('cubenorm', 'from='+incube, 'to='+outcube), message="Running cubenorm.")
     finally:
         unlink_if_exists(incube)
 
@@ -335,7 +335,7 @@ def ctx2plate(ctxurl, platefile):
         reduced_cube = os.path.join(options.tmpdir, 'reduced_'+imgname+'.cub')
         nonull_cube = os.path.join(options.tmpdir, 'nonull_'+imgname+'.cub')
         calibrated_cube = os.path.join(options.tmpdir, 'calibrated_'+imgname+'.cub')
-        lineeq_cube = os.path.join(options.tmpdir, 'lineeq_'+imgname+'.cub')
+        norm_cube = os.path.join(options.tmpdir, 'norm_'+imgname+'.cub')
         projected_cube = os.path.join(options.tmpdir, 'projected_'+imgname+'.cub')
         stretched_cube = os.path.join(options.tmpdir, 'stretched_'+imgname+'.cub')
 
@@ -349,20 +349,23 @@ def ctx2plate(ctxurl, platefile):
             raise Exception("Too many invalid pixels in %s" % original_cube)
         if EMISSION_ANGLE_THRESHOLD > 0:
             fail_high_emission_angles(original_cube, emission_angle_threshold=EMISSION_ANGLE_THRESHOLD)
+        ###
+        # PREPROCESS
+        ###
+
+		# Let's leave null2lrs out, CTX images are 16 bit, so can't just stretch to 255 at this stage.
+        null2lrs(original_cube, nonull_cube)
+        calibrate(nonull_cube, calibrated_cube)
 
         # DOWNSAMPLE
         if options.downsample < 100:
-            reduce(original_cube, reduced_cube, options.downsample)
-            unlink_if_exists(original_cube)
+            reduce(calibrated_cube, reduced_cube, options.downsample)
+            unlink_if_exists(calibrated_cube)
         else:
-            reduced_cube = original_cube # skip downsampling
+            reduced_cube = calibrated_cube # skip downsampling
         
-        # PREPROCESS
-		# Let's leave null2lrs out, CTX images are 16 bit, so can't just stretch to 255 at this stage.
-        null2lrs(reduced_cube, nonull_cube)
-        calibrate(nonull_cube, calibrated_cube)
-        lineeq(calibrated_cube, lineeq_cube)
-        map_project(lineeq_cube, projected_cube)
+        cubenorm(reduced_cube, norm_cube)
+        map_project(norm_cube, projected_cube)
         stretch2int8(projected_cube, stretched_cube)
 
         #Delete original tmpfile, if it exists
