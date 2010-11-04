@@ -6,6 +6,7 @@ import shlex
 import traceback
 
 DEFAULT_TMP_DIR = '/scratch/tmp'
+DEFAULT_CACHE_DIR = '/big/scratch/ctxcache'
 VALIDITY_THRESHOLD = 0.2
 #EMISSION_ANGLE_THRESHOLD = 20
 EMISSION_ANGLE_THRESHOLD = -1 # emission angle filter disabled
@@ -295,15 +296,14 @@ def dl_report(nblocks, blocksize, totalsize):
     sys.stdout.write("\r%d of %d blocks transferred" % (nblocks, totalsize / blocksize))
     sys.stdout.flush()
 
-def download(parsed, retries=2):
-    print "Downloading: "+parsed.geturl()
-    destfile = os.path.join(options.tmpdir, parsed.path.split('/')[-1])
+def download(parsed_url, destfile, retries=2):
+    print "Downloading: "+parsed_url.geturl()
     try:
-        (ctxfile, headers) = urllib.urlretrieve(parsed.geturl(), destfile, reporthook=dl_report)
+        (ctxfile, headers) = urllib.urlretrieve(parsed_url.geturl(), destfile, reporthook=dl_report)
     except:
         if retries < 1:
             raise
-        return download(parsed, retries - 1)
+        return download(parsed_url, retries - 1)
     print "\n"
     return ctxfile
     
@@ -316,28 +316,39 @@ def ctx2plate(ctxurl, platefile):
     Download the file first, if a remote url is given.
     '''
     
-    parsed = urlparse.urlparse(ctxurl, 'http')
+    parsed_url= urlparse.urlparse(ctxurl, 'http')
+    destfile = os.path.join(options.tmpdir, parsed_url.path.split('/')[-1])
+    # intermediate filenames
+    imgname = os.path.splitext(os.path.basename(destfile))[0]
+    original_cube =  os.path.join(options.tmpdir, imgname+'.cub')
+    reduced_cube = os.path.join(options.tmpdir, 'reduced_'+imgname+'.cub')
+    nonull_cube = os.path.join(options.tmpdir, 'nonull_'+imgname+'.cub')
+    calibrated_cube = os.path.join(options.tmpdir, 'calibrated_'+imgname+'.cub')
+    norm_cube = os.path.join(options.tmpdir, 'norm_'+imgname+'.cub')
+    projected_cube = os.path.join(options.tmpdir, 'projected_'+imgname+'.cub')
+    stretched_cube = os.path.join(options.cachedir, 'stretched_'+imgname+'.cub') ### NOTE: This file gets saved to a different location
+
+    if os.path.exists(stretched_cube):
+        # Shortcut preprocessing and add the stretched cube to plate
+        print "File %s already exists!  Skipping preprocessing and running img2plate." % stretched_cube
+        if options.write_to_plate and not options.dry_run:
+            image2plate(stretched_cube, platefile)
+        else:
+            print "DRY RUN.  %s would be added to %s" % (stretched_cube, platefile)
+        print "ctx2plate completed."
+        return 0
+
     using_tmpfile = False
-    if parsed.netloc:
+    if parsed_url.netloc:
         # download the file
-        ctxfile = download(parsed)
-        if ctxfile != ctxurl:
+        ctxfile = download(parsed_url, destfile)
+        if ctxfile != ctxurl: # implies we were given a remote URL rather than a local file path
             using_tmpfile = True # this file will be deleted at the end of the script
     else:
-        ctxfile = parsed.path
+        ctxfile = parsed_url.path
     try:
         assert os.path.exists(ctxfile)
         print "Commencing ctx2plate: %s --> %s" % (ctxfile, platefile)
-
-        # intermediate filenames
-        imgname = os.path.splitext(os.path.basename(ctxfile))[0]
-        original_cube =  os.path.join(options.tmpdir, imgname+'.cub')
-        reduced_cube = os.path.join(options.tmpdir, 'reduced_'+imgname+'.cub')
-        nonull_cube = os.path.join(options.tmpdir, 'nonull_'+imgname+'.cub')
-        calibrated_cube = os.path.join(options.tmpdir, 'calibrated_'+imgname+'.cub')
-        norm_cube = os.path.join(options.tmpdir, 'norm_'+imgname+'.cub')
-        projected_cube = os.path.join(options.tmpdir, 'projected_'+imgname+'.cub')
-        stretched_cube = os.path.join(options.tmpdir, 'stretched_'+imgname+'.cub')
 
         # ISIS INGESTION
         ctx2isis(ctxfile, original_cube)
@@ -380,7 +391,9 @@ def ctx2plate(ctxurl, platefile):
         try:
             image2plate(stretched_cube, platefile)
         finally:
-            unlink_if_exists(stretched_cube)
+            ### stretched_cube files are left on the drive for now ###
+            #unlink_if_exists(stretched_cube)
+            pass
     else:
         print "DRY RUN.  %s would be added to %s" % (stretched_cube, platefile)
     print "ctx2plate completed."
@@ -392,14 +405,17 @@ def main():
     usage = "%prog sourceimage.img platefile [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('--tmpdir', action='store', dest='tmpdir', help="Where to write intermediate images (default: %s)" % DEFAULT_TMP_DIR)
+    parser.add_option('--cachedir', action='store', dest='cachedir', help="Where to write final (pre-plate) images for caching(default: %s)" % DEFAULT_CACHE_DIR)
     parser.add_option('-t', '--transaction-id', action='store', dest='transaction_id', type='int')
     parser.add_option('--preserve', '-p', dest='delete_files', action='store_false', help="Don't delete the intermediate files.")
     parser.add_option('--noplate', dest='write_to_plate', action='store_false', help="Like --dry-run, except run everything but image2plate")
     parser.add_option('--dry-run', dest='dry_run', action='store_true', help='Print the commands to be run without actually running them') # NOTE: --dry-run will always throw errors, because we can't use the isis tools to pull values and stats from intermediate files that don't exist!
     parser.add_option('--downsample', dest='downsample', action='store', type='int', help="Percentage to downsample (as integer)")
     parser.add_option('-v', '--verbose', dest='verbose', action='store_true', help='More output!')
-    parser.set_defaults(tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True, dry_run=False, verbose=False, downsample=100)
+    parser.set_defaults(cachedir=DEFAULT_CACHE_DIR, tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True, dry_run=False, verbose=False, downsample=100)
     (options, args) = parser.parse_args()
+    if options.tmpdir != DEFAULT_TMP_DIR and options.cachedir == DEFAULT_CACHE_DIR:
+        options.cachedir = options.tmpdir
     if len(args) != 2:
         parser.print_help()
         sys.exit(1)
