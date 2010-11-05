@@ -402,7 +402,7 @@ def ctx2plate(ctxurl, platefile):
 def main():
     global options
     from optparse import OptionParser
-    usage = "%prog sourceimage.img platefile [options]"
+    usage = "%prog source_url platefile [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('--tmpdir', action='store', dest='tmpdir', help="Where to write intermediate images (default: %s)" % DEFAULT_TMP_DIR)
     parser.add_option('--cachedir', action='store', dest='cachedir', help="Where to write final (pre-plate) images for caching(default: %s)" % DEFAULT_CACHE_DIR)
