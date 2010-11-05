@@ -106,8 +106,18 @@ class hirise2plateCommand(RetryingJobCommand):
         args = "%s %s -t %d" % (kwargs['file_path'], kwargs['platefile'], self.job.transaction_id)
         return args.split(' ')
 
-class ctx2plate(JobCommand):
+class ctx2plateCommand(JobCommand):
     commandname = 'ctx2plate'
+
+    def build_arguments(self, **kwargs):
+        for keyword in ('url', 'platefile', 'transaction_id'): # required keywords
+            assert keyword in kwargs
+        kwargs = dotdict(kwargs)
+        arguments = [kwargs.url, kwargs.platefile]
+        arguments += ['-t', str(kwargs.transaction_id)]
+        if 'downsample' in kwargs:
+            arguments += ["--downsample="+str(kwargs.downsample)]
+        return arguments
         
 class Snapshot(RetryingJobCommand):
     commandname = 'snapshot'
