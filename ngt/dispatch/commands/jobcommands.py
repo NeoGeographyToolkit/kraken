@@ -115,7 +115,7 @@ class ctx2plateCommand(JobCommand):
         kwargs = dotdict(kwargs)
         arguments = [kwargs.url, kwargs.platefile]
         arguments += ['-t', str(kwargs.transaction_id)]
-        if 'downsample' in kwargs:
+        if 'downsample' in kwargs and kwargs.downsample:
             arguments += ["--downsample="+str(kwargs.downsample)]
         return arguments
         

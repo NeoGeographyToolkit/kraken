@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import sys, os, json
 import csv
+import optparse
 
 sys.path.insert(0, '../..')
 os.environ['DJANGO_SETTINGS_MODULE'] = 'ngt.settings'
@@ -18,7 +19,7 @@ from load_scripts.snapshot.create_jobs import create_snapshot_jobs
 
 
 METADATA_DIR = '/big/sourcedata/mars/ctx/meta'
-PLATEFILE = 'pf://wwt10one/index/test_ctx_v2.plate'
+DEFAULT_PLATEFILE = 'pf://wwt10one/index/test_ctx_default.plate'
 #transaction_id_sequence = Sequence('seq_transaction_id')
 
 def gen_transaction_ids():
@@ -55,7 +56,7 @@ def generate_urls(metadata_dir=METADATA_DIR, baseurl='http://pds-imaging.jpl.nas
         yield url
         
 @transaction.commit_on_success
-def create_mipmap_jobs(n_jobs=None, platefile=PLATEFILE, name=None, downsample=10):
+def create_mipmap_jobs(n_jobs=None, platefile=DEFAULT_PLATEFILE, name=None, downsample=None):
     # where n_jobs is the number of jobs to generate.  Default (None) builds jobs for all assets in the queryset.
     #transaction_id_sequence.setval(1) # reset the transaction_id sequence
     jobset = JobSet()
@@ -66,10 +67,16 @@ def create_mipmap_jobs(n_jobs=None, platefile=PLATEFILE, name=None, downsample=1
     _build_mipmap_jobs(jobset, generate_urls(), platefile, downsample=downsample, n_jobs=n_jobs)
     return jobset
 
-def main(platefile=PLATEFILE, activate=True):
-    mm_jobset = create_mipmap_jobs(platefile=platefile)
-    sn_jobset = create_snapshot_jobs(mmjobset=mm_jobset, platefile=platefile)
-    if activate:
+def main():
+    parser = optparse.OptionParser()
+    parser.add_option('-p', '--platefile', action='store', dest='platefile', help='Platefile URL to which the images should be written (e.g. pf://wwt10one/index/collectible.plate)')
+    parser.add_option('--no-activate', action='store_false', dest='activate', help='Do not activate the new jobsets after creation.')
+    parser.set_defaults(platefile=DEFAULT_PLATEFILE, activate=True)
+    (options, args) = parser.parse_args()
+
+    mm_jobset = create_mipmap_jobs(platefile=options.platefile)
+    sn_jobset = create_snapshot_jobs(mmjobset=mm_jobset, platefile=options.platefile)
+    if options.activate:
         for js in (mm_jobset, sn_jobset):
             JobSet.activate(js)
 
