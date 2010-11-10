@@ -27,7 +27,10 @@ def which(command):
     return path
 
 # IMAGE2PLATE = which('image2plate')
+VW_PATH = '/big/local/visionworkbench/bin'
 IMAGE2PLATE = 'image2plate'
+if os.path.exists(VW_PATH): # We're on the cluster!
+    IMAGE2PLATE = os.path.join(VW_PATH, IMAGE2PLATE)
 
 def isis_run(args, message=None, pretend=None, display=True):
     ''' 
