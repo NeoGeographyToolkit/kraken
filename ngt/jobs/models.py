@@ -64,7 +64,7 @@ class Job(models.Model):
         
     class EnumDescriptor(object):
         '''
-        A sneaky way to use an enum values without 
+        A sneaky way to use enum values without 
         hunting down and changing all the existing code that gets and sets string values.
         '''
         def __init__(self, enum_field_name, enum_class):
