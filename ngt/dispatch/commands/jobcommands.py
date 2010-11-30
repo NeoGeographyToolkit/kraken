@@ -178,7 +178,7 @@ class StartSnapshot(JobCommand):
     @transaction.commit_on_success
     def postprocess(self):
         # get platefile from job arguments
-        pfpattern = re.compile('pf:')
+        pfpattern = re.compile('(pf|amqp|zmq|zmq\+(icp|tcp)):')
         args = shlex.split(str(self.job.command_string))
         platefile = filter(pfpattern.match, args)[0]
 
