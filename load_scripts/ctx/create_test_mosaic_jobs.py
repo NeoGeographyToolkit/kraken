@@ -39,7 +39,7 @@ def _build_mipmap_jobs(jobset, urls, platefile, downsample=None, n_jobs=None):
         job.jobset = jobset
         job.save()
         i += 1
-        if n_jobs and i >= njobs: break
+        if n_jobs and i >= n_jobs: break
     print "Created %d jobs." % i
 
 def generate_urls(metadata_dir=METADATA_DIR, baseurl='http://pds-imaging.jpl.nasa.gov/data/mro/mars_reconnaissance_orbiter/ctx/'):
@@ -70,15 +70,22 @@ def create_mipmap_jobs(n_jobs=None, platefile=DEFAULT_PLATEFILE, name=None, down
 def main():
     parser = optparse.OptionParser()
     parser.add_option('-p', '--platefile', action='store', dest='platefile', help='Platefile URL to which the images should be written (e.g. pf://wwt10one/index/collectible.plate)')
+    parser.add_option('--njobs', action="store", dest="n_jobs", type="int", help="Limit the number of image2plate jobs generated")
     parser.add_option('--no-activate', action='store_false', dest='activate', help='Do not activate the new jobsets after creation.')
-    parser.set_defaults(platefile=DEFAULT_PLATEFILE, activate=True)
+    parser.add_option('--name', action='store', dest='jobset_name', help="Override the default name for the image2plate jobset.")
+    parser.add_option('--no-snapshots', action='store_false', dest='do_snapshots', help="Don't create a snapshot JobSet.")
+    parser.set_defaults(platefile=DEFAULT_PLATEFILE, activate=True, name=None, do_snapshots=True, n_jobs=None)
     (options, args) = parser.parse_args()
 
-    mm_jobset = create_mipmap_jobs(platefile=options.platefile)
-    sn_jobset = create_snapshot_jobs(mmjobset=mm_jobset, platefile=options.platefile)
+    mm_jobset = create_mipmap_jobs(n_jobs=options.n_jobs, platefile=options.platefile, name=options.jobset_name)
+    if options.do_snapshots:
+        sn_jobset = create_snapshot_jobs(mmjobset=mm_jobset, platefile=options.platefile)
+    else:
+        sn_jobset = None
     if options.activate:
         for js in (mm_jobset, sn_jobset):
-            JobSet.activate(js)
+            if js:
+                JobSet.activate(js)
 
 if __name__ == '__main__':
     main()
