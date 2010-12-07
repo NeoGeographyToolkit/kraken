@@ -306,7 +306,7 @@ def download(parsed_url, destfile, retries=2):
     except:
         if retries < 1:
             raise
-        return download(parsed_url, retries - 1)
+        return download(parsed_url, destfile, retries=retries - 1)
     print "\n"
     return ctxfile
     
