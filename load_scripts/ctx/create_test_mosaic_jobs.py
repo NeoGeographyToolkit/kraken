@@ -74,10 +74,11 @@ def main():
     parser.add_option('--no-activate', action='store_false', dest='activate', help='Do not activate the new jobsets after creation.')
     parser.add_option('--name', action='store', dest='jobset_name', help="Override the default name for the image2plate jobset.")
     parser.add_option('--no-snapshots', action='store_false', dest='do_snapshots', help="Don't create a snapshot JobSet.")
-    parser.set_defaults(platefile=DEFAULT_PLATEFILE, activate=True, name=None, do_snapshots=True, n_jobs=None)
+    parser.add_option('--downsample', action='store', type='int', dest='downsample', help="Percentage to downsample during preprocessing.")
+    parser.set_defaults(platefile=DEFAULT_PLATEFILE, activate=True, name=None, do_snapshots=True, n_jobs=None,  downsample=None)
     (options, args) = parser.parse_args()
 
-    mm_jobset = create_mipmap_jobs(n_jobs=options.n_jobs, platefile=options.platefile, name=options.jobset_name)
+    mm_jobset = create_mipmap_jobs(n_jobs=options.n_jobs, platefile=options.platefile, name=options.jobset_name, downsample=options.downsample)
     if options.do_snapshots:
         sn_jobset = create_snapshot_jobs(mmjobset=mm_jobset, platefile=options.platefile)
     else:
