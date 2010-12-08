@@ -270,7 +270,44 @@ class JobSet(models.Model):
             counts[Job.StatusEnum.reverse(row[0])] = row[1]
         return counts
 
-        
+    
+    def stats(self):
+        def total_seconds(td):
+            """ td is a TimeDelta """
+            return (td.microseconds + (td.seconds + td.days * 24 * 3600) * 10**6) / 10**6
+
+        def median(seq_):
+            seq = sorted(seq_)
+            n = len(seq)
+            if n % 2 == 1:
+              return seq[(n+1)/2-1]
+            else:
+              lower = seq[n/2-1]
+              upper = seq[n/2]
+              return (float(lower + upper)) / 2
+
+        def stddev(seq, mean):
+            from math import sqrt
+            sumsq_variance = sum( (val-mean)**2 for val in seq )
+            return sqrt(sumsq_variance / len(seq)-1)
+    
+        n = 0
+        times = []
+        for j in self.jobs.all():
+            if j.ended and j.status == 'complete':
+                n += 1
+                runtime = total_seconds(j.runtime)
+                times.append(runtime)
+        mean = sum(times) / n
+        return {
+            'completed_jobs': n,
+            'min': min(times),
+            'max': max(times),
+            'mean': mean,
+            'std': stddev(times, mean),
+            'median': median(times),
+        }
+
     @transaction.commit_on_success
     def reset(self):
         self.jobs.update(status_enum=Job.StatusEnum.NEW)
