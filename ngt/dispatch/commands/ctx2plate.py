@@ -267,6 +267,7 @@ def stretch2int8(infile, outfile):
 
 def image2plate(imagefile, platefile):
     cmd = [IMAGE2PLATE,]
+    cmd += ('-m', 'equi') # equirectangular projection for GE
     if options.transaction_id:
         cmd += ('-t', str(options.transaction_id))
     cmd += ('--file-type auto -o', platefile, imagefile)
