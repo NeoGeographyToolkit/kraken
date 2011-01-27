@@ -182,6 +182,12 @@ def cubenorm(incube, outcube):
     finally:
         unlink_if_exists(incube)
 
+def histeq(incube, outcube):
+    try:
+        isis_run('histeq', 'from='+incube, 'to='+outcube, message="Running histeq.")
+    finally:
+        unlink_if_exists(incube)
+
 def get_max_camera_latitude(cubefile):
     p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'camrange', 'from='+cubefile ], stdout=PIPE)
     stats = p.communicate()[0]
@@ -329,6 +335,7 @@ def ctx2plate(ctxurl, platefile):
     nonull_cube = os.path.join(options.tmpdir, 'nonull_'+imgname+'.cub')
     calibrated_cube = os.path.join(options.tmpdir, 'calibrated_'+imgname+'.cub')
     norm_cube = os.path.join(options.tmpdir, 'norm_'+imgname+'.cub')
+    histeq_cube = os.path.join(options.tmpdir, 'histeq_'+imgname+'.cub')
     projected_cube = os.path.join(options.tmpdir, 'projected_'+imgname+'.cub')
     stretched_cube = os.path.join(options.cachedir, 'stretched_'+imgname+'.cub') ### NOTE: This file gets saved to a different location
 
@@ -380,7 +387,8 @@ def ctx2plate(ctxurl, platefile):
             reduced_cube = calibrated_cube # skip downsampling
         
         cubenorm(reduced_cube, norm_cube)
-        map_project(norm_cube, projected_cube)
+        histeq(norm_cube, histeq_cube)
+        map_project(histeq_cube, projected_cube)
         stretch2int8(projected_cube, stretched_cube)
 
         #Delete original tmpfile, if it exists
