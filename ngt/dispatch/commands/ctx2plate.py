@@ -184,7 +184,7 @@ def cubenorm(incube, outcube):
 
 def histeq(incube, outcube):
     try:
-        isis_run('histeq', 'from='+incube, 'to='+outcube, message="Running histeq.")
+        isis_run(('histeq', 'from='+incube, 'to='+outcube), message="Running histeq.")
     finally:
         unlink_if_exists(incube)
 
