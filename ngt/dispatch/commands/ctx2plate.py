@@ -4,6 +4,8 @@ import subprocess
 from subprocess import Popen, PIPE
 import shlex
 import traceback
+import urlparse
+import urllib
 
 DEFAULT_TMP_DIR = '/scratch/tmp'
 DEFAULT_CACHE_DIR = '/big/scratch/ctxcache'
@@ -182,6 +184,22 @@ def cubenorm(incube, outcube):
     finally:
         unlink_if_exists(incube)
 
+def histeq(incube, outcube):
+    try:
+        isis_run(('histeq', 'from='+incube, 'to='+outcube), message="Running histeq.")
+    finally:
+        unlink_if_exists(incube)
+
+def mean_norm(incube, outcube):
+    """
+    Clip all values greater than 2 standard deviations from the mean.
+    """
+    (min, max, mean, stdev) = get_stats(incube)
+    new_min = mean - 2*stdev
+    new_max = mean + 2*stdev
+    args = ('stretch', 'from='+incube, 'to='+outcube, 'LRSMIN='+min, 'LRSMAX='+new_min, 'HRSMIN='+new_max, 'HRSMAX='+max)
+    isis_run(args, message="Running mean normalization.")
+
 def get_max_camera_latitude(cubefile):
     p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'camrange', 'from='+cubefile ], stdout=PIPE)
     stats = p.communicate()[0]
@@ -228,8 +246,26 @@ def map_project(incube, outcube):
         unlink_if_exists(incube)
            
 
-def getminmax(file):
-    p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'stats', 'from='+file ], stdout=PIPE)
+#def getminmax(file):
+#    p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'stats', 'from='+file ], stdout=PIPE)
+#    stats = p.communicate()[0]
+#    tokens = stats.split('\n')
+#    minimum = 0.0
+#    maximum = 0.0
+#    for t in tokens:
+#        subtokens = t.split('=')
+#        if (len(subtokens) > 1):
+#            param = subtokens[0].strip()
+#            if (param == "Minimum"):
+#                minimum = float(subtokens[1].strip())
+#            if (param == "Maximum"):
+#                maximum = float(subtokens[1].strip())
+#
+#    print "min: %f\tmax: %f" % (minimum, maximum)
+#    return (minimum, maximum)
+
+def get_stats(incube):
+    p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'stats', 'from='+incube ], stdout=PIPE)
     stats = p.communicate()[0]
     tokens = stats.split('\n')
     minimum = 0.0
@@ -242,13 +278,16 @@ def getminmax(file):
                 minimum = float(subtokens[1].strip())
             if (param == "Maximum"):
                 maximum = float(subtokens[1].strip())
+            if (param == "Average"):
+                mean = float(subtokens[1].strip())
+            if (param == "StandardDeviation"):
+                stdev = float(subtokens[1].strip())
+    return (min, max, mean, stdev)
 
-    print "min: %f\tmax: %f" % (minimum, maximum)
-    return (minimum, maximum)
 
 def stretch2int8(infile, outfile):
      # stretch from=/home/ted/e1501055.cub to=/home/ted/e1501055_8bit.cub+8bit+0:254 pairs="0.092769:1 0.183480:254" null=0 lis=1 lrs=1 his=255 hrs=255 
-    (minval, maxval) = getminmax(infile)
+    (minval, maxval, mean, stdev) = get_stats(infile)
     args = (
         'stretch',
         'from='+infile,
@@ -267,6 +306,7 @@ def stretch2int8(infile, outfile):
 
 def image2plate(imagefile, platefile):
     cmd = [IMAGE2PLATE,]
+    cmd += ('-m', 'equi') # equirectangular projection for GE
     if options.transaction_id:
         cmd += ('-t', str(options.transaction_id))
     cmd += ('--file-type auto -o', platefile, imagefile)
@@ -311,8 +351,6 @@ def download(parsed_url, destfile, retries=2):
     return ctxfile
     
 
-import urlparse
-import urllib
 def ctx2plate(ctxurl, platefile):
     '''
     Process a CTX image from its raw form into a platefile.
@@ -328,6 +366,8 @@ def ctx2plate(ctxurl, platefile):
     nonull_cube = os.path.join(options.tmpdir, 'nonull_'+imgname+'.cub')
     calibrated_cube = os.path.join(options.tmpdir, 'calibrated_'+imgname+'.cub')
     norm_cube = os.path.join(options.tmpdir, 'norm_'+imgname+'.cub')
+    mean_norm_cube = os.path.join(options.tmpdir, 'mean_norm_'+imgname+'.cub')
+    histeq_cube = os.path.join(options.tmpdir, 'histeq_'+imgname+'.cub')
     projected_cube = os.path.join(options.tmpdir, 'projected_'+imgname+'.cub')
     stretched_cube = os.path.join(options.cachedir, 'stretched_'+imgname+'.cub') ### NOTE: This file gets saved to a different location
 
@@ -375,11 +415,23 @@ def ctx2plate(ctxurl, platefile):
         if options.downsample < 100:
             reduce(calibrated_cube, reduced_cube, options.downsample)
             unlink_if_exists(calibrated_cube)
+            working_cube = reduced_cube
         else:
-            reduced_cube = calibrated_cube # skip downsampling
+            working_cube = calibrated_cube # skip downsampling
         
-        cubenorm(reduced_cube, norm_cube)
-        map_project(norm_cube, projected_cube)
+        cubenorm(working_cube, norm_cube)
+        working_cube = norm_cube
+
+        if options.histeq:
+            histeq(norm_cube, histeq_cube)
+            working_cube = histeq_cube
+
+        if options.normalize:
+            mean_normalize(working_cube, mean_norm_cube)
+            working_cube = mean_norm_cube
+
+        map_project(working_cube, projected_cube)
+
         stretch2int8(projected_cube, stretched_cube)
 
         #Delete original tmpfile, if it exists
@@ -414,6 +466,8 @@ def main():
     parser.add_option('--noplate', dest='write_to_plate', action='store_false', help="Like --dry-run, except run everything but image2plate")
     parser.add_option('--dry-run', dest='dry_run', action='store_true', help='Print the commands to be run without actually running them') # NOTE: --dry-run will always throw errors, because we can't use the isis tools to pull values and stats from intermediate files that don't exist!
     parser.add_option('--downsample', dest='downsample', action='store', type='float', help="Percentage to downsample (as float)")
+    parser.add_option('--histeq', dest='histeq', action='store_true', help="Apply histogram equalization", default=False)
+    parser.add_options('--normalize', dest='normalize', action='store_true', default=False, help="Apply normalization by clipping values beyond 2 stds from the mean and stretching.")
     parser.add_option('-v', '--verbose', dest='verbose', action='store_true', help='More output!')
     parser.set_defaults(cachedir=DEFAULT_CACHE_DIR, tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True, dry_run=False, verbose=False, downsample=100)
     (options, args) = parser.parse_args()
@@ -422,8 +476,8 @@ def main():
     if len(args) != 2:
         parser.print_help()
         sys.exit(1)
-    else:
-        (input_url, platefile) = args
+
+    (input_url, platefile) = args
 
     retcode = ctx2plate(input_url, platefile)    
     sys.exit(retcode)
