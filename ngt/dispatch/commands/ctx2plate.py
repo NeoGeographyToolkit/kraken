@@ -190,14 +190,14 @@ def histeq(incube, outcube):
     finally:
         unlink_if_exists(incube)
 
-def mean_norm(incube, outcube):
+def mean_normalize(incube, outcube):
     """
     Clip all values greater than 2 standard deviations from the mean.
     """
-    (min, max, mean, stdev) = get_stats(incube)
+    (old_min, old_max, mean, stdev) = get_stats(incube)
     new_min = mean - 2*stdev
     new_max = mean + 2*stdev
-    args = ('stretch', 'from='+incube, 'to='+outcube, 'LRSMIN='+min, 'LRSMAX='+new_min, 'HRSMIN='+new_max, 'HRSMAX='+max)
+    args = ('specpix', 'from='+incube, 'to='+outcube, 'LRSMIN=%f'%old_min, 'LRSMAX=%f'%new_min, 'HRSMIN=%f'%new_max, 'HRSMAX=%f'%old_max)
     isis_run(args, message="Running mean normalization.")
 
 def get_max_camera_latitude(cubefile):
@@ -282,7 +282,7 @@ def get_stats(incube):
                 mean = float(subtokens[1].strip())
             if (param == "StandardDeviation"):
                 stdev = float(subtokens[1].strip())
-    return (min, max, mean, stdev)
+    return (minimum, maximum, mean, stdev)
 
 
 def stretch2int8(infile, outfile):
@@ -467,7 +467,7 @@ def main():
     parser.add_option('--dry-run', dest='dry_run', action='store_true', help='Print the commands to be run without actually running them') # NOTE: --dry-run will always throw errors, because we can't use the isis tools to pull values and stats from intermediate files that don't exist!
     parser.add_option('--downsample', dest='downsample', action='store', type='float', help="Percentage to downsample (as float)")
     parser.add_option('--histeq', dest='histeq', action='store_true', help="Apply histogram equalization", default=False)
-    parser.add_options('--normalize', dest='normalize', action='store_true', default=False, help="Apply normalization by clipping values beyond 2 stds from the mean and stretching.")
+    parser.add_option('--normalize', dest='normalize', action='store_true', default=False, help="Apply normalization by clipping values beyond 2 stds from the mean.")
     parser.add_option('-v', '--verbose', dest='verbose', action='store_true', help='More output!')
     parser.set_defaults(cachedir=DEFAULT_CACHE_DIR, tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True, dry_run=False, verbose=False, downsample=100)
     (options, args) = parser.parse_args()
