@@ -116,7 +116,9 @@ class ctx2plateCommand(JobCommand):
         arguments = [kwargs.url, kwargs.platefile]
         arguments += ['-t', str(kwargs.transaction_id)]
         if 'downsample' in kwargs and kwargs.downsample:
-            arguments += ["--downsample="+str(kwargs.downsample)]
+            arguments.append( "--downsample="+str(kwargs.downsample) )
+        if 'normalize' in kwargs and kwargs.normalize:
+            arguments.append('--normalize')
         return arguments
         
 class Snapshot(RetryingJobCommand):
