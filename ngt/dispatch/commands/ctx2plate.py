@@ -195,8 +195,8 @@ def mean_normalize(incube, outcube):
     Clip all values greater than 2 standard deviations from the mean.
     """
     (old_min, old_max, mean, stdev) = get_stats(incube)
-    new_min = mean - 2*stdev
-    new_max = mean + 2*stdev
+    new_min = mean - 2.5*stdev
+    new_max = mean + 2.5*stdev
     args = ('specpix', 'from='+incube, 'to='+outcube, 'LRSMIN=%f'%old_min, 'LRSMAX=%f'%new_min, 'HRSMIN=%f'%new_max, 'HRSMAX=%f'%old_max)
     isis_run(args, message="Running mean normalization.")
 
