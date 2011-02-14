@@ -419,16 +419,16 @@ def ctx2plate(ctxurl, platefile):
         else:
             working_cube = calibrated_cube # skip downsampling
         
+        if options.normalize:
+            mean_normalize(working_cube, mean_norm_cube)
+            working_cube = mean_norm_cube
+
         cubenorm(working_cube, norm_cube)
         working_cube = norm_cube
 
         if options.histeq:
             histeq(norm_cube, histeq_cube)
             working_cube = histeq_cube
-
-        if options.normalize:
-            mean_normalize(working_cube, mean_norm_cube)
-            working_cube = mean_norm_cube
 
         map_project(working_cube, projected_cube)
 
