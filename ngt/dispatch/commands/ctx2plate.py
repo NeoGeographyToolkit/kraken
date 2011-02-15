@@ -433,8 +433,9 @@ def ctx2plate(ctxurl, platefile):
         cubenorm(working_cube, norm_cube)
         working_cube = norm_cube
 
-        bandnorm(working_cube, bandnorm_cube)
-        working_cube = bandnorm_cube
+        if options.bandnorm:
+            bandnorm(working_cube, bandnorm_cube)
+            working_cube = bandnorm_cube
 
         if options.histeq:
             histeq(norm_cube, histeq_cube)
@@ -478,6 +479,7 @@ def main():
     parser.add_option('--downsample', dest='downsample', action='store', type='float', help="Percentage to downsample (as float)")
     parser.add_option('--histeq', dest='histeq', action='store_true', help="Apply histogram equalization", default=False)
     parser.add_option('--normalize', dest='normalize', action='store_true', default=False, help="Apply normalization by clipping values beyond 2 stds from the mean.")
+    parser.add_option('--bandnorm', dest='bandnorm', action='store_true', help="Apply ISIS bandnorm tool.", default = False)
     parser.add_option('-v', '--verbose', dest='verbose', action='store_true', help='More output!')
     parser.set_defaults(cachedir=DEFAULT_CACHE_DIR, tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True, dry_run=False, verbose=False, downsample=100)
     (options, args) = parser.parse_args()
