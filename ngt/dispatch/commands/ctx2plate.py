@@ -184,6 +184,12 @@ def cubenorm(incube, outcube):
     finally:
         unlink_if_exists(incube)
 
+def bandnorm(incube, outcube):
+    try:
+        isis_run(('bandnorm', 'from='+incube, 'to='+outcube), message="Running bandnorm.")
+    finally:
+        unlink_if_exists(incube)
+
 def histeq(incube, outcube):
     try:
         isis_run(('histeq', 'from='+incube, 'to='+outcube), message="Running histeq.")
@@ -366,7 +372,8 @@ def ctx2plate(ctxurl, platefile):
     nonull_cube = os.path.join(options.tmpdir, 'nonull_'+imgname+'.cub')
     calibrated_cube = os.path.join(options.tmpdir, 'calibrated_'+imgname+'.cub')
     norm_cube = os.path.join(options.tmpdir, 'norm_'+imgname+'.cub')
-    mean_norm_cube = os.path.join(options.tmpdir, 'mean_norm_'+imgname+'.cub')
+    bandnorm_cube = os.path.join(options.tmpdir, 'bandnorm_'+imgname+'.cub')
+    meannorm_cube = os.path.join(options.tmpdir, 'meannorm_'+imgname+'.cub')
     histeq_cube = os.path.join(options.tmpdir, 'histeq_'+imgname+'.cub')
     projected_cube = os.path.join(options.tmpdir, 'projected_'+imgname+'.cub')
     stretched_cube = os.path.join(options.cachedir, 'stretched_'+imgname+'.cub') ### NOTE: This file gets saved to a different location
@@ -420,11 +427,15 @@ def ctx2plate(ctxurl, platefile):
             working_cube = calibrated_cube # skip downsampling
         
         if options.normalize:
-            mean_normalize(working_cube, mean_norm_cube)
-            working_cube = mean_norm_cube
+            mean_normalize(working_cube, meannorm_cube)
+            working_cube = meannorm_cube
 
         cubenorm(working_cube, norm_cube)
         working_cube = norm_cube
+
+        if options.bandnorm:
+            bandnorm(working_cube, bandnorm_cube)
+            working_cube = bandnorm_cube
 
         if options.histeq:
             histeq(norm_cube, histeq_cube)
@@ -468,6 +479,7 @@ def main():
     parser.add_option('--downsample', dest='downsample', action='store', type='float', help="Percentage to downsample (as float)")
     parser.add_option('--histeq', dest='histeq', action='store_true', help="Apply histogram equalization", default=False)
     parser.add_option('--normalize', dest='normalize', action='store_true', default=False, help="Apply normalization by clipping values beyond 2 stds from the mean.")
+    parser.add_option('--bandnorm', dest='bandnorm', action='store_true', help="Apply ISIS bandnorm tool.", default = False)
     parser.add_option('-v', '--verbose', dest='verbose', action='store_true', help='More output!')
     parser.set_defaults(cachedir=DEFAULT_CACHE_DIR, tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True, dry_run=False, verbose=False, downsample=100)
     (options, args) = parser.parse_args()
