@@ -430,11 +430,11 @@ def ctx2plate(ctxurl, platefile):
             mean_normalize(working_cube, meannorm_cube)
             working_cube = meannorm_cube
 
-        bandnorm(working_cube, bandnorm_cube)
-        working_cube = bandnorm_cube
-
         cubenorm(working_cube, norm_cube)
         working_cube = norm_cube
+
+        bandnorm(working_cube, bandnorm_cube)
+        working_cube = bandnorm_cube
 
         if options.histeq:
             histeq(norm_cube, histeq_cube)
