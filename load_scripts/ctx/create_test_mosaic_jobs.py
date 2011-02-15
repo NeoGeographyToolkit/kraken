@@ -28,14 +28,26 @@ def gen_transaction_ids():
         i += 2
         yield i
 
-def _build_mipmap_jobs(jobset, urls, platefile, downsample=None, n_jobs=None, normalize=False):
+def _build_mipmap_jobs(jobset, urls, platefile, n_jobs=None, options=None):
+    if options:
+        downsample = options.downsample
+        bandnorm = options.bandnorm
+        clipping = options.clipping
+    else:
+        downsample = None
+        bandnorm = False
+        clipping = False
     transaction_ids = gen_transaction_ids()
     i = 0
     for url in Tracker(iter=urls, target=27859, progress=True):
         job = Job()
         job.transaction_id = transaction_ids.next()
         job.command = 'ctx2plate'
-        job.arguments = job.wrapped().build_arguments(url=url, platefile=platefile, transaction_id=job.transaction_id, downsample=downsample, normalize=normalize)
+        job.arguments = job.wrapped().build_arguments(url=url, platefile=platefile, transaction_id=job.transaction_id, downsample=downsample)
+        if bandnorm:
+            job.arguments.append('--bandnorm')
+        if clipping:
+            job.arguments.append('--normalize')
         job.jobset = jobset
         job.save()
         i += 1
@@ -56,7 +68,11 @@ def generate_urls(metadata_dir=METADATA_DIR, baseurl='http://pds-imaging.jpl.nas
         yield url
         
 @transaction.commit_on_success
+<<<<<<< HEAD
 def create_mipmap_jobs(n_jobs=None, platefile=DEFAULT_PLATEFILE, name=None, downsample=None, normalize=False):
+=======
+def create_mipmap_jobs(n_jobs=None, platefile=DEFAULT_PLATEFILE, name=None, options=None):
+>>>>>>> 0496b2c
     # where n_jobs is the number of jobs to generate.  Default (None) builds jobs for all assets in the queryset.
     #transaction_id_sequence.setval(1) # reset the transaction_id sequence
     jobset = JobSet()
@@ -64,7 +80,7 @@ def create_mipmap_jobs(n_jobs=None, platefile=DEFAULT_PLATEFILE, name=None, down
     jobset.command = "ctx2plate"
     jobset.priority = 3
     jobset.save()
-    _build_mipmap_jobs(jobset, generate_urls(), platefile, downsample=downsample, n_jobs=n_jobs, normalize=normalize)
+    _build_mipmap_jobs(jobset, generate_urls(), platefile, n_jobs=n_jobs, options=options)
     return jobset
 
 def main():
@@ -75,11 +91,12 @@ def main():
     parser.add_option('--name', action='store', dest='jobset_name', help="Override the default name for the image2plate jobset.")
     parser.add_option('--no-snapshots', action='store_false', dest='do_snapshots', help="Don't create a snapshot JobSet.")
     parser.add_option('--downsample', action='store', type='int', dest='downsample', help="Percentage to downsample during preprocessing.")
-    parser.add_option('--normalize', action='store_true', dest='normalize', default=False, help="Normalize by clipping out values > 2stds from the mean.")
-    parser.set_defaults(platefile=DEFAULT_PLATEFILE, activate=True, name=None, do_snapshots=True, n_jobs=None,  downsample=None)
+    parser.add_option('--bandnorm', action='store_true', dest='bandnorm', help="Perform ISIS band normalization.")
+    parser.add_option('--clipping', action='store_true', dest='clipping', help="Clip to within 2.5 standard deviations of the mean intensity value")
+    parser.set_defaults(platefile=DEFAULT_PLATEFILE, activate=True, name=None, do_snapshots=True, n_jobs=None,  downsample=None, bandnorm=False)
     (options, args) = parser.parse_args()
 
-    mm_jobset = create_mipmap_jobs(n_jobs=options.n_jobs, platefile=options.platefile, name=options.jobset_name, downsample=options.downsample, normalize=options.normalize)
+    mm_jobset = create_mipmap_jobs(n_jobs=options.n_jobs, platefile=options.platefile, name=options.jobset_name, options=options)
     if options.do_snapshots:
         sn_jobset = create_snapshot_jobs(mmjobset=mm_jobset, platefile=options.platefile)
     else:
