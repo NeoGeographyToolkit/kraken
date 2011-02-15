@@ -184,6 +184,12 @@ def cubenorm(incube, outcube):
     finally:
         unlink_if_exists(incube)
 
+def bandnorm(incube, outcube):
+    try:
+        isis_run(('bandnorm', 'from='+incube, 'to='+outcube), message="Running bandnorm.")
+    finally:
+        unlink_if_exists(incube)
+
 def histeq(incube, outcube):
     try:
         isis_run(('histeq', 'from='+incube, 'to='+outcube), message="Running histeq.")
@@ -366,7 +372,8 @@ def ctx2plate(ctxurl, platefile):
     nonull_cube = os.path.join(options.tmpdir, 'nonull_'+imgname+'.cub')
     calibrated_cube = os.path.join(options.tmpdir, 'calibrated_'+imgname+'.cub')
     norm_cube = os.path.join(options.tmpdir, 'norm_'+imgname+'.cub')
-    mean_norm_cube = os.path.join(options.tmpdir, 'mean_norm_'+imgname+'.cub')
+    bandnorm_cube = os.path.join(options.tmpdir, 'bandnorm_'+imgname+'.cub')
+    meannorm_cube = os.path.join(options.tmpdir, 'meannorm_'+imgname+'.cub')
     histeq_cube = os.path.join(options.tmpdir, 'histeq_'+imgname+'.cub')
     projected_cube = os.path.join(options.tmpdir, 'projected_'+imgname+'.cub')
     stretched_cube = os.path.join(options.cachedir, 'stretched_'+imgname+'.cub') ### NOTE: This file gets saved to a different location
@@ -420,8 +427,11 @@ def ctx2plate(ctxurl, platefile):
             working_cube = calibrated_cube # skip downsampling
         
         if options.normalize:
-            mean_normalize(working_cube, mean_norm_cube)
-            working_cube = mean_norm_cube
+            mean_normalize(working_cube, meannorm_cube)
+            working_cube = meannorm_cube
+
+        bandnorm(working_cube, bandnorm_cube)
+        working_cube = bandnorm_cube
 
         cubenorm(working_cube, norm_cube)
         working_cube = norm_cube
