@@ -36,7 +36,7 @@ def _build_mipmap_jobs(jobset, urls, platefile, n_jobs=None, options=None):
     else:
         downsample = None
         bandnorm = False
-        clipping = False
+        clipping = 0
     transaction_ids = gen_transaction_ids()
     i = 0
     for url in Tracker(iter=urls, target=27859, progress=True):
@@ -46,8 +46,7 @@ def _build_mipmap_jobs(jobset, urls, platefile, n_jobs=None, options=None):
         job.arguments = job.wrapped().build_arguments(url=url, platefile=platefile, transaction_id=job.transaction_id, downsample=downsample)
         if bandnorm:
             job.arguments.append('--bandnorm')
-        if clipping:
-            job.arguments.append('--normalize')
+        job.arguments.append('--clipping', clipping)
         job.jobset = jobset
         job.save()
         i += 1
@@ -68,11 +67,7 @@ def generate_urls(metadata_dir=METADATA_DIR, baseurl='http://pds-imaging.jpl.nas
         yield url
         
 @transaction.commit_on_success
-<<<<<<< HEAD
-def create_mipmap_jobs(n_jobs=None, platefile=DEFAULT_PLATEFILE, name=None, downsample=None, normalize=False):
-=======
 def create_mipmap_jobs(n_jobs=None, platefile=DEFAULT_PLATEFILE, name=None, options=None):
->>>>>>> 0496b2c
     # where n_jobs is the number of jobs to generate.  Default (None) builds jobs for all assets in the queryset.
     #transaction_id_sequence.setval(1) # reset the transaction_id sequence
     jobset = JobSet()
@@ -92,8 +87,8 @@ def main():
     parser.add_option('--no-snapshots', action='store_false', dest='do_snapshots', help="Don't create a snapshot JobSet.")
     parser.add_option('--downsample', action='store', type='int', dest='downsample', help="Percentage to downsample during preprocessing.")
     parser.add_option('--bandnorm', action='store_true', dest='bandnorm', help="Perform ISIS band normalization.")
-    parser.add_option('--clipping', action='store_true', dest='clipping', help="Clip to within 2.5 standard deviations of the mean intensity value")
-    parser.set_defaults(platefile=DEFAULT_PLATEFILE, activate=True, name=None, do_snapshots=True, n_jobs=None,  downsample=None, bandnorm=False)
+    parser.add_option('--clipping', action='store', type='float', dest='clipping', help="Clip to within N standard deviations of the mean intensity value (0 disables)")
+    parser.set_defaults(platefile=DEFAULT_PLATEFILE, activate=True, name=None, do_snapshots=True, n_jobs=None,  downsample=None, bandnorm=False, clipping=2.5)
     (options, args) = parser.parse_args()
 
     mm_jobset = create_mipmap_jobs(n_jobs=options.n_jobs, platefile=options.platefile, name=options.jobset_name, options=options)

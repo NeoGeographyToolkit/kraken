@@ -196,15 +196,15 @@ def histeq(incube, outcube):
     finally:
         unlink_if_exists(incube)
 
-def mean_normalize(incube, outcube):
+def clip_outliers(incube, outcube, n):
     """
-    Clip all values greater than 2 standard deviations from the mean.
+    Clip all values greater than n standard deviations from the mean.
     """
     (old_min, old_max, mean, stdev) = get_stats(incube)
-    new_min = mean - 2.5*stdev
-    new_max = mean + 2.5*stdev
+    new_min = mean - n*stdev
+    new_max = mean + n*stdev
     args = ('specpix', 'from='+incube, 'to='+outcube, 'LRSMIN=%f'%old_min, 'LRSMAX=%f'%new_min, 'HRSMIN=%f'%new_max, 'HRSMAX=%f'%old_max)
-    isis_run(args, message="Running mean normalization.")
+    isis_run(args, message="Clipping outliers.")
 
 def get_max_camera_latitude(cubefile):
     p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'camrange', 'from='+cubefile ], stdout=PIPE)
@@ -373,7 +373,7 @@ def ctx2plate(ctxurl, platefile):
     calibrated_cube = os.path.join(options.tmpdir, 'calibrated_'+imgname+'.cub')
     norm_cube = os.path.join(options.tmpdir, 'norm_'+imgname+'.cub')
     bandnorm_cube = os.path.join(options.tmpdir, 'bandnorm_'+imgname+'.cub')
-    meannorm_cube = os.path.join(options.tmpdir, 'meannorm_'+imgname+'.cub')
+    clipped_cube = os.path.join(options.tmpdir, 'clipped_'+imgname+'.cub')
     histeq_cube = os.path.join(options.tmpdir, 'histeq_'+imgname+'.cub')
     projected_cube = os.path.join(options.tmpdir, 'projected_'+imgname+'.cub')
     stretched_cube = os.path.join(options.cachedir, 'stretched_'+imgname+'.cub') ### NOTE: This file gets saved to a different location
@@ -426,9 +426,9 @@ def ctx2plate(ctxurl, platefile):
         else:
             working_cube = calibrated_cube # skip downsampling
         
-        if options.normalize:
-            mean_normalize(working_cube, meannorm_cube)
-            working_cube = meannorm_cube
+        if options.clipping >= 0:
+            clip_outliers(working_cube, clipped_cube, options.clipping)
+            working_cube = clipped_cube
 
         cubenorm(working_cube, norm_cube)
         working_cube = norm_cube
@@ -478,7 +478,7 @@ def main():
     parser.add_option('--dry-run', dest='dry_run', action='store_true', help='Print the commands to be run without actually running them') # NOTE: --dry-run will always throw errors, because we can't use the isis tools to pull values and stats from intermediate files that don't exist!
     parser.add_option('--downsample', dest='downsample', action='store', type='float', help="Percentage to downsample (as float)")
     parser.add_option('--histeq', dest='histeq', action='store_true', help="Apply histogram equalization", default=False)
-    parser.add_option('--normalize', dest='normalize', action='store_true', default=False, help="Apply normalization by clipping values beyond 2 stds from the mean.")
+    parser.add_option('c', '--clipping', dest='clipping', action='store', type='float', help="Clip intensity values beyond N standard deviations from the mean. 0 disables. (Default: 2.5) ", default=2.5)
     parser.add_option('--bandnorm', dest='bandnorm', action='store_true', help="Apply ISIS bandnorm tool.", default = False)
     parser.add_option('-v', '--verbose', dest='verbose', action='store_true', help='More output!')
     parser.set_defaults(cachedir=DEFAULT_CACHE_DIR, tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True, dry_run=False, verbose=False, downsample=100)
