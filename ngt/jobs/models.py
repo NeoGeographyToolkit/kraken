@@ -333,18 +333,24 @@ class JobSet(models.Model):
             raise ArgumentError("Expected a JobSet or int.")
 
     @classmethod
-    def activate(klass, jobset):
-        js = klass.get(jobset)
-        js.active = True
-        js.save()
-        print "%s activated." % str(js)
+    def activate(klass, jobset_ids):
+        if not hasattr(jobset_ids, '__iter__'):
+            jobset_ids = [jobset_ids]
+        for jobset in jobset_ids:
+            js = klass.get(jobset)
+            js.active = True
+            js.save()
+            print "%s activated." % str(js)
 
     @classmethod
-    def deactivate(klass, jobset):
-        js = klass.get(jobset)
-        js.active = False
-        js.save()
-        print "%s deactivated." % str(js)
+    def deactivate(klass, jobset_ids):
+        if not hasattr(jobset_ids, '__iter__'):
+            jobset_ids = [jobset_ids]
+        for jobset in jobset_ids:
+            js = klass.get(jobset)
+            js.active = False
+            js.save()
+            print "%s deactivated." % str(js)
             
 def active_jobsets():
     jobsets = JobSet.objects.filter(active=True)
