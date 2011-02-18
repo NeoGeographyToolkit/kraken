@@ -48,6 +48,8 @@ def _build_mipmap_jobs(jobset, urls, platefile, n_jobs=None, options=None):
             job.arguments.append('--bandnorm')
         if not options.use_cache:
             job.arguments.append('--nocache')
+        if options.use_percentages:
+            job.arguments.append('--percentages')
         job.arguments.append('--clipping=%f' % clipping)
         job.jobset = jobset
         job.save()
@@ -92,6 +94,7 @@ def main():
     parser.add_option('--clipping', action='store', type='float', dest='clipping', help="Clip to within N standard deviations of the mean intensity value (0 disables)")
     parser.add_option('--nocache', action='store_false', dest='use_cache', help='If there is a cached output cube, reprocess anyway')
     parser.add_option('--use-cache', action='store_true', dest='use_cache', help='Use a cached copy of the preprocessed output, if one exists.')
+    parser.add_option('--percentages', dest='use_percentages', action='store_true', help="Use percentages instead of values for the stretch step (overrides clipping setting)")
     parser.set_defaults(
         platefile = DEFAULT_PLATEFILE, 
         activate = True, 
@@ -101,7 +104,8 @@ def main():
         downsample = None, 
         bandnorm = False, 
         clipping = 3.0, 
-        use_cache = False
+        use_cache = False,
+        use_percentages = False,
     )
     (options, args) = parser.parse_args()
 
