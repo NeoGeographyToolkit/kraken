@@ -281,21 +281,26 @@ def get_stats(incube):
     return (minimum, maximum, mean, stdev)
 
 
-def stretch2int8(infile, outfile, std_deviations=0.0):
+def stretch2int8(infile, outfile, standard_deviations=0.0, use_percentages=False):
     # stretch from=/home/ted/e1501055.cub to=/home/ted/e1501055_8bit.cub+8bit+0:254 pairs="0.092769:1 0.183480:254" null=0 lis=1 lrs=1 his=255 hrs=255
-    (minval, maxval, mean, stdev) = get_stats(infile)
 
-    if (std_deviations > 0.1 ):
-        if (mean-std_deviations*stdev) > minval:
-            minval = mean-std_deviations*stdev
-        if (mean+std_deviations*stdev) < maxval:
-            maxval = mean+std_deviations*stdev
+    if use_percentages:
+        pairs = "0.27:1 50:128 99.73:255"  # an alternative way to cut the tails on the histogram should work faster since it doesn't depend on the stats function.
+        pairs += " USEPERCENTAGES=true"
+    else:
+        (minval, maxval, mean, stdev) = get_stats(infile)
+        if (std_deviations > 0.1 ):
+            if (mean-std_deviations*stdev) > minval:
+                minval = mean-std_deviations*stdev
+            if (mean+std_deviations*stdev) < maxval:
+                maxval = mean+std_deviations*stdev
+        pairs = "%f:1 %f:255" % (minval, maxval)
 
     args = (
         'stretch',
         'from='+infile,
         'to='+outfile+'+8bit+1:255',
-        'pairs=%f:1 %f:255' % (minval, maxval),
+        'pairs='+pairs,
         'null=0',
         'lis=1',
         'lrs=1',
@@ -436,7 +441,7 @@ def ctx2plate(ctxurl, platefile):
 
         map_project(working_cube, projected_cube)
 
-        stretch2int8(projected_cube, stretched_cube, options.clipping)
+        stretch2int8(projected_cube, stretched_cube, standard_deviations=options.clipping, use_percentages=options.use_percentages)
 
         #Delete original tmpfile, if it exists
         if using_tmpfile:
@@ -472,10 +477,25 @@ def main():
     parser.add_option('--dry-run', dest='dry_run', action='store_true', help='Print the commands to be run without actually running them') # NOTE: --dry-run will always throw errors, because we can't use the isis tools to pull values and stats from intermediate files that don't exist!
     parser.add_option('--downsample', dest='downsample', action='store', type='float', help="Percentage to downsample (as float)")
     parser.add_option('--histeq', dest='histeq', action='store_true', help="Apply histogram equalization", default=False)
-    parser.add_option('-c', '--clipping', dest='clipping', action='store', type='float', help="Clip intensity values beyond N standard deviations from the mean. 0 disables. (Default 3)", default=3)
+    parser.add_option('-c', '--clipping', dest='clipping', action='store', type='float', help="Clip intensity values beyond N standard deviations from the mean. 0 disables. (Default 3)")
     parser.add_option('--bandnorm', dest='bandnorm', action='store_true', help="Apply ISIS bandnorm tool.")
+    parser.add_option('--percentages', dest='use_percentages', action='store_true', help="Use percentages instead of values for the stretch step (overrides clipping setting)")
     parser.add_option('-v', '--verbose', dest='verbose', action='store_true', help='More output!')
-    parser.set_defaults(caching=True, cachedir=DEFAULT_CACHE_DIR, tmpdir=DEFAULT_TMP_DIR, transaction_id=None, delete_files=True, write_to_plate=True, dry_run=False, verbose=False, bandnorm=False, downsample=100)
+    parser.set_defaults(
+        caching=True, 
+        cachedir=DEFAULT_CACHE_DIR, 
+        tmpdir=DEFAULT_TMP_DIR, 
+        transaction_id=None, 
+        delete_files=True, 
+        write_to_plate=True, 
+        dry_run=False, 
+        verbose=False, 
+        bandnorm=False, 
+        histeq=False,
+        downsample=100, 
+        clipping=3.0,
+        use_percentages=False,
+    )
     (options, args) = parser.parse_args()
     if options.tmpdir != DEFAULT_TMP_DIR and options.cachedir == DEFAULT_CACHE_DIR:
         options.cachedir = options.tmpdir
