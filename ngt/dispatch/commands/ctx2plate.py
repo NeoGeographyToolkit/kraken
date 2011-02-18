@@ -286,7 +286,6 @@ def stretch2int8(infile, outfile, standard_deviations=0.0, use_percentages=False
 
     if use_percentages:
         pairs = "0.27:1 50:128 99.73:255"  # an alternative way to cut the tails on the histogram should work faster since it doesn't depend on the stats function.
-        pairs += " USEPERCENTAGES=true"
     else:
         (minval, maxval, mean, stdev) = get_stats(infile)
         if (std_deviations > 0.1 ):
@@ -307,6 +306,8 @@ def stretch2int8(infile, outfile, standard_deviations=0.0, use_percentages=False
         'his=255',
         'hrs=255',
         )
+    if use_percentages:
+        args += ('usepercentages=true',)
     try:
         retcode = isis_run(args, message="Converting to int8: %s --> %s" % (infile,outfile))
     finally:
