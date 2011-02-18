@@ -46,7 +46,9 @@ def _build_mipmap_jobs(jobset, urls, platefile, n_jobs=None, options=None):
         job.arguments = job.wrapped().build_arguments(url=url, platefile=platefile, transaction_id=job.transaction_id, downsample=downsample)
         if bandnorm:
             job.arguments.append('--bandnorm')
-        job.arguments.append('--clipping', clipping)
+        if not options.use_cache:
+            job.arguments.append('--nocache')
+        job.arguments.append('--clipping=%f' % clipping)
         job.jobset = jobset
         job.save()
         i += 1
@@ -88,7 +90,19 @@ def main():
     parser.add_option('--downsample', action='store', type='int', dest='downsample', help="Percentage to downsample during preprocessing.")
     parser.add_option('--bandnorm', action='store_true', dest='bandnorm', help="Perform ISIS band normalization.")
     parser.add_option('--clipping', action='store', type='float', dest='clipping', help="Clip to within N standard deviations of the mean intensity value (0 disables)")
-    parser.set_defaults(platefile=DEFAULT_PLATEFILE, activate=True, name=None, do_snapshots=True, n_jobs=None,  downsample=None, bandnorm=False, clipping=2.5)
+    parser.add_option('--nocache', action='store_false', dest='use_cache', help='If there is a cached output cube, reprocess anyway')
+    parser.add_option('--use-cache', action='store_true', dest='use_cache', help='Use a cached copy of the preprocessed output, if one exists.')
+    parser.set_defaults(
+        platefile = DEFAULT_PLATEFILE, 
+        activate = True, 
+        name = None, 
+        do_snapshots = True,
+        n_jobs = None,  
+        downsample = None, 
+        bandnorm = False, 
+        clipping = 3.0, 
+        use_cache = False
+    )
     (options, args) = parser.parse_args()
 
     mm_jobset = create_mipmap_jobs(n_jobs=options.n_jobs, platefile=options.platefile, name=options.jobset_name, options=options)
