@@ -154,6 +154,20 @@ def fail_high_emission_angles(file, emission_angle_threshold=20):
     else:
         raise Exception("Failed to get the emission angle.")
 
+def fail_poor_data_quality(file):
+    print "Checking data quality..."
+    p = Popen(['head', '-n', '46', file]) # Assuming all attached PDS labels are the same line length, which they ought to be.
+    lines = p.communicate()[0].split('\n')
+    for line in lines:
+        tokens = split('=')
+        if tokens[0].strip() == 'DATA_QUALITY_DESC':
+            if tokens[1].strip() == 'OK':
+                return 0
+            else:
+                raise Exception("Failed data quality check: %s" % tokens[1].strip())
+    else:
+        raise Exception("Data quality header not found.")
+
 # def get_crosstrack_summing(file):
 #     p = Popen([ os.path.join(COMMAND_PATH, 'isis.sh'), 'catlab', 'from='+file ], stdout=PIPE)
 #     stats = p.communicate()[0]
@@ -402,6 +416,10 @@ def ctx2plate(ctxurl, platefile):
     try:
         assert os.path.exists(ctxfile)
         print "Commencing ctx2plate: %s --> %s" % (ctxfile, platefile)
+        
+        # Filter on data quality flag
+        # This is disabled because the production create_mosaic_jobs script is doing this now.
+        #fail_poor_data_quality(ctxfile)
 
         # ISIS INGESTION
         ctx2isis(ctxfile, original_cube)
@@ -453,12 +471,8 @@ def ctx2plate(ctxurl, platefile):
     
     # MipMap & add to platefile
     if options.write_to_plate and not options.dry_run:
-        try:
-            image2plate(stretched_cube, platefile)
-        finally:
-            ### stretched_cube files are left on the drive for now ###
-            #unlink_if_exists(stretched_cube)
-            pass
+        image2plate(stretched_cube, platefile)
+        unlink_if_exists(stretched_cube)
     else:
         print "DRY RUN.  %s would be added to %s" % (stretched_cube, platefile)
     print "ctx2plate completed."
