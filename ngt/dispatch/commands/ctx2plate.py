@@ -302,11 +302,11 @@ def stretch2int8(infile, outfile, standard_deviations=0.0, use_percentages=False
         pairs = "0.27:1 50:128 99.73:255"  # an alternative way to cut the tails on the histogram should work faster since it doesn't depend on the stats function.
     else:
         (minval, maxval, mean, stdev) = get_stats(infile)
-        if (std_deviations > 0.1 ):
-            if (mean-std_deviations*stdev) > minval:
-                minval = mean-std_deviations*stdev
-            if (mean+std_deviations*stdev) < maxval:
-                maxval = mean+std_deviations*stdev
+        if (standard_deviations > 0.1 ):
+            if (mean-standard_deviations*stdev) > minval:
+                minval = mean-standard_deviations*stdev
+            if (mean+standard_deviations*stdev) < maxval:
+                maxval = mean+standard_deviations*stdev
         pairs = "%f:1 %f:255" % (minval, maxval)
 
     args = (
