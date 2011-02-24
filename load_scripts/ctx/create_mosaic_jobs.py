@@ -78,11 +78,12 @@ def generate_urls(metadata_dir=METADATA_DIR, baseurl='http://pds-imaging.jpl.nas
         table = cum_index.Table(labelfile, tablefile)
         for row in table:
             if row.data_quality_desc.strip() == 'OK':  # filter for data quality errors
-                volume = row.volume_id.lower()
-                head, tail = os.path.split(row.file_specification_name)
-                head = head.lower()
-                url = os.path.join(baseurl, volume, head, tail)
-                yield url
+                if row.mission_phase_name.strip() in ('PSP','ESP'): # filter for mission phase
+                    volume = row.volume_id.lower()
+                    head, tail = os.path.split(row.file_specification_name)
+                    head = head.lower()
+                    url = os.path.join(baseurl, volume, head, tail)
+                    yield url
 
 
 @transaction.commit_on_success
