@@ -312,10 +312,19 @@ class JobSet(models.Model):
     def reset(self):
         self.jobs.update(status_enum=Job.StatusEnum.NEW)
         if 'snapshot' in self.name.lower():
+            # "snapshot" commands are generated when "start_snapshot" completes
+            # hence they must be deleted if we reset the JobSet
             self.jobs.filter(command='snapshot').delete()
 
     def requeue(self):
         return self.jobs.filter(status_enum=Job.StatusEnum.PROCESSING).update(status_enum=Job.StatusEnum.REQUEUE)
+    def unfail(self):
+        return self.jobs.filter(status_enum=Job.StatusEnum.FAILED).update(status_enum=Job.StatusEnum.REQUEUE)
+
+    def recover(self):
+        p = self.requeue()
+        f = self.unfail()
+        return f + p
 
     @classmethod
     @transaction.commit_on_success
