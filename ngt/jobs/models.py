@@ -317,11 +317,15 @@ class JobSet(models.Model):
             self.jobs.filter(command='snapshot').delete()
 
     def requeue(self):
+        """Set all jobs with status PROCESSING to status REQUEUE"""
         return self.jobs.filter(status_enum=Job.StatusEnum.PROCESSING).update(status_enum=Job.StatusEnum.REQUEUE)
+
     def unfail(self):
+        """Set all jobs with status FAILED to status REQUEUE"""
         return self.jobs.filter(status_enum=Job.StatusEnum.FAILED).update(status_enum=Job.StatusEnum.REQUEUE)
 
     def recover(self):
+        """Set all jobs with status PROCESSING or FAILED to status REQUEUE"""
         p = self.requeue()
         f = self.unfail()
         return f + p
