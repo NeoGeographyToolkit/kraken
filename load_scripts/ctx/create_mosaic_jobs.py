@@ -51,6 +51,8 @@ def _build_mipmap_jobs(jobset, urls, platefile, n_jobs=None, options=None):
             job.arguments.append('--nocache')
         if options.use_percentages:
             job.arguments.append('--percentages')
+        if options.no_plate:
+            job.arguments.append('--noplate')
         job.arguments.append('--clipping=%f' % clipping)
         job.jobset = jobset
         job.save()
@@ -102,8 +104,8 @@ def main():
     parser = optparse.OptionParser()
     parser.add_option('-p', '--platefile', action='store', dest='platefile', help='Platefile URL to which the images should be written (e.g. pf://wwt10one/index/collectible.plate)')
     parser.add_option('--njobs', action="store", dest="n_jobs", type="int", help="Limit the number of image2plate jobs generated")
-    parser.add_option('--no-activate', action='store_false', dest='activate', help='Do not activate the new jobsets after creation.')
     parser.add_option('--name', action='store', dest='jobset_name', help="Override the default name for the image2plate jobset.")
+    parser.add_option('--no-activate', action='store_false', dest='activate', help='Do not activate the new jobsets after creation.')
     parser.add_option('--no-snapshots', action='store_false', dest='do_snapshots', help="Don't create a snapshot JobSet.")
     parser.add_option('--downsample', action='store', type='int', dest='downsample', help="Percentage to downsample during preprocessing.")
     parser.add_option('--bandnorm', action='store_true', dest='bandnorm', help="Perform ISIS band normalization.")
@@ -111,6 +113,7 @@ def main():
     parser.add_option('--nocache', action='store_false', dest='use_cache', help='If there is a cached output cube, reprocess anyway')
     parser.add_option('--use-cache', action='store_true', dest='use_cache', help='Use a cached copy of the preprocessed output, if one exists.')
     parser.add_option('--percentages', dest='use_percentages', action='store_true', help="Use percentages instead of values for the stretch step (overrides clipping setting)")
+    parser.add_option('--noplate', dest='no_plate', action='store_true', help="Skip platefile insertion.  Just preprocess.")
     parser.add_option('--test', dest='test', action='store_true', help="Draw image urls from a particular set of test images rather than the PDS cumulative label (default).")
     parser.set_defaults(
         platefile = DEFAULT_PLATEFILE, 
@@ -124,6 +127,7 @@ def main():
         use_cache = False,
         use_percentages = False,
         test = False,
+        no_plate = False,
     )
     (options, args) = parser.parse_args()
 
