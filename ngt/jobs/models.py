@@ -14,6 +14,10 @@ import logging
 logger = logging.getLogger('job_models')
 
 class JobManager(models.Manager):
+    def get_query_set(self):
+        # The output field can contain a huge amount of text, so let's not fetch it unless we need it.
+        return super(JobManager, self).get_query_set().defer("output")
+
     def status_filter(self, arg):
         '''
         Filter a queryset by status value or list of status values.
@@ -293,8 +297,8 @@ class JobSet(models.Model):
     
         n = 0
         times = []
-        for j in self.jobs.all():
-            if j.ended and j.status == 'complete':
+        for j in self.jobs.status_filter('complete'):
+            if j.ended:
                 n += 1
                 runtime = total_seconds(j.runtime)
                 times.append(runtime)
