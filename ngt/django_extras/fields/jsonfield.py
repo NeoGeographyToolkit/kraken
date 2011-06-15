@@ -22,28 +22,16 @@ def loads(str):
     return json.loads(str, encoding=settings.DEFAULT_CHARSET)
     
 class JSONField(models.TextField):
+    __metaclass__ = models.SubfieldBase
+
     def db_type(self):
         return 'text'
-        
-    def pre_save(self, model_instance, add):
-        value = getattr(model_instance, self.attname, None)
+
+    def get_db_prep_value(self, value):
         return dumps(value)
-    
-    def contribute_to_class(self, cls, name):
-        super(JSONField, self).contribute_to_class(cls, name)
-        signals.post_init.connect(self.post_init, sender=cls)
-        
-        def get_json(model_instance):
-            return dumps(getattr(model_instance, self.attname, None))
-        setattr(cls, 'get_%s_json' % self.name, get_json)
-    
-        def set_json(model_instance, json):
-            return setattr(model_instance, self.attname, loads(json))
-        setattr(cls, 'set_%s_json' % self.name, set_json)
-    
-    def post_init(self, instance=None, **kwargs):
-        value = self.value_from_object(instance)
-        if (value):
-            setattr(instance, self.attname, loads(value))
+
+    def to_python(self, value):
+        if value:
+            return loads(value)
         else:
-            setattr(instance, self.attname, None)
+            return None
