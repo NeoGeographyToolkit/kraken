@@ -2,6 +2,8 @@
 import sys, os, os.path
 import subprocess
 from subprocess import Popen, PIPE
+import multiprocessing
+import resource
 import shlex
 import traceback
 import urlparse
@@ -335,11 +337,28 @@ def image2plate(imagefile, platefile):
         cmd += ('-t', str(options.transaction_id))
     cmd += ('--file-type auto -o', platefile, imagefile)
     cmd = ' '.join(cmd)
-
     print cmd
-    exit_status = execute(cmd, pretend=not options.write_to_plate)
+
+    parent_conn, child_conn = multiprocessing.Pipe()
+    pretend = not options.write_to_plate
+    p = multiprocessing.Process(target=_image2plate, args=(child_conn, cmd, pretend))
+
+    exit_status, rusage = parent_conn.recv()
+    p.join()
+
+    print "BEGIN_IMAGE2PLATE_RUSAGE",
+    print json.dumps(tuple(rusage)),
+    print "END_IMAGE2PLATE_RUSAGE"
+
     if exit_status != 0:
         raise Exception("image2plate failed!")
+
+def _image2plate(conn, cmd, pretend):
+    exit_status = execute(cmd, pretend=not options.write_to_plate)
+    rusage = resource.getrusage(resource.RUSAGE_CHILDREN)
+    conn.send((exit_status, rusage))
+    sys.stdout.flush()
+
 
 def reduce(infile, outfile, percent):
     scalefactor_inverse = 1/(percent/100.00)
