@@ -8,6 +8,7 @@ import shlex
 import traceback
 import urlparse
 import urllib
+import json
 
 DEFAULT_TMP_DIR = '/scratch/tmp'
 DEFAULT_CACHE_DIR = '/big/scratch/ctxcache'
@@ -342,6 +343,7 @@ def image2plate(imagefile, platefile):
     parent_conn, child_conn = multiprocessing.Pipe()
     pretend = not options.write_to_plate
     p = multiprocessing.Process(target=_image2plate, args=(child_conn, cmd, pretend))
+    p.start()
 
     exit_status, rusage = parent_conn.recv()
     p.join()
