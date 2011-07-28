@@ -184,7 +184,7 @@ def main():
     else:
         mm_jobset = create_mipmap_jobs(n_jobs=options.n_jobs, platefile=options.platefile, name=options.jobset_name, options=options)
     if options.do_snapshots:
-        sn_jobset = create_snapshot_jobs(mmjobset=mm_jobset, platefile=options.platefile)
+        sn_jobset = create_snapshot_jobs(mmjobset=mm_jobset, input_platefile=options.platefile)
     else:
         sn_jobset = None
     if options.activate:

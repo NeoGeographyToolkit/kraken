@@ -133,12 +133,16 @@ class Snapshot(RetryingJobCommand):
         ###
     
         regionstr = '%d,%d:%d,%d' % kwargs['region'] # expects a 4-tuple
-        return [
+        args =  [
             '-t', str(self.job.transaction_id),
             '--region', '%s@%d' % (regionstr, kwargs['level']),
             '--transaction-range', '%d:%d' % kwargs['transaction_range'],
-            kwargs['platefile']
+            kwargs['input_platefile']
         ]
+        if 'output_platefile' in kwargs and kwargs['output_platefile']:
+            args.append('-o ' + kwargs['output_platefile'])
+
+        return args
 
 class StartSnapshot(JobCommand):
     commandname = 'start_snapshot'
@@ -151,7 +155,9 @@ class StartSnapshot(JobCommand):
         
         t_range = kwargs['transaction_range'] # expect a 2-tuple
         description = "Snapshot of transactions %d --> %d" % t_range
-        args = ['--start', '"%s"' % description, '-t', str(self.job.transaction_id), kwargs['platefile']]
+        args = ['--start', '"%s"' % description, '-t', str(self.job.transaction_id), kwargs['input_platefile']]
+        if 'output_platefile' in kwargs and kwargs['output_platefile']:
+            args.append('-o ' + kwargs['output_platefile'])
         return args
 
     def _generate_partitions(self, level):
@@ -182,8 +188,24 @@ class StartSnapshot(JobCommand):
         # get platefile from job arguments
         pfpattern = re.compile('(pf|amqp|zmq|zmq\+(icp|tcp)):')
         args = shlex.split(str(self.job.command_string))
-        platefile = filter(pfpattern.match, args)[0]
 
+        input_platefile = None
+        output_platefile = None
+        for i in range(len(args)):
+            if pfpattern.match(args[i]):
+                if args[i-1] in ('-o', '--output-plate'):
+                    assert not output_platefile
+                    output_platefile = args[i]
+                else:
+                    assert not input_platefile
+                    input_platefile = args[i]
+            if input_platefile and output_platefile:
+                break
+        assert input_platefile
+
+        if not output_platefile:
+            output_platefile = input_platefile
+               
         # parse pyramid depth (max level) from job output
         maxlevel = self._get_maxlevel(self.job.output)
         # get corresponding end_snapshot job
@@ -209,7 +231,8 @@ class StartSnapshot(JobCommand):
                     region = region,
                     level = level,
                     transaction_range = job_transaction_range,
-                    platefile = platefile,
+                    input_platefile = input_platefile,
+                    output_platefile = output_platefile
                 )
                 snapjob.save()
                 endjob.dependencies.add(snapjob)
@@ -222,7 +245,9 @@ class EndSnapshot(JobCommand):
     commandname = 'end_snapshot'
     
     def build_arguments(self, **kwargs):
-        args = ['--finish', '-t', str(self.job.transaction_id), kwargs['platefile']]
+        args = ['--finish', '-t', str(self.job.transaction_id), kwargs['input_platefile']]
+        if 'output_platefile' in kwargs and kwargs['output_platefile']:
+            args.append('-o ' + kwargs['output_platefile'])
         return args
         
     

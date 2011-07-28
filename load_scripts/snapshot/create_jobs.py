@@ -3,7 +3,7 @@ from django.db import transaction
 from ngt.jobs.models import Job,JobSet
 from ngt.dispatch.commands.jobcommands import MipMapCommand, hirise2plateCommand, StartSnapshot, EndSnapshot
 
-def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, last_endjob, platefile):
+def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, last_endjob, input_platefile, output_platefile=None):
     transaction_id = transaction_range[1] + 1
     print "Creating snapshot jobs for transaction range %d --> %d" % transaction_range
     # create start and end jobs
@@ -14,7 +14,8 @@ def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_j
     )
     startjob.arguments = startjob.wrapped().build_arguments(
         transaction_range = transaction_range,
-        platefile = platefile
+        input_platefile = input_platefile,
+        output_platefile = output_platefile
     )
     
     endjob = Job(
@@ -22,7 +23,7 @@ def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_j
         command = 'end_snapshot',
         jobset = snapshot_jobset
     )
-    endjob.arguments = endjob.wrapped().build_arguments(platefile=platefile)
+    endjob.arguments = endjob.wrapped().build_arguments(input_platefile=input_platefile, output_platefile=output_platefile)
     startjob.save()
     endjob.save()
     # add dependencies
@@ -37,9 +38,9 @@ def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_j
     
 
 @transaction.commit_on_success   
-def create_snapshot_jobs(mmjobset=None, interval=256, platefile=None):
-    if not platefile:
-        raise Exception("'platefile' argument required.")
+def create_snapshot_jobs(mmjobset=None, interval=256, input_platefile=None, output_platefile=None):
+    if not input_platefile:
+        raise Exception("'input_platefile' argument required.")
     if not mmjobset:
         mmjobset = JobSet.objects.filter(name__contains="MipMap").latest('pk')
     snapshot_jobset = JobSet()
@@ -58,14 +59,14 @@ def create_snapshot_jobs(mmjobset=None, interval=256, platefile=None):
             transaction_range_start = mmjob.transaction_id        
         if i % interval == 0:
             transaction_range = (transaction_range_start, mmjob.transaction_id)
-            startjob, endjob = _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, endjob, platefile)
+            startjob, endjob = _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, endjob, input_platefile, output_platefile)
             #clear transaction range and jobs for dependency list
             transaction_range_start = mmjob.transaction_id + 1  # Set the start of the next snapshot
             jobs_for_dependency = []
     else: # after the last iteration, start a snapshot with whatever's left.
         if jobs_for_dependency:
             transaction_range = (transaction_range_start, mmjob.transaction_id)
-            _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, endjob, platefile)
+            _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, endjob, input_platefile)
     print "Setting priority to 1 and activating."
     snapshot_jobset.priority = 1
     snapshot_jobset.active = True
