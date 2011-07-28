@@ -66,7 +66,7 @@ def create_snapshot_jobs(mmjobset=None, interval=256, input_platefile=None, outp
     else: # after the last iteration, start a snapshot with whatever's left.
         if jobs_for_dependency:
             transaction_range = (transaction_range_start, mmjob.transaction_id)
-            _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, endjob, input_platefile)
+            _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, endjob, input_platefile, output_platefile)
     print "Setting priority to 1 and activating."
     snapshot_jobset.priority = 1
     snapshot_jobset.active = True
