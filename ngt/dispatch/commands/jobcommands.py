@@ -157,7 +157,8 @@ class StartSnapshot(JobCommand):
         description = "Snapshot of transactions %d --> %d" % t_range
         args = ['--start', '"%s"' % description, '-t', str(self.job.transaction_id), kwargs['input_platefile']]
         if 'output_platefile' in kwargs and kwargs['output_platefile']:
-            args.append('-o ' + kwargs['output_platefile'])
+            args.append('-o') 
+            args.append(kwargs['output_platefile'])
         return args
 
     def _generate_partitions(self, level):
