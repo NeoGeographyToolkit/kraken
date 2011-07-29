@@ -140,9 +140,10 @@ class Snapshot(RetryingJobCommand):
             kwargs['input_platefile']
         ]
         if 'output_platefile' in kwargs and kwargs['output_platefile']:
-            args.append('-o ' + kwargs['output_platefile'])
+            args.append('-o')
+            args.append(kwargs['output_platefile'])
 
-        return args
+        return [ a.strip() for a in args ]
 
 class StartSnapshot(JobCommand):
     commandname = 'start_snapshot'
@@ -159,7 +160,7 @@ class StartSnapshot(JobCommand):
         if 'output_platefile' in kwargs and kwargs['output_platefile']:
             args.append('-o') 
             args.append(kwargs['output_platefile'])
-        return args
+        return [ a.strip() for a in args ]
 
     def _generate_partitions(self, level):
         '''
