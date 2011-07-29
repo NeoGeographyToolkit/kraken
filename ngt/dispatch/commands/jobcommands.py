@@ -249,7 +249,8 @@ class EndSnapshot(JobCommand):
     def build_arguments(self, **kwargs):
         args = ['--finish', '-t', str(self.job.transaction_id), kwargs['input_platefile']]
         if 'output_platefile' in kwargs and kwargs['output_platefile']:
-            args.append('-o ' + kwargs['output_platefile'])
+            args.append('-o')
+            args.append(kwargs['output_platefile'])
         return args
         
     
