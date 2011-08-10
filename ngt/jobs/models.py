@@ -171,6 +171,14 @@ class Job(models.Model):
         return self._jobcommand
 
     @property
+    def jobcommand(self):
+        """
+        Property alias for Job.wrapped()
+        Returns an instance of the JobCommand subclass appropriate to this Job.
+        """
+        return self.wrapped()
+
+    @property
     def command_string(self):
         if type(self.arguments) == list:
             return self.command + ' ' + ' '.join(self.arguments)
@@ -379,7 +387,7 @@ def status():
     pprint( dict( [(js, js.status()) for js in jobsets] ) )
 
 
-from ngt.assets.models import Asset, DATA_ROOT # putting this here helps avoid circular imports
+from ngt.assets.models import Asset, DATA_ROOT # putting this way down here helps avoid circular imports
 
 from ngt.dispatch.commands import jobcommands
 def create_jobcommand_map():
