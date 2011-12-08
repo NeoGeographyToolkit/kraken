@@ -79,8 +79,16 @@ class RetryingJobCommand(JobCommand):
         return self.job
             
         
-class MipMapCommand(RetryingJobCommand):
-    commandname = 'mipmap'
+class Image2PlateCommand(RetryingJobCommand):
+    """
+    M. Broxton originally referred to image2plate as mipmap (although the command no longer does any mipmapping).
+    This command was originally called mipmap as a result.  Later we added a new command called mipmap, that actualy mipmaps.
+    To avoid future problems, I've renamed this JobCommand.
+    It will break certain old jobsets and jobset creation scripts that rely on the notion that mipmap means image2plate.
+
+    I am so, so sorry.
+    """
+    commandname = 'image2plate'
 
     def build_arguments(self, **kwargs):
         args = "-t %s %s -o %s" % (self.job.transaction_id, kwargs['file_path'], kwargs['platefile'])
@@ -91,6 +99,24 @@ class MipMapCommand(RetryingJobCommand):
         self.job = super(MipMapCommand, self).postprocess(self.job)
         if self.job.status == 'failed':
             self.job.status = 'failed_nonblocking'
+
+class MipMapCommand(JobCommand):
+    """
+    This calls out the "mipmap" executable and actually mipmaps from one plate level to another.
+    If you're running a jobset created by an ancient script, it may not be the command you're looking for.
+    See MipMapCommand docstring for how we got into this mess.
+    """
+    commandname = "mipmap"
+
+    def build_arguments(self, platefile, mm_from_level, transaction_id):
+        # mipmap <URL> --level <level to get data from>:<last level to write> -m equip -t <same TID as snapshot>
+        return [
+            platefile,
+            '--level', '%s:0' % mm_from_level,
+            '-m', 'equip',
+            '-t', transaction_id,
+        ]
+
 
 class moc2plateCommand(RetryingJobCommand):
     commandname = 'moc2plate'
@@ -219,8 +245,9 @@ class StartSnapshot(JobCommand):
         #job_transaction_range = (min(transids), max(transids))
         logger.info("start_snapshot executed.  Generating snapshot jobs")
         job_transaction_range = minmax(d.transaction_id for d in self.job.dependencies.all())
+        lowest_snapshot_level = self.job.context['lowest_snapshot_level']
         jcount = 0
-        for level in range(maxlevel):
+        for level in range(lowest_snapshot_level, maxlevel):
             for region in self._generate_partitions(level):
                 logger.debug("Generating snapshot job for region %s" % str(region))
                 #print "Generating snapshot job for region " + str(region) + " at " + str(level)
@@ -238,6 +265,15 @@ class StartSnapshot(JobCommand):
                 )
                 snapjob.save()
                 endjob.dependencies.add(snapjob)
+        if lowest_snapshot_level > 0:
+            mipmapjob = Job(
+                command="mipmap",
+                transaction_id = self.job.transaction_id,
+                jobset = snapjobset,
+            )
+            mipmapjob.arguments = mipmapjob.wrapped().build_arguments(output_platefile, lowest_snapshot_level, self.job.transaction_id)
+            mipmapjob.dependencies.add(endjob)
+            mipmapjob.save()
                 
         return self.job
         

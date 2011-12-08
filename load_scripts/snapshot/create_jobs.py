@@ -38,7 +38,7 @@ def _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_j
     
 
 @transaction.commit_on_success   
-def create_snapshot_jobs(mmjobset=None, interval=256, input_platefile=None, output_platefile=None):
+def create_snapshot_jobs(mmjobset=None, interval=256, input_platefile=None, output_platefile=None, lowest_snapshot_level=3, activate=True):
     if not input_platefile:
         raise Exception("'input_platefile' argument required.")
     if not mmjobset:
@@ -60,15 +60,20 @@ def create_snapshot_jobs(mmjobset=None, interval=256, input_platefile=None, outp
         if i % interval == 0:
             transaction_range = (transaction_range_start, mmjob.transaction_id)
             startjob, endjob = _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, endjob, input_platefile, output_platefile)
+            startjob.context['lowest_snapshot_level'] = lowest_snapshot_level; startjob.save() # StartSnapshot JobCommand needs access to this value
+
             #clear transaction range and jobs for dependency list
             transaction_range_start = mmjob.transaction_id + 1  # Set the start of the next snapshot
             jobs_for_dependency = []
+
     else: # after the last iteration, start a snapshot with whatever's left.
         if jobs_for_dependency:
             transaction_range = (transaction_range_start, mmjob.transaction_id)
-            _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, endjob, input_platefile, output_platefile)
-    print "Setting priority to 1 and activating."
+            startjob, endjob = _build_snapshot_start_end(transaction_range, jobs_for_dependency, snapshot_jobset, endjob, input_platefile, output_platefile)
+            startjob.context['lowest_snapshot_level'] = lowest_snapshot_level; startjob.save()
+    
+    print "Setting priority to 1 and " + ("activating." if activate else "NOT activating.")
     snapshot_jobset.priority = 1
-    snapshot_jobset.active = True
+    snapshot_jobset.active = activate
     snapshot_jobset.save()
     return snapshot_jobset
