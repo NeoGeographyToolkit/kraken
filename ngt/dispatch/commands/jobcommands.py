@@ -206,7 +206,11 @@ class StartSnapshot(JobCommand):
     def _get_maxlevel(self, output):
         pat = re.compile('Plate has (\d+) levels')
         match = pat.search(output)
-        assert match
+        try:
+            assert match
+        except AssertionError:
+            print "OUTPUT: " + output
+            raise
         return int(match.groups()[0])
 
             
@@ -272,6 +276,7 @@ class StartSnapshot(JobCommand):
                 jobset = snapjobset,
             )
             mipmapjob.arguments = mipmapjob.wrapped().build_arguments(output_platefile, lowest_snapshot_level, self.job.transaction_id)
+            mipmapjob.save()
             mipmapjob.dependencies.add(endjob)
             mipmapjob.save()
                 
