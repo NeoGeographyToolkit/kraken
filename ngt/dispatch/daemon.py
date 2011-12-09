@@ -373,7 +373,7 @@ def _job_ended(request):
     except Reaper.DoesNotExist:
         # <shrug> Log a warning.  Re-register.
         logger.warning("A job ended that was assigned to an unregistered reaper %s.  Probably not good. Reaper will be reregistered." % request.reaper_id)
-        register_reaper(protocols.pack(protobuf.ReaperRegistrationRequest, {'uuid': job.processor}))
+        register_reaper(protocols.pack(protobuf.ReaperRegistrationRequest, {'reaper_uuid': job.processor}))
         
         
     if request.state == 'complete' and job.creates_new_asset:
