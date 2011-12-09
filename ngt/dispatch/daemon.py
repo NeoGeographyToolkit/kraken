@@ -128,6 +128,7 @@ def _register_reaper(request):
         logger.info("Reaper %s exists.  Resurrecting." % request.reaper_uuid[:8])
         if 'hostname' in request:
             r.hostname = request.hostname
+        r.type = r.type or 'generic'
         r.deleted = False
         r.expired = False
         r.timeouts = 0
