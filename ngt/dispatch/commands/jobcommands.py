@@ -114,7 +114,7 @@ class MipMapCommand(JobCommand):
             platefile,
             '--level', '%s:0' % mm_from_level,
             '-m', 'equip',
-            '-t', transaction_id,
+            '-t', str(transaction_id),
         ]
 
 

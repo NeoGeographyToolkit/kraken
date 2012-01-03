@@ -108,6 +108,12 @@ class Job(models.Model):
             if type(value) != list:
                 raise ValueError("ListDescriptor requires a list value.")
 
+            # ensure all arguments are string types
+            # silently convert them if not
+            for i in range(len(value)):
+                if not type(value[i]) in (str, unicode):
+                    value[i] = str(value[i])
+
             # Default to a dict-style representation if the storage field is unset
             # Will overwrite an existing list representation if present
             if type(getattr(instance, self.fieldname)) in (type(None), list):
