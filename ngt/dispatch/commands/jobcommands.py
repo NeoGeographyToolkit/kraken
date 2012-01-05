@@ -194,14 +194,14 @@ class StartSnapshot(JobCommand):
         Divide the space into 32x32 regions
         '''
         print '\n\n****** Generating Partitions!!!!! ******\n\n'
-        sqrt_regions = 32 # number of regions to divide each side by (i.e. there will be sqrt_regions**2 regions)
-        if 2**level <= sqrt_regions:
+        max_region_size = 128 # root size of a region: we can fit a maximum of 16,384 (128**2) tiles within the address space for a single blob file
+        if 2**level <= max_region_size:
             yield(0, 0, 2**level, 2**level)
         else:
-            tiles_per_side = 2**level / sqrt_regions
-            for i in range(sqrt_regions):
-                for j in range(sqrt_regions):
-                    yield (i*tiles_per_side, j*tiles_per_side, (i+1)*tiles_per_side, (j+1)*tiles_per_side)
+            number_of_regions = 2**level / max_region_size
+            for i in range(number_of_regions):
+                for j in range(number_of_regions):
+                    yield (i*max_region_size, j*max_region_size, (i+1)*max_region_size, (j+1)*max_region_size)
                     
     def _get_maxlevel(self, output):
         pat = re.compile('Plate has (\d+) levels')
