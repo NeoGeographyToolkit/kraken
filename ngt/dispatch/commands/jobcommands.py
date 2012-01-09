@@ -109,11 +109,11 @@ class MipMapCommand(JobCommand):
     commandname = "mipmap"
 
     def build_arguments(self, platefile, mm_from_level, transaction_id):
-        # mipmap <URL> --level <level to get data from>:<last level to write> -m equip -t <same TID as snapshot>
+        # mipmap <URL> --level <level to get data from>:<last level to write> -m equi -t <same TID as snapshot>
         return [
             platefile,
             '--level', '%s:0' % mm_from_level,
-            '-m', 'equip',
+            '-m', 'equi',
             '-t', str(transaction_id),
         ]
 
